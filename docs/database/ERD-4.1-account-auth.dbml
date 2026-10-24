@@ -1,0 +1,137 @@
+Project algolearner_auth_4_1 {
+  database_type: 'PostgreSQL'
+  Note: 'SRS 1.1, section 4.1: Account and Authentication. Logical schema; audit_logs is shared with section 4.16.'
+}
+
+Enum account_role {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+Enum account_lifecycle_status {
+  PENDING_VERIFICATION
+  ACTIVE
+  DEACTIVATED
+}
+
+Enum otp_purpose {
+  REGISTER
+  RESET_PASSWORD
+}
+
+Enum restriction_kind {
+  AUTO_LOCK
+  ADMIN_LOCK
+  SUSPENSION
+}
+
+Enum audit_actor_type {
+  USER
+  SYSTEM
+}
+
+Enum audit_outcome {
+  SUCCESS
+  REJECTED
+  FAILED
+}
+
+Table accounts {
+  id uuid [pk]
+  email varchar(255) [not null, unique, note: 'Immutable after registration']
+  username varchar(100) [not null, unique, note: 'Immutable after registration']
+  password_hash text [not null]
+  role account_role [not null, default: 'STUDENT', note: 'Public registration permits STUDENT or TEACHER only']
+  lifecycle_status account_lifecycle_status [not null, default: 'PENDING_VERIFICATION']
+  failed_login_count int [not null, default: 0]
+  email_verified_at timestamptz
+  terms_accepted_at timestamptz [not null]
+  privacy_accepted_at timestamptz [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'Effective TEMPORARILY_LOCKED and SUSPENDED states are derived from active account_restrictions, so independent restrictions do not overwrite one another.'
+}
+
+Table otp_challenges {
+  id uuid [pk]
+  account_id uuid [not null]
+  purpose otp_purpose [not null]
+  code_hash text [not null]
+  failed_attempts int [not null, default: 0]
+  sent_at timestamptz [not null]
+  expires_at timestamptz [not null]
+  consumed_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (account_id, purpose, sent_at) [name: 'idx_otp_account_purpose_sent']
+  }
+
+  Note: 'Store only an OTP hash. Valid for 10 minutes, at most 5 wrong entries, and a 60-second resend cooldown.'
+}
+
+Table auth_sessions {
+  id uuid [pk]
+  account_id uuid [not null]
+  refresh_token_hash text [not null, unique]
+  remember_me boolean [not null, default: false]
+  device_label varchar(255)
+  expires_at timestamptz [not null]
+  last_seen_at timestamptz
+  revoked_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (account_id, revoked_at) [name: 'idx_sessions_account_revoked']
+  }
+
+  Note: 'Refresh token lifetime: 7 days, or 30 days with Remember Me. JWT access token lifetime: 15 minutes; access tokens are not stored here.'
+}
+
+Table account_restrictions {
+  id uuid [pk]
+  account_id uuid [not null]
+  imposed_by_account_id uuid [note: 'Null for automatic lock']
+  kind restriction_kind [not null]
+  reason text [note: 'Required for SUSPENSION']
+  starts_at timestamptz [not null]
+  ends_at timestamptz
+  revoked_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (account_id, kind, ends_at) [name: 'idx_restrictions_account_kind_end']
+    imposed_by_account_id [name: 'idx_restrictions_imposed_by']
+  }
+
+  Note: 'AUTO_LOCK lasts 15 minutes after 5 consecutive login failures. ADMIN_LOCK and SUSPENSION are independent; SUSPENSION may have no end time.'
+}
+
+Table audit_logs {
+  id uuid [pk]
+  actor_account_id uuid [note: 'Null when the actor is the system']
+  target_account_id uuid [note: 'Null if no existing account can be identified']
+  actor_type audit_actor_type [not null]
+  action varchar(100) [not null]
+  outcome audit_outcome [not null]
+  occurred_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (actor_account_id, occurred_at) [name: 'idx_audit_actor_time']
+    (target_account_id, occurred_at) [name: 'idx_audit_target_time']
+  }
+
+  Note: 'Shared audit table for account state actions. Never store passwords, OTPs, access tokens, or refresh tokens.'
+}
+
+Ref: otp_challenges.account_id > accounts.id [delete: restrict]
+Ref: auth_sessions.account_id > accounts.id [delete: restrict]
+Ref: account_restrictions.account_id > accounts.id [delete: restrict]
+Ref: account_restrictions.imposed_by_account_id > accounts.id [delete: restrict]
+Ref: audit_logs.actor_account_id > accounts.id [delete: restrict]
+Ref: audit_logs.target_account_id > accounts.id [delete: restrict]
