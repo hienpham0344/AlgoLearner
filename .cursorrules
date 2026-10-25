@@ -1,22 +1,49 @@
-# Cursor Rules & AI Assistant Configuration
+# Cursor Rules & AI Assistant Configuration for AlgoLearner
 
-> Place this file as `.cursorrules` in your project root to align Cursor AI with Agents-kit standards.
+> Single Source of Truth for Cursor AI, Antigravity, and all AI Coding Assistants working on **AlgoLearner**.
 
-## 1. Core Engineering Principles
-- **SOLID & Clean Architecture**: Follow Single Responsibility and Dependency Inversion. Domain entities must remain independent of external frameworks.
-- **YAGNI (You Aren't Gonna Need It)**: Do not write speculative, unrequested, or "future-proof" features. Solve only today's acceptance criteria.
-- **KISS**: Favor clear, simple code over clever one-liners. Use guard clauses (early returns) and limit nesting to <= 3 levels.
-- **TDD (Test-Driven Development)**: Always write a failing unit or integration test before implementing production logic.
-- **Evidence Before Assertions**: Execute tests and verify passing output before declaring work finished.
+## 1. Project Context & Stack Standards
+- **Product**: Programming Learning Platform combining Classroom/LMS & Public LeetCode-style Practice (based on **SRS ver 1.1**).
+- **Backend**: Spring Boot 3.x (Java 17/21), Spring Security, Spring Data JPA, PostgreSQL, Flyway, springdoc-openapi 3.
+- **Frontend**: React 18/19, TypeScript (strict, zero `any`), Vite, Tailwind CSS v4, TanStack Query v5, Monaco Code Editor.
+- **Security & Sandbox**: Isolated Sandboxed Code Execution (Java, Python) with `--network none`, 2s time limit, 256MB RAM limit, read-only root FS, dropped Linux capabilities.
 
-## 2. Token Hygiene & Precision Editing
-- Never dump multi-hundred line raw terminal outputs into conversation memory.
-- Inspect files with targeted line slices rather than dumping whole source files.
-- Prefer surgical line-level edits over rewriting entire files for minor changes.
+## 2. API Design Rules (Mandatory)
+- **Base URI**: `/api/v1/...` with plural kebab-case nouns (e.g. `/api/v1/classrooms/{classId}/assignments`).
+- **Standard Envelope**:
+  - Success: `ApiResponse<T>` with `{ success: true, message: string, data: T, timestamp: string }`.
+  - Paginated: `PageResponse<T>` with `{ success: true, data: { items: T[], pagination: { page, size, totalElements, totalPages } }, timestamp }`.
+  - Error: `ApiErrorResponse` with `{ success: false, errorCode: string, message: string, errors?: FieldError[], timestamp, path }`.
+- **Timezone**: All timestamps in Database and API payloads MUST be **ISO-8601 UTC** (`YYYY-MM-DDTHH:mm:ssZ`). Frontend formats to UTC+7 for display.
+- **Contract-First**: Every controller method MUST have complete Swagger/OpenAPI annotations (`@Operation`, `@ApiResponse`, `@Tag`).
+- Refer to [API_DESIGN_GUIDELINES.md](file:///home/hien/Project/AlgoLearner/docs/rules/API_DESIGN_GUIDELINES.md) for full specs.
 
-## 3. Stack Standards
-- **Python**: Enforce Pydantic v2 schemas, strict type annotations (`mypy`), and pytest suites.
-- **Java / JVM**: Inspect build metadata (`pom.xml` / `build.gradle`), target Java 17+, and use deterministic unit tests.
-- **TypeScript / React**: Enforce WCAG AA accessibility, functional components, and strict TypeScript types without `any`.
-- **Database**: Use UUIDv7 / BIGSERIAL, explicit foreign keys, indexes on all foreign keys, and zero-downtime expand-and-contract migrations.
-- **Git**: Use Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `chore:`). Never force-push to shared branches.
+## 3. Backend Java / Spring Boot Conventions
+- **Layer Separation**: Controller -> Service (Interface + Impl) -> Repository -> Database.
+- **No Entity Leaks**: NEVER return JPA Entities from Controllers. Always map to Request/Response DTOs (Java 17+ `record` preferred for DTOs).
+- **JPA Entities**:
+  - Primary Keys: `UUID` for business entities, `Long / BIGSERIAL` for high-throughput audit/log tables.
+  - Relations: ALWAYS use `FetchType.LAZY` on `@ManyToOne`, `@OneToMany`, `@ManyToMany`. Never use `EAGER`.
+  - Auditing: Inherit `BaseAuditableEntity` with `@CreatedDate` and `@LastModifiedDate` storing `Instant`.
+  - Lombok: Use `@Getter`, `@Setter`, `@Builder`, `@NoArgsConstructor`, `@AllArgsConstructor`. NEVER use `@Data` on JPA Entities.
+- **Transactions**: Default `@Transactional(readOnly = true)` at Service class level; specific `@Transactional` on write methods.
+- **Validation**: Use Jakarta Bean Validation (`@Valid`, `@NotNull`, `@NotBlank`, `@Size`, `@Email`) at the Controller boundary.
+- **Exceptions**: Extend domain exceptions from `AppException` and handle in `@RestControllerAdvice`.
+- Refer to [CODING_STANDARDS.md](file:///home/hien/Project/AlgoLearner/docs/rules/CODING_STANDARDS.md) for full specs.
+
+## 4. Frontend React / TypeScript Conventions
+- **Strict Typing**: TypeScript `strict: true`. Never use `any`. Use `unknown` with type guards or explicit interfaces.
+- **Feature-Driven Layout**: Organize components, hooks, api, and types inside `frontend/src/features/<feature_name>/`.
+- **Server State**: Use TanStack Query v5 with query key factories.
+- **Accessibility & Design**: WCAG 2.2 AA compliant. Every interactive element requires `aria-label` or visible text. Distinctive, anti-slop typography and authentic color tokens.
+- **Sanitization**: All user-generated Markdown (announcements, problems, lessons) MUST be sanitized using `DOMPurify` before rendering.
+
+## 5. Security & Sandbox Constraints
+- **Code Execution**: Run code via isolated Sandbox container. Never execute user-supplied code directly on the host machine.
+- **RBAC & IDOR**: Always verify that the acting user is the owner/teacher of the classroom before allowing modifications.
+- **Authentication**: JWT Access Token (15-30m) + Refresh Token (7-30d). Validate password strength with BCrypt.
+- Refer to [SECURITY_AND_SANDBOX_RULES.md](file:///home/hien/Project/AlgoLearner/docs/rules/SECURITY_AND_SANDBOX_RULES.md) for full specs.
+
+## 6. Git & Commit Guidelines
+- Conventional Commits: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`.
+- Branch naming: `feature/<module>-<description>`, `bugfix/<ticket>-<description>`.
