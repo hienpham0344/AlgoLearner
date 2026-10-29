@@ -1,0 +1,17 @@
+spring:
+  profiles:
+    default: mock
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+      accept-float-as-int: false
+  servlet:
+    multipart:
+      max-file-size: ${AVATAR_MAX_SIZE:5MB}
+      max-request-size: ${AVATAR_MAX_REQUEST_SIZE:6MB}
+app:
+  storage:
+    avatar-directory: ${AVATAR_DIRECTORY:./data/avatars}
+    max-bytes: ${AVATAR_MAX_BYTES:5242880}
+    max-pixels: ${AVATAR_MAX_PIXELS:16000000}
+    allowed-types: ${AVATAR_ALLOWED_TYPES:image/jpeg,image/png}
