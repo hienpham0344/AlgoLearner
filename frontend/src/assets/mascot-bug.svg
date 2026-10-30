@@ -1,0 +1,634 @@
+<svg width="280" height="280" viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+<style>
+@keyframes kf_Group_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(65px) translateY(59px) translateY(-2.5px);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(65px) translateY(59px) translateY(-2.5px);
+  }
+  60% {
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+  68.33% {
+    animation-timing-function: ease-in;
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+  70.83% {
+    animation-timing-function: ease-out;
+    transform: translateX(65px) translateY(59px) translateY(2px);
+  }
+  74.67% {
+    animation-timing-function: ease-in;
+    transform: translateX(65px) translateY(59px) translateY(-9px);
+  }
+  78.83% {
+    animation-timing-function: ease-out;
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+  81% {
+    animation-timing-function: ease-in;
+    transform: translateX(65px) translateY(59px) translateY(-2px);
+  }
+  84.17% {
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+  100% {
+    transform: translateX(65px) translateY(59px) translateY(0px);
+  }
+}
+#Group {
+  transform-origin: 0 0;
+  animation: kf_Group_transform_0 6s linear infinite;
+}
+@keyframes kf_Ch__n_sau_ph___i_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(0rad);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(0.105rad);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(-0.058rad);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(0.105rad);
+  }
+  60% {
+    transform: translateX(96px) translateY(171px) rotate(0rad);
+  }
+  68.33% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(0rad);
+  }
+  70.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(-0.105rad);
+  }
+  74.67% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(0.262rad);
+  }
+  78.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(96px) translateY(171px) rotate(-0.087rad);
+  }
+  84.17% {
+    transform: translateX(96px) translateY(171px) rotate(0rad);
+  }
+  100% {
+    transform: translateX(96px) translateY(171px) rotate(0rad);
+  }
+}
+#Ch__n_sau_ph___i {
+  transform-origin: 0 0;
+  animation: kf_Ch__n_sau_ph___i_transform_0 6s linear infinite;
+}
+@keyframes kf_Ch__n_sau_tr__i_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0rad) translate(-3px, 0px);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(-0.105rad) translate(-3px, 0px);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0.058rad) translate(-3px, 0px);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(-0.105rad) translate(-3px, 0px);
+  }
+  60% {
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0rad) translate(-3px, 0px);
+  }
+  68.33% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0rad) translate(-3px, 0px);
+  }
+  70.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0.105rad) translate(-3px, 0px);
+  }
+  74.67% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(-0.262rad) translate(-3px, 0px);
+  }
+  78.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0.087rad) translate(-3px, 0px);
+  }
+  84.17% {
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0rad) translate(-3px, 0px);
+  }
+  100% {
+    transform: translateX(51px) translateY(171px) translate(3px, 0px) rotate(0rad) translate(-3px, 0px);
+  }
+}
+#Ch__n_sau_tr__i {
+  transform-origin: 0 0;
+  animation: kf_Ch__n_sau_tr__i_transform_0 6s linear infinite;
+}
+@keyframes kf_Ch__n_gi___a_ph___i_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(0rad);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(-0.105rad);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(0.058rad);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(-0.105rad);
+  }
+  60% {
+    transform: translateX(128px) translateY(152px) rotate(0rad);
+  }
+  68.33% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(0rad);
+  }
+  70.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(0.105rad);
+  }
+  74.67% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(-0.262rad);
+  }
+  78.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(128px) translateY(152px) rotate(0.087rad);
+  }
+  84.17% {
+    transform: translateX(128px) translateY(152px) rotate(0rad);
+  }
+  100% {
+    transform: translateX(128px) translateY(152px) rotate(0rad);
+  }
+}
+#Ch__n_gi___a_ph___i {
+  transform-origin: 0 0;
+  animation: kf_Ch__n_gi___a_ph___i_transform_0 6s linear infinite;
+}
+@keyframes kf_Ch__n_gi___a_tr__i_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0rad) translate(-9px, 0px);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0.105rad) translate(-9px, 0px);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(-0.058rad) translate(-9px, 0px);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0.105rad) translate(-9px, 0px);
+  }
+  60% {
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0rad) translate(-9px, 0px);
+  }
+  68.33% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0rad) translate(-9px, 0px);
+  }
+  70.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(-0.105rad) translate(-9px, 0px);
+  }
+  74.67% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0.262rad) translate(-9px, 0px);
+  }
+  78.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(-0.087rad) translate(-9px, 0px);
+  }
+  84.17% {
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0rad) translate(-9px, 0px);
+  }
+  100% {
+    transform: translateX(13px) translateY(152px) translate(9px, 0px) rotate(0rad) translate(-9px, 0px);
+  }
+}
+#Ch__n_gi___a_tr__i {
+  transform-origin: 0 0;
+  animation: kf_Ch__n_gi___a_tr__i_transform_0 6s linear infinite;
+}
+@keyframes kf_Tay_ph___i_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0rad) translate(0px, -5px);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(-0.157rad) translate(0px, -5px);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0.086rad) translate(0px, -5px);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(-0.157rad) translate(0px, -5px);
+  }
+  60% {
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0rad) translate(0px, -5px);
+  }
+  68.33% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0rad) translate(0px, -5px);
+  }
+  70.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0.105rad) translate(0px, -5px);
+  }
+  74.67% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(-0.489rad) translate(0px, -5px);
+  }
+  78.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0.087rad) translate(0px, -5px);
+  }
+  84.17% {
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0rad) translate(0px, -5px);
+  }
+  100% {
+    transform: translateX(138px) translateY(110px) translate(0px, 5px) rotate(0rad) translate(0px, -5px);
+  }
+}
+#Tay_ph___i {
+  transform-origin: 0 0;
+  animation: kf_Tay_ph___i_transform_0 6s linear infinite;
+}
+@keyframes kf_Tay_tr__i_transform_0 {
+  0% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(0rad) translate(-12px, -5px);
+  }
+  15% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(0.157rad) translate(-12px, -5px);
+  }
+  30% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(-0.086rad) translate(-12px, -5px);
+  }
+  45% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(0.157rad) translate(-12px, -5px);
+  }
+  60% {
+    transform: translateY(110px) translate(12px, 5px) rotate(0rad) translate(-12px, -5px);
+  }
+  68.33% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(0rad) translate(-12px, -5px);
+  }
+  70.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(-0.105rad) translate(-12px, -5px);
+  }
+  74.67% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(0.489rad) translate(-12px, -5px);
+  }
+  78.83% {
+    animation-timing-function: ease-in-out;
+    transform: translateY(110px) translate(12px, 5px) rotate(-0.087rad) translate(-12px, -5px);
+  }
+  84.17% {
+    transform: translateY(110px) translate(12px, 5px) rotate(0rad) translate(-12px, -5px);
+  }
+  100% {
+    transform: translateY(110px) translate(12px, 5px) rotate(0rad) translate(-12px, -5px);
+  }
+}
+#Tay_tr__i {
+  transform-origin: 0 0;
+  animation: kf_Tay_tr__i_transform_0 6s linear infinite;
+}
+@keyframes kf_M___t_t___i_gi___n_transform_0 {
+  0% {
+    transform: translate(19.991px, 11.814px) scaleY(1) translate(-19.991px, -11.814px);
+  }
+  23.33% {
+    animation-timing-function: ease-in;
+    transform: translate(19.991px, 11.814px) scaleY(1) translate(-19.991px, -11.814px);
+  }
+  24.83% {
+    animation-timing-function: ease-out;
+    transform: translate(19.991px, 11.814px) scaleY(0.12) translate(-19.991px, -11.814px);
+  }
+  27% {
+    transform: translate(19.991px, 11.814px) scaleY(1) translate(-19.991px, -11.814px);
+  }
+  87.5% {
+    animation-timing-function: ease-in;
+    transform: translate(19.991px, 11.814px) scaleY(1) translate(-19.991px, -11.814px);
+  }
+  89% {
+    animation-timing-function: ease-out;
+    transform: translate(19.991px, 11.814px) scaleY(0.12) translate(-19.991px, -11.814px);
+  }
+  91.17% {
+    transform: translate(19.991px, 11.814px) scaleY(1) translate(-19.991px, -11.814px);
+  }
+  100% {
+    transform: translate(19.991px, 11.814px) scaleY(1) translate(-19.991px, -11.814px);
+  }
+}
+@keyframes kf_M___t_t___i_gi___n_offset_distance_0 {
+  0% {
+    offset-distance: 0%;
+  }
+  1.25% {
+    offset-distance: 0%;
+  }
+  2.5% {
+    offset-distance: 0.261%;
+  }
+  3.75% {
+    offset-distance: 0.782%;
+  }
+  5% {
+    offset-distance: 1.564%;
+  }
+  6.25% {
+    offset-distance: 2.346%;
+  }
+  7.5% {
+    offset-distance: 3.129%;
+  }
+  8.75% {
+    offset-distance: 3.911%;
+  }
+  10% {
+    offset-distance: 4.693%;
+  }
+  11.25% {
+    offset-distance: 5.475%;
+  }
+  12.5% {
+    offset-distance: 5.996%;
+  }
+  13.75% {
+    offset-distance: 6.257%;
+  }
+  16.25% {
+    offset-distance: 6.257%;
+  }
+  17.5% {
+    offset-distance: 6.518%;
+  }
+  18.75% {
+    offset-distance: 7.039%;
+  }
+  20% {
+    offset-distance: 7.821%;
+  }
+  21.25% {
+    offset-distance: 8.603%;
+  }
+  22.5% {
+    offset-distance: 9.386%;
+  }
+  23.75% {
+    offset-distance: 10.168%;
+  }
+  25% {
+    offset-distance: 10.95%;
+  }
+  26.25% {
+    offset-distance: 11.732%;
+  }
+  27.5% {
+    offset-distance: 12.253%;
+  }
+  28.75% {
+    offset-distance: 12.575%;
+  }
+  31.25% {
+    offset-distance: 12.575%;
+  }
+  32.5% {
+    offset-distance: 12.877%;
+  }
+  33.75% {
+    offset-distance: 13.3%;
+  }
+  35% {
+    offset-distance: 13.964%;
+  }
+  36.25% {
+    offset-distance: 15.335%;
+  }
+  37.5% {
+    offset-distance: 18.077%;
+  }
+  38.75% {
+    offset-distance: 20.818%;
+  }
+  40% {
+    offset-distance: 22.189%;
+  }
+  41.25% {
+    offset-distance: 22.854%;
+  }
+  42.5% {
+    offset-distance: 23.277%;
+  }
+  43.75% {
+    offset-distance: 23.579%;
+  }
+  45% {
+    offset-distance: 23.639%;
+  }
+  46.25% {
+    offset-distance: 23.719%;
+  }
+  47.5% {
+    offset-distance: 23.983%;
+  }
+  48.333% {
+    offset-distance: 24.274%;
+  }
+  48.75% {
+    offset-distance: 24.274%;
+  }
+  50% {
+    offset-distance: 26.303%;
+  }
+  51.25% {
+    offset-distance: 29.348%;
+  }
+  52.5% {
+    offset-distance: 31.716%;
+  }
+  53.333% {
+    offset-distance: 32.393%;
+  }
+  53.75% {
+    offset-distance: 32.709%;
+  }
+  55% {
+    offset-distance: 33.448%;
+  }
+  56.25% {
+    offset-distance: 34.082%;
+  }
+  57.5% {
+    offset-distance: 34.61%;
+  }
+  58.75% {
+    offset-distance: 34.821%;
+  }
+  60% {
+    offset-distance: 34.927%;
+  }
+  68.333% {
+    offset-distance: 34.927%;
+  }
+  68.75% {
+    offset-distance: 35.135%;
+  }
+  70% {
+    offset-distance: 37.429%;
+  }
+  70.833% {
+    offset-distance: 39.932%;
+  }
+  71.25% {
+    offset-distance: 44.521%;
+  }
+  72.5% {
+    offset-distance: 57.139%;
+  }
+  73.75% {
+    offset-distance: 65.169%;
+  }
+  74.667% {
+    offset-distance: 67.463%;
+  }
+  75% {
+    offset-distance: 67.463%;
+  }
+  76.25% {
+    offset-distance: 72.156%;
+  }
+  77.5% {
+    offset-distance: 79.665%;
+  }
+  78.75% {
+    offset-distance: 89.05%;
+  }
+  78.833% {
+    offset-distance: 89.989%;
+  }
+  80% {
+    offset-distance: 93.534%;
+  }
+  81% {
+    offset-distance: 94.994%;
+  }
+  81.25% {
+    offset-distance: 94.994%;
+  }
+  82.5% {
+    offset-distance: 96.454%;
+  }
+  83.75% {
+    offset-distance: 98.957%;
+  }
+  84.167% {
+    offset-distance: 100%;
+  }
+  100% {
+    offset-distance: 100%;
+  }
+}
+#M___t_t___i_gi___n {
+  translate: 119.142px 101.186px;
+  transform-origin: 0 0;
+  transform-box: view-box;
+  offset-path: path('M0 0 C0 -0.833 0 -1.667 0 -2.5 C0 -1.667 0 -0.833 0 0 C0 -0.193 0 -0.386 0 -0.579 C1 -1.026 2 -1.474 3 -1.921 C3 -2.114 3 -2.307 3 -2.5 C3 -2.415 3 -2.331 3 -2.246 C2 -1.835 1 -1.424 0 -1.012 C0 -0.675 0 -0.337 0 0 C0 0.667 0 1.333 0 2 C0 -1.667 0 -5.333 0 -9 C0 -6 0 -3 0 0 C0 -0.667 0 -1.333 0 -2 C0 -1.333 0 -0.667 0 0');
+  offset-rotate: 0deg;
+  offset-anchor: 0px 0px;
+  animation:
+    kf_M___t_t___i_gi___n_transform_0 6s linear infinite,
+    kf_M___t_t___i_gi___n_offset_distance_0 6s linear infinite;
+}
+</style>
+<g id="Bug_____B____s__n_l___i" clip-path="url(#clip0_11_24)">
+<g id="Group" transform="translate(65 59)">
+<path id="Ch__n_sau_ph___i" transform="translate(96 171)" d="M0 0L3 10" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round"/>
+<path id="Ch__n_sau_tr__i" transform="translate(51 171)" d="M3 0L0 10" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round"/>
+<path id="Ch__n_gi___a_ph___i" transform="translate(128 152)" d="M0 0L9 11" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round"/>
+<path id="Ch__n_gi___a_tr__i" transform="translate(13 152)" d="M9 0L0 11" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round"/>
+<path id="Tay_ph___i" transform="translate(138 110)" d="M0 5L12 0" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round"/>
+<path id="Tay_tr__i" transform="translate(0 110)" d="M12 5L0 0" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round"/>
+<g id="Vector" filter="url(#filter0_d_11_24)" transform="translate(6 57)">
+<path d="M69 120C107.108 120 138 93.1371 138 60C138 26.8629 107.108 0 69 0C30.8924 0 0 26.8629 0 60C0 93.1371 30.8924 120 69 120Z" id="Vector_bg_0" fill="#F3EFE8">
+</path>
+<path d="M69 120C107.108 120 138 93.1371 138 60C138 26.8629 107.108 0 69 0C30.8924 0 0 26.8629 0 60C0 93.1371 30.8924 120 69 120Z" stroke="#111111" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<path id="Vector_2" transform="translate(75 90)" d="M0 0V85" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_3" transform="translate(42)" d="M7 16L0 0M59 16L66 0" stroke="#8A7E74" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+<g id="Vector_4" filter="url(#filter1_d_11_24)" transform="translate(12 12)">
+<path d="M85 0H41C18.3563 0 0 18.3563 0 41V45C0 67.6437 18.3563 86 41 86H85C107.644 86 126 67.6437 126 45V41C126 18.3563 107.644 0 85 0Z" id="Vector_4_bg_0" fill="#F3EFE8">
+</path>
+<path d="M85 0H41C18.3563 0 0 18.3563 0 41V45C0 67.6437 18.3563 86 41 86H85C107.644 86 126 67.6437 126 45V41C126 18.3563 107.644 0 85 0Z" stroke="#111111" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+</g>
+<g id="M___t_t___i_gi___n" transform="translate(119.142 101.186)">
+<path id="Vector_5" transform="translate(6.06402) rotate(16)" d="M9 4.5C9 2.01472 6.98528 0 4.5 0C2.01472 0 0 2.01472 0 4.5V17.5C0 19.9853 2.01472 22 4.5 22C6.98528 22 9 19.9853 9 17.5V4.5Z" fill="#111111"/>
+<path id="Vector_6" transform="translate(28.7325 1.34489) rotate(-6)" d="M9 4.5C9 2.01472 6.98528 0 4.5 0C2.01472 0 0 2.01472 0 4.5V17.5C0 19.9853 2.01472 22 4.5 22C6.98528 22 9 19.9853 9 17.5V4.5Z" fill="#111111"/>
+</g>
+</g>
+<defs>
+<filter id="filter0_d_11_24" x="-1.25" y="-1.25" width="140.5" height="125.5" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="3"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.462745 0 0 0 0 0.411765 0 0 0 0 0.34902 0 0 0 0.15 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_11_24"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_11_24" result="shape"/>
+</filter>
+<filter id="filter1_d_11_24" x="-1.25" y="-1.25" width="128.5" height="91.5" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="3"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.462745 0 0 0 0 0.411765 0 0 0 0 0.34902 0 0 0 0.15 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_11_24"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_11_24" result="shape"/>
+</filter>
+<clipPath id="clip0_11_24">
+<rect width="280" height="280" fill="white"/>
+</clipPath>
+</defs>
+</svg>
