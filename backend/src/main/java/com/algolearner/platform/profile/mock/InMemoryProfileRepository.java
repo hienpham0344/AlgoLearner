@@ -1,7 +1,7 @@
 package com.algolearner.platform.profile.mock;
 import com.algolearner.platform.profile.ProfileRepository;
 import com.algolearner.platform.common.exception.ApiException;
-import org.springframework.http.HttpStatus;
+import com.algolearner.platform.common.exception.ErrorCode;
 import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.UUID;
@@ -10,7 +10,7 @@ import java.util.UUID;
 public class InMemoryProfileRepository implements ProfileRepository {
     private final MockData data;
     public InMemoryProfileRepository(MockData data) { this.data=data; }
-    private ApiException missing() { return new ApiException(HttpStatus.NOT_FOUND,"PROFILE_NOT_FOUND","Profile not found"); }
+    private ApiException missing() { return new ApiException(ErrorCode.PROFILE_NOT_FOUND,"Profile not found"); }
     public Profile own(UUID id) {
         Profile p=data.profiles.get(id);
         if(p==null || !java.util.Set.of("STUDENT","TEACHER").contains(p.role())) throw missing();

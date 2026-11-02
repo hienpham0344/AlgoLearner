@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties={"logging.level.root=WARN","logging.level.org.springframework=WARN","debug=false"})
 @AutoConfigureMockMvc
-@ActiveProfiles("mock")
+@ActiveProfiles({"mock", "test"})
 class ProfileApiTest {
     @org.springframework.boot.test.context.TestConfiguration
     static class TimeConfiguration {
@@ -133,7 +133,7 @@ class ProfileApiTest {
     void studentDashboard() throws Exception {
         var first=body(read("/dashboards/student?accountId="+MockData.id("student2"),"student").andExpect(status().isOk()));
         assertThat(first.path("classrooms").path("items").size()).isEqualTo(2);
-        assertThat(first.path("publicPracticeStatistics").path("solved").asInt()).isEqualTo(2);
+        assertThat(first.path("publicPracticeStatistics").path("solved").asInt()).isEqualTo(1);
         for(String section:Set.of("upcomingAssignments","upcomingQuizzes","enrolledCourses","recentNotifications"))
             assertThat(first.path(section).path("items").isArray()).isTrue();
         var second=body(read("/dashboards/student","student2").andExpect(status().isOk()));

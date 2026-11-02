@@ -9,10 +9,20 @@ From `backend`:
 
 ```powershell
 mvn compile
+$env:SPRING_PROFILES_ACTIVE = 'mock,dev'
 mvn spring-boot:run
 ```
 
-The default Spring profile is `mock`. You may explicitly set `SPRING_PROFILES_ACTIVE=mock`.
+Mock mode is opt-in: set `SPRING_PROFILES_ACTIVE=mock,dev` locally (tests use `mock,test`).
+There is no default mock profile. The unsigned decoder is disabled for `prod` and `production`,
+even if mock/dev/test profiles are also enabled. Never enable mock mode on a public deployment.
+Production requires real repository adapters (not implemented here), plus `JWT_ISSUER`,
+`JWT_AUDIENCE` and `JWT_JWK_SET_URI` (see `.env.example`). Issuer and JWK URL must use HTTPS.
+`JwtAuthenticationConfiguration` verifies RS256/ES256 signatures using the provider's public
+JWKs, exact issuer, audience membership and canonical UUID subject. Tokens require `iat` and
+`exp`; future `iat`/`nbf` and expired tokens are rejected with no clock skew allowance.
+Unsigned mock tokens and HMAC tokens are rejected. Missing/invalid settings fail decoder startup;
+JWK retrieval/signature verification happens when decoding a token. Role still comes from the server account.
 Swagger UI: http://localhost:8080/swagger-ui/index.html. OpenAPI: http://localhost:8080/v3/api-docs.
 `.env.example` lists local settings; Spring does not load this file automatically.
 Use `./mvn-local.ps1 spring-boot:run` in PowerShell to load `backend/.env` for that invocation.
@@ -62,10 +72,24 @@ Authorization: Bearer mock-student
 | mock-admin | Admin only; cannot access Student/Teacher profile management |
 | mock-suspended / mock-deactivated / mock-locked | Authentication denied; suspended/deactivated public profiles hidden |
 
-Mock tokens are development credentials, not signed JWTs. The mock decoder is isolated behind the `mock` profile.
+Mock tokens are development credentials, not signed JWTs. The decoder requires `mock` plus `dev` or `test`.
 Role and current access status come from AccountRepository, never client-supplied IDs or role claims.
 
 ## Call the APIs
+
+### Adding API errors
+
+Define the stable string code, HTTP status and default public message in
+`common/exception/ErrorCode.java`. Throw `new ApiException(ErrorCode.PROFILE_NOT_FOUND)`
+for business errors; an optional second argument supplies a more specific public message.
+For a new framework exception, add an `@ExceptionHandler` mapping in `ApiExceptionHandler`
+and return `error(ErrorCode.YOUR_CODE, request, fields)`.
+For example, `MethodArgumentNotValidException` maps to `VALIDATION_FAILED`, HTTP 400,
+`Invalid request parameters`, with field validation details in `errors`.
+
+Solved counts distinct PUBLISHED public problems with an ACCEPTED official submission.
+Admin `publicCourseCount` and `publicProblemCount` count only PUBLISHED content.
+Draft, Unpublished and Archived content are excluded from these statistics.
 
 All paths below have prefix `/api/v1` and use the existing response envelopes.
 
@@ -103,7 +127,7 @@ Default charts cover the preceding 30 days; days/months and Monday-start weeks u
 Fixtures cover draft/archived sources, personal deadlines, a newer graded attempt superseding an older pending attempt,
 deleted/expired notifications and pending teacher contributions. Counts and charts are derived from source records.
 Solved counts distinct public problems with official ACCEPTED submissions. Streak uses actual accepted submission dates in UTC+7,
-excluding RUN, class practice and assignments. Initial student results are Solved=2, Current Streak=3, Highest Streak=4, calculated from fixture history.
+excluding RUN, class practice, assignments and problems that are not PUBLISHED. Initial student results are Solved=1, Current Streak=3, Highest Streak=4, calculated from fixture history.
 
 ## Storage boundaries and future integration
 
@@ -133,6 +157,21 @@ The mock profile continues to exclude DataSource and Hibernate auto-configuratio
 ## Verification
 
 Run `./mvn-local.ps1 clean verify` to build and run the existing unit/API tests.
+If PowerShell reports that `mvn` is not recognized, Maven is not installed on `PATH`.
+This checkout can use its local Maven installation instead, from `backend`:
+
+```powershell
+.\.tools\apache-maven-3.9.9\bin\mvn.cmd '-Dmaven.repo.local=.tools/repository' clean verify
+```
+
+`.tools` is ignored by Git and is not included in a fresh clone. For a fresh clone,
+install Maven and add its `bin` directory to `PATH`, then open a new terminal.
+The `mvn-local.ps1` helper selects Maven from `PATH` or falls back to the local installation;
+it also loads `.env` settings. The direct command above does not load `.env`.
+
+GitHub Actions workflow `.github/workflows/backend-ci.yml` runs `clean verify` on Java 21
+for pushes and pull requests. Each run uploads Surefire reports as `backend-test-reports`,
+including when tests fail. View the check on the PR's latest commit after pushing the workflow.
 The Supabase test is skipped unless `-Dsupabase.check=true` is explicitly supplied.
 Java 21+ and access to Maven Central (or a populated local Maven cache) are required.
 

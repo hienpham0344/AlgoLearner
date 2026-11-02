@@ -85,7 +85,8 @@ public class InMemoryDashboardRepository implements DashboardRepository {
     }
     public Totals totals() {
         return new Totals(data.accounts.stream().filter(a -> a.role().equals("STUDENT")).count(),data.accounts.stream().filter(a -> a.role().equals("TEACHER")).count(),data.classes.size(),
-            data.contents.stream().filter(x -> x.kind().equals("COURSE")).count(),data.contents.stream().filter(x -> x.kind().equals("PROBLEM")).count(),data.judge.stream().filter(Judge::official).count());
+            data.contents.stream().filter(x -> x.kind().equals("COURSE") && x.status().equals("PUBLISHED")).count(),
+            data.contents.stream().filter(x -> x.kind().equals("PROBLEM") && x.status().equals("PUBLISHED")).count(),data.judge.stream().filter(Judge::official).count());
     }
     public Moderation moderation(Context c) {
         var restrictions=data.restrictions.stream().filter(r -> r.active(c.now())).toList();

@@ -2,7 +2,7 @@ package com.algolearner.platform.profile.dashboard;
 
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.profile.PracticeStatisticsService;
-import org.springframework.http.HttpStatus;
+import com.algolearner.platform.common.exception.ErrorCode;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
@@ -103,6 +103,6 @@ public class DashboardService {
         return switch(interval) { case "week" -> time.plusWeeks(1); case "month" -> time.plusMonths(1); default -> time.plusDays(1); };
     }
     private static ApiException invalid(String message) {
-        return new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED",message);
+        return new ApiException(ErrorCode.VALIDATION_FAILED,message);
     }
 }

@@ -1,0 +1,24 @@
+Project algolearner_profile_4_2 {
+  database_type: 'PostgreSQL'
+  Note: 'SRS 1.1, section 4.2: User Profile and Dashboard. Only user_profiles is new. accounts is an external reference stub from section 4.1; do not create it again or concatenate this stub into the combined schema.'
+}
+
+Table accounts {
+  id uuid [pk]
+
+  Note: 'EXTERNAL REFERENCE ONLY. Full definition: ERD-4.1-account-auth.dbml. Identity, credentials, role, lifecycle and join date remain owned by account-auth.'
+}
+
+Table user_profiles {
+  account_id uuid [pk, not null, note: 'Shared primary key and foreign key; reuse accounts.id, do not generate a new UUID']
+  full_name varchar(150) [note: 'Nullable until supplied; proposed limit, not an SRS-defined limit']
+  avatar_storage_key text [note: 'Nullable opaque key issued by File Storage Service after successful upload; never a client-supplied URL or expiring signed URL']
+  short_bio varchar(500) [note: 'Nullable plain text; proposed limit, not an SRS-defined limit']
+  is_public boolean [not null, default: false, note: 'Privacy preference only; effective visibility also depends on current account state and restrictions']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  Note: 'One profile at most per account. Application provisions a profile for every Student/Teacher. No duplicate username, email, password, role, join date, account status, Practice statistics or Dashboard data. avatar_storage_key is a service reference, not a relational FK; shared file metadata schema is outside section 4.2.'
+}
+
+Ref: user_profiles.account_id - accounts.id [delete: restrict]

@@ -4,7 +4,7 @@ import com.algolearner.platform.common.exception.ApiException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpStatus;
+import com.algolearner.platform.common.exception.ErrorCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
@@ -32,12 +32,12 @@ public class AvatarStorage {
         if(maxBytes<1 || maxBytes>=Integer.MAX_VALUE || maxPixels<1) throw new IllegalArgumentException("Invalid avatar size configuration");
     }
     public String store(MultipartFile file) {
-        if(file.isEmpty()) throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Avatar file is empty");
-        if(file.getSize()>maxBytes) throw failure(HttpStatus.PAYLOAD_TOO_LARGE,"AVATAR_TOO_LARGE","Avatar exceeds upload limit");
+        if(file.isEmpty()) throw failure(ErrorCode.VALIDATION_FAILED,"Avatar file is empty");
+        if(file.getSize()>maxBytes) throw failure(ErrorCode.AVATAR_TOO_LARGE,"Avatar exceeds upload limit");
         Path temporary=null;
         try (InputStream input=file.getInputStream()) {
             byte[] bytes=input.readNBytes((int)maxBytes+1);
-            if(bytes.length>maxBytes) throw failure(HttpStatus.PAYLOAD_TOO_LARGE,"AVATAR_TOO_LARGE","Avatar exceeds upload limit");
+            if(bytes.length>maxBytes) throw failure(ErrorCode.AVATAR_TOO_LARGE,"Avatar exceeds upload limit");
             BufferedImage image;
             String extension;
             try(ImageInputStream imageInput=ImageIO.createImageInputStream(new ByteArrayInputStream(bytes))) {
@@ -51,7 +51,7 @@ public class AvatarStorage {
                     String mime=extension.equals("jpg")?"image/jpeg":"image/png";
                     if(!allowedTypes.contains(mime)) throw invalidType();
                     if((long)reader.getWidth(0)*reader.getHeight(0)>maxPixels)
-                        throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Avatar dimensions exceed configured limit");
+                        throw failure(ErrorCode.VALIDATION_FAILED,"Avatar dimensions exceed configured limit");
                     image=reader.read(0);
                 } finally { reader.dispose(); }
             }
@@ -59,18 +59,18 @@ public class AvatarStorage {
             temporary=Files.createTempFile(directory,"upload-",".tmp");
             // Re-encode decoded pixels to strip metadata and trailing/polyglot content.
             if(!ImageIO.write(image,extension,temporary.toFile())) throw invalidType();
-            if(Files.size(temporary)>maxBytes) throw failure(HttpStatus.PAYLOAD_TOO_LARGE,"AVATAR_TOO_LARGE","Normalized avatar exceeds upload limit");
+            if(Files.size(temporary)>maxBytes) throw failure(ErrorCode.AVATAR_TOO_LARGE,"Normalized avatar exceeds upload limit");
             String key=UUID.randomUUID()+"."+extension;
             Files.move(temporary,path(key),StandardCopyOption.ATOMIC_MOVE);
             return key;
         } catch(ApiException ex) { throw ex; }
         catch(javax.imageio.IIOException ex) { throw invalidType(); }
-        catch(IOException ex) { throw failure(HttpStatus.SERVICE_UNAVAILABLE,"FILE_STORAGE_UNAVAILABLE","Avatar could not be stored"); }
+        catch(IOException ex) { throw failure(ErrorCode.FILE_STORAGE_UNAVAILABLE,"Avatar could not be stored"); }
         finally { if(temporary!=null) try { Files.deleteIfExists(temporary); } catch(IOException ex) { LOG.warn("Unable to clean temporary avatar"); } }
     }
     public Resource read(String key) {
         Path file=path(key);
-        if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)) throw failure(HttpStatus.NOT_FOUND,"PROFILE_NOT_FOUND","Avatar not found");
+        if(!Files.isRegularFile(file,LinkOption.NOFOLLOW_LINKS)) throw failure(ErrorCode.PROFILE_NOT_FOUND,"Avatar not found");
         return new FileSystemResource(file);
     }
     public void delete(String key) {
@@ -78,11 +78,11 @@ public class AvatarStorage {
         try { Files.deleteIfExists(path(key)); } catch(IOException ex) { LOG.warn("Unable to remove unused avatar"); }
     }
     private Path path(String key) {
-        if(key==null || !key.matches("[0-9a-f-]{36}\\.(png|jpg)")) throw failure(HttpStatus.NOT_FOUND,"PROFILE_NOT_FOUND","Avatar not found");
+        if(key==null || !key.matches("[0-9a-f-]{36}\\.(png|jpg)")) throw failure(ErrorCode.PROFILE_NOT_FOUND,"Avatar not found");
         Path result=directory.resolve(key).normalize();
         if(!result.startsWith(directory)) throw invalidType();
         return result;
     }
-    private ApiException invalidType() { return failure(HttpStatus.UNSUPPORTED_MEDIA_TYPE,"UNSUPPORTED_AVATAR_TYPE","Avatar must be a supported image"); }
-    private ApiException failure(HttpStatus status,String code,String message) { return new ApiException(status,code,message); }
+    private ApiException invalidType() { return failure(ErrorCode.UNSUPPORTED_AVATAR_TYPE,"Avatar must be a supported image"); }
+    private ApiException failure(ErrorCode error,String message) { return new ApiException(error,message); }
 }

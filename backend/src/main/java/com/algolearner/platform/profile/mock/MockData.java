@@ -94,6 +94,7 @@ public class MockData implements AccountRepository, PracticeRepository {
     @Override public List<Restriction> restrictions() { return List.copyOf(restrictions); }
     @Override public List<Accepted> acceptedPublicSubmissions(UUID account) {
         return judge.stream().filter(s -> s.account().equals(account) && s.official() && s.publicProblem()!=null && s.verdict().equals("ACCEPTED"))
+            .filter(s -> contents.stream().anyMatch(c -> c.id().equals(s.publicProblem()) && c.kind().equals("PROBLEM") && c.status().equals("PUBLISHED")))
             .map(s -> new Accepted(s.publicProblem(),s.submittedAt())).toList();
     }
 }

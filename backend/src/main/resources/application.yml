@@ -1,6 +1,4 @@
 spring:
-  profiles:
-    default: mock
   jackson:
     deserialization:
       fail-on-unknown-properties: true
@@ -10,6 +8,11 @@ spring:
       max-file-size: ${AVATAR_MAX_SIZE:5MB}
       max-request-size: ${AVATAR_MAX_REQUEST_SIZE:6MB}
 app:
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      jwk-set-uri: ${JWT_JWK_SET_URI:}
   storage:
     avatar-directory: ${AVATAR_DIRECTORY:./data/avatars}
     max-bytes: ${AVATAR_MAX_BYTES:5242880}

@@ -30,25 +30,26 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiErrorResponse> validation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         var fields = ex.getBindingResult().getFieldErrors().stream().map(e -> ApiErrorResponse.ValidationError.builder()
                 .field(e.getField()).message(e.getDefaultMessage()).build()).toList();
-        return error(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "Invalid request parameters", request, fields);
+        return error(ErrorCode.VALIDATION_FAILED, request, fields);
     }
     @ExceptionHandler({HttpMessageNotReadableException.class, ConstraintViolationException.class,
             MethodArgumentTypeMismatchException.class, MissingServletRequestParameterException.class,
             MissingServletRequestPartException.class})
     ResponseEntity<ApiErrorResponse> invalid(Exception ex, HttpServletRequest request) {
-        return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST_BODY", "Invalid request parameters", request, null);
+        return error(ErrorCode.INVALID_REQUEST_BODY, request, null);
     }
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ApiErrorResponse> tooLarge(Exception ex, HttpServletRequest request) {
-        return error(HttpStatus.PAYLOAD_TOO_LARGE, "AVATAR_TOO_LARGE", "Avatar exceeds upload limit", request, null);
+        return error(ErrorCode.AVATAR_TOO_LARGE, request, null);
     }
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ApiErrorResponse> forbidden(Exception ex, HttpServletRequest request) {
-        return error(HttpStatus.FORBIDDEN, "FORBIDDEN_OPERATION", "Access denied", request, null);
+        return error(ErrorCode.FORBIDDEN_OPERATION, request, null);
     }
     @ExceptionHandler(ResponseStatusException.class)
     ResponseEntity<ApiErrorResponse> status(ResponseStatusException ex, HttpServletRequest request) {
-        return error(HttpStatus.valueOf(ex.getStatusCode().value()), "INVALID_REQUEST", ex.getReason(), request, null);
+        return error(HttpStatus.valueOf(ex.getStatusCode().value()), ErrorCode.INVALID_REQUEST.getCode(),
+                ErrorCode.INVALID_REQUEST.getMessage(), request, null);
     }
     @ExceptionHandler(Exception.class)
     ResponseEntity<ApiErrorResponse> unexpected(Exception ex, HttpServletRequest request) {
@@ -57,7 +58,11 @@ public class ApiExceptionHandler {
             return error(status,"HTTP_"+status.value(),status.getReasonPhrase(),request,null);
         }
         LOG.error("Request failed: {}", request.getRequestURI(), ex);
-        return error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_SERVER_ERROR", "Request could not be completed", request, null);
+        return error(ErrorCode.INTERNAL_SERVER_ERROR, request, null);
+    }
+    private ResponseEntity<ApiErrorResponse> error(ErrorCode error, HttpServletRequest request,
+            List<ApiErrorResponse.ValidationError> fields) {
+        return error(error.getHttpStatus(), error.getCode(), error.getMessage(), request, fields);
     }
     private ResponseEntity<ApiErrorResponse> error(HttpStatus status, String code, String message,
             HttpServletRequest request, List<ApiErrorResponse.ValidationError> fields) {

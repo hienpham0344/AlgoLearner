@@ -3,7 +3,7 @@ package com.algolearner.platform.profile;
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.security.AccountAccess;
 import org.springframework.core.io.Resource;
-import org.springframework.http.HttpStatus;
+import com.algolearner.platform.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.util.UriUtils;
@@ -25,7 +25,7 @@ public class ProfileService {
     public UserProfile own(UUID id) { requireProfileRole(id); return ownResponse(repository.own(id)); }
     public synchronized UserProfile update(UUID id,ProfileUpdate request) {
         requireProfileRole(id);
-        if(!request.hasFullName && !request.hasShortBio) throw new ApiException(HttpStatus.BAD_REQUEST,"INVALID_REQUEST_BODY","At least one editable field is required");
+        if(!request.hasFullName && !request.hasShortBio) throw new ApiException(ErrorCode.INVALID_REQUEST_BODY,"At least one editable field is required");
         String name=normalize(request.fullName,150),bio=normalize(request.shortBio,500);
         var old=repository.own(id);
         repository.update(id,request.hasFullName?name:old.fullName(),request.hasShortBio?bio:old.shortBio(),clock.instant());
@@ -33,7 +33,7 @@ public class ProfileService {
     }
     public synchronized UserProfile privacy(UUID id,PrivacyUpdate request) {
         requireProfileRole(id);
-        if(request.isPublic()==null) throw new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","isPublic must be a boolean");
+        if(request.isPublic()==null) throw new ApiException(ErrorCode.VALIDATION_FAILED,"isPublic must be a boolean");
         repository.privacy(id,request.isPublic(),clock.instant());
         return ownResponse(repository.own(id));
     }
@@ -70,12 +70,12 @@ public class ProfileService {
     }
     private void requireProfileRole(UUID id) {
         if(!java.util.Set.of("STUDENT","TEACHER").contains(access.activeRole(id)))
-            throw new ApiException(HttpStatus.FORBIDDEN,"FORBIDDEN_OPERATION","Profile management is available to Student and Teacher only");
+            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION,"Profile management is available to Student and Teacher only");
     }
     private String normalize(String value,int limit) {
         if(value==null) return null;
         String result=value.strip();
-        if(result.codePointCount(0,result.length())>limit) throw new ApiException(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Profile text exceeds maximum length");
+        if(result.codePointCount(0,result.length())>limit) throw new ApiException(ErrorCode.VALIDATION_FAILED,"Profile text exceeds maximum length");
         return result.isEmpty()?null:result;
     }
 }

@@ -1,6 +1,6 @@
 package com.algolearner.platform.common.security;
 import com.algolearner.platform.common.exception.ApiException;
-import org.springframework.http.HttpStatus;
+import com.algolearner.platform.common.exception.ErrorCode;
 import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.util.UUID;
@@ -13,6 +13,6 @@ public class AccountAccess {
         return repository.accounts().stream().filter(a -> a.id().equals(id) && a.status().equals("ACTIVE"))
             .filter(a -> repository.restrictions().stream().noneMatch(r -> r.accountId().equals(id) && r.active(clock.instant())))
             .map(AccountRepository.Account::role).findFirst().orElseThrow(() ->
-                new ApiException(HttpStatus.FORBIDDEN,"FORBIDDEN_OPERATION","Account access denied"));
+                new ApiException(ErrorCode.FORBIDDEN_OPERATION,"Account access denied"));
     }
 }

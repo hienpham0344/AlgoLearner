@@ -4,9 +4,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.oauth2.jwt.*;
 import java.time.Clock;
-/** Development adapter. Replace with a real JwtDecoder when integrating module 4.1. */
+/** Unsigned development tokens require explicit mock and dev/test profiles. */
 @Configuration
-@Profile("mock")
+@Profile("mock & (dev | test) & !prod & !production")
 public class MockAuthenticationConfiguration {
     @Bean JwtDecoder mockJwtDecoder(AccountRepository repository, Clock clock) {
         return token -> {

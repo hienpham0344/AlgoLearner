@@ -2,6 +2,7 @@ package com.algolearner.platform.common.security;
 
 import com.algolearner.platform.common.dto.ApiErrorResponse;
 import com.algolearner.platform.common.exception.ApiException;
+import com.algolearner.platform.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,20 +37,20 @@ public class SecurityConfig {
                     throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token"), "Account access denied");
                 }
             })).authenticationEntryPoint((request, response, ex) -> {
-                response.setStatus(401); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                mapper.writeValue(response.getOutputStream(), ApiErrorResponse.builder().errorCode("UNAUTHORIZED_ACCESS")
-                        .message("Authentication is required").path(request.getRequestURI()).build());
+                response.setStatus(ErrorCode.UNAUTHORIZED_ACCESS.getHttpStatus().value()); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                mapper.writeValue(response.getOutputStream(), ApiErrorResponse.builder().errorCode(ErrorCode.UNAUTHORIZED_ACCESS.getCode())
+                        .message(ErrorCode.UNAUTHORIZED_ACCESS.getMessage()).path(request.getRequestURI()).build());
             }))
             .exceptionHandling(errors -> errors
                 .authenticationEntryPoint((request, response, ex) -> {
-                    response.setStatus(401); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    mapper.writeValue(response.getOutputStream(), ApiErrorResponse.builder().errorCode("UNAUTHORIZED_ACCESS")
-                            .message("Authentication is required").path(request.getRequestURI()).build());
+                    response.setStatus(ErrorCode.UNAUTHORIZED_ACCESS.getHttpStatus().value()); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    mapper.writeValue(response.getOutputStream(), ApiErrorResponse.builder().errorCode(ErrorCode.UNAUTHORIZED_ACCESS.getCode())
+                            .message(ErrorCode.UNAUTHORIZED_ACCESS.getMessage()).path(request.getRequestURI()).build());
                 })
                 .accessDeniedHandler((request, response, ex) -> {
-                    response.setStatus(403); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-                    mapper.writeValue(response.getOutputStream(), ApiErrorResponse.builder().errorCode("FORBIDDEN_OPERATION")
-                            .message("Access denied").path(request.getRequestURI()).build());
+                    response.setStatus(ErrorCode.FORBIDDEN_OPERATION.getHttpStatus().value()); response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                    mapper.writeValue(response.getOutputStream(), ApiErrorResponse.builder().errorCode(ErrorCode.FORBIDDEN_OPERATION.getCode())
+                            .message(ErrorCode.FORBIDDEN_OPERATION.getMessage()).path(request.getRequestURI()).build());
                 }));
         return http.build();
     }
