@@ -121,3 +121,5 @@ Trong thư mục `frontend`, chạy `npm.cmd run dev:auth-demo` trên Windows ho
 Backend thật cần trả `resetToken` ngắn hạn từ `POST /api/v1/auth/verify-otp` với `purpose: RESET_PASSWORD`, rồi xác thực và tiêu thụ token đó trong `POST /api/v1/auth/reset-password`. Token phải hết hạn và chỉ dùng một lần.
 
 Chế độ này chỉ mô phỏng API trong Vite khi dùng lệnh `dev:auth-demo`; nó không kiểm chứng bảo mật hay dữ liệu của Spring backend thật.
+
+Sau khi đăng nhập tài khoản demo, mở `/dashboard` để xem Dashboard Student với dữ liệu mẫu được gắn nhãn. Các phần dữ liệu thật còn thiếu API được ghi tại [`docs/student-dashboard-integration.md`](docs/student-dashboard-integration.md).

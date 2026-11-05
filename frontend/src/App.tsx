@@ -39,8 +39,9 @@ export const App: React.FC = () => {
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/courses" element={<CoursePreviewPage />} />
       </Route>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <DashboardPage />
