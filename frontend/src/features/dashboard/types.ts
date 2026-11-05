@@ -2,7 +2,7 @@ export interface CourseProgress {
   id: string;
   title: string;
   topic: string;
-  currentLesson: string;
+  currentLesson?: string;
   progressPercent: number;
   href?: string;
 }
@@ -13,7 +13,7 @@ export interface LearningDeadline {
   className: string;
   kind: 'Assignment' | 'Quiz';
   dueAt: string;
-  status: 'Not started' | 'In progress';
+  status?: 'Not started' | 'In progress';
   href?: string;
 }
 

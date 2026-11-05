@@ -9,6 +9,8 @@ import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { AuthExperience } from '@/features/auth/components/AuthExperience';
 import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
+import { ProfilePage } from '@/features/profile/pages/ProfilePage';
+import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -40,6 +42,8 @@ export const App: React.FC = () => {
         <Route path="/courses" element={<CoursePreviewPage />} />
       </Route>
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/u/:username" element={<PublicProfilePage />} />
+      <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route
         path="/dashboard"
         element={

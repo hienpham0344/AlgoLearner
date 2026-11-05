@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initAuth = async () => {
       const savedToken = localStorage.getItem('algolearner_token');
       if (savedToken) {
-        if (import.meta.env.MODE === 'auth-demo' && savedToken.startsWith('mock-')) {
+        if (['auth-demo', 'backend-mock'].includes(import.meta.env.MODE) && savedToken.startsWith('mock-')) {
           const storedUser = savedAuthUser();
           if (storedUser) { setUser(storedUser); setIsLoading(false); return; }
         }

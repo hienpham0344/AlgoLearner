@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from 'vite';
+import { demoRoleIdentity } from './demoRoleIdentity';
 
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -63,7 +64,7 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
   return JSON.parse(raw);
 }
 
-export function authDemoPlugin(): Plugin {
+export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'): Plugin {
   const attempts = new Map<string, AttemptState>();
   const challenges = new Map<string, ResetChallenge>();
   const grants = new Map<string, ResetGrant>();
@@ -160,6 +161,16 @@ export function authDemoPlugin(): Plugin {
         }
 
         const identity = payload.usernameOrEmail.trim().toLowerCase();
+        const roleIdentity = demoRoleIdentity(identity, roleAccountMode);
+        if (payload.password === INITIAL_DEMO_PASSWORD && roleIdentity) {
+          const role = roleIdentity.toUpperCase();
+          attempts.delete(identity);
+          respond(response, 200, successBody({ token: `mock-${roleIdentity}`, user: {
+            id: `backend-mock-${roleIdentity}`, username: roleIdentity, email: `${roleIdentity}@example.test`, role,
+            fullName: `Demo ${roleIdentity[0].toUpperCase()}${roleIdentity.slice(1)}`, lifecycleStatus: 'ACTIVE',
+          } }, roleAccountMode === 'backend-mock' ? 'Signed in to the backend mock' : 'Signed in to the demo workspace'));
+          return;
+        }
         const now = Date.now();
         const saved = attempts.get(identity);
         const state = saved?.lockedUntil && saved.lockedUntil <= now ? { count: 0, lockedUntil: null } : saved ?? { count: 0, lockedUntil: null };

@@ -1,21 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { ArrowRight, Bell, BookOpen, CalendarDays, ChevronRight, Code2, Flame, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, Bell, BookOpen, CalendarDays, ChevronRight, Code2, Flame, LayoutDashboard, LogOut, Menu, UserRound, X } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { apiClient } from '@/services/apiClient';
-import type { ApiResponse } from '@/types/api';
+import { profileApi } from '@/features/profile/api/profileApi';
 import logoMark from '@/assets/logo-mark.svg';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
 import type { LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
+import { dashboardApi, dashboardKeys, profileKeys } from '../api/dashboardApi';
+import { mapStudentDashboard } from '../mapStudentDashboard';
+import { RoleDashboardPage } from './RoleDashboardPage';
 import '../styles/dashboard.css';
-
-interface UserProfileData {
-  fullName?: string;
-  publicPracticeStatistics?: { solved?: number };
-  streak?: { currentStreak?: number };
-}
 
 const isDemo = import.meta.env.MODE === 'auth-demo';
 const emptyData: StudentDashboardData = {
@@ -38,40 +35,24 @@ export const DashboardPage = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [navOpen, setNavOpen] = useState(false);
-  const [profile, setProfile] = useState<UserProfileData | null>(null);
-  const [profileState, setProfileState] = useState<'loading' | 'ready' | 'unavailable' | 'restricted'>(isDemo ? 'ready' : 'loading');
-  const [profileRetry, setProfileRetry] = useState(0);
-
+  const student = user?.role === 'STUDENT';
+  const profileQuery = useQuery({ queryKey: profileKeys.own(), queryFn: ({ signal }) => profileApi.own(signal), enabled: student && !isDemo, retry: false });
+  const dashboardQuery = useQuery({ queryKey: dashboardKeys.student(), queryFn: ({ signal }) => dashboardApi.student(signal), enabled: student && !isDemo, retry: false });
   useEffect(() => {
-    if (isDemo || user?.role !== 'STUDENT') return;
-    const controller = new AbortController();
-    setProfileState('loading');
-    apiClient.get<ApiResponse<UserProfileData>>('/users/me/profile', { signal: controller.signal })
-      .then(response => { setProfile(response.data.data); setProfileState('ready'); })
-      .catch(error => {
-        if (controller.signal.aborted) return;
-        if (isAxiosError(error) && error.response?.status === 401) {
-          logout();
-          navigate('/login', { replace: true });
-          return;
-        }
-        setProfileState(isAxiosError(error) && error.response?.status === 403 ? 'restricted' : 'unavailable');
-      });
-    return () => controller.abort();
-  }, [user?.role, profileRetry]);
+    if ([profileQuery.error, dashboardQuery.error].some(error => isAxiosError(error) && error.response?.status === 401)) {
+      logout(); navigate('/login', { replace: true });
+    }
+  }, [profileQuery.error, dashboardQuery.error, logout, navigate]);
 
   const signOut = () => { logout(); navigate('/login', { replace: true }); };
   if (user?.role !== 'STUDENT') {
-    return <main className="dashboard-role-guard"><div><span className="dashboard-eyebrow">ALGOLEARN WORKSPACE</span><h1>Student workspace</h1><p>This dashboard is available to student accounts.</p><button type="button" onClick={signOut}>Sign out <ArrowRight size={16} aria-hidden="true" /></button></div></main>;
+    return user?.role === 'TEACHER' || user?.role === 'ADMIN' ? <RoleDashboardPage role={user.role} /> : null;
   }
 
-  const data = isDemo ? dashboardDemoData : emptyData;
-  const practice: PracticeStats = isDemo ? data.practice : {
-    currentStreak: profile?.streak?.currentStreak ?? null,
-    totalSolved: profile?.publicPracticeStatistics?.solved ?? null,
-    easy: null, medium: null, hard: null,
-  };
-  const displayName = profile?.fullName || user.fullName || user.username;
+  const data = isDemo ? dashboardDemoData : dashboardQuery.data ? mapStudentDashboard(dashboardQuery.data) : emptyData;
+  const practice: PracticeStats = data.practice;
+  const profileState = isDemo ? 'ready' : dashboardQuery.isPending ? 'loading' : dashboardQuery.isError ? isAxiosError(dashboardQuery.error) && dashboardQuery.error.response?.status === 403 ? 'restricted' : 'unavailable' : 'ready';
+  const displayName = profileQuery.data?.fullName || user.fullName || user.username;
   const firstName = displayName?.split(' ')[0] || 'Learner';
   const featuredCourse = data.courses[0];
   const unreadCount = data.notifications.filter(notification => !notification.read).length;
@@ -86,6 +67,7 @@ export const DashboardPage = () => {
     { label: 'Public courses', href: '/courses', icon: Code2 },
     { label: 'Coding practice', href: '#practice', icon: Flame },
     { label: 'Notifications', href: '#notifications', icon: Bell },
+    { label: 'My profile', href: '/profile', icon: UserRound },
   ];
 
   return (
@@ -111,21 +93,22 @@ export const DashboardPage = () => {
           <span className="dashboard-topbar-path">Workspace <ChevronRight size={13} aria-hidden="true" /> Dashboard</span>
           <div className="dashboard-topbar-actions">
             <a className="dashboard-icon-link" href="#notifications" aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}><Bell size={18} strokeWidth={1.8} aria-hidden="true" />{unreadCount > 0 && <span className="dashboard-notification-dot" />}</a>
-            <details className="dashboard-profile"><summary aria-label="Account menu"><span className="dashboard-avatar">{firstName.slice(0, 1).toUpperCase()}</span><span className="dashboard-profile-name">{displayName}</span></summary><div className="dashboard-profile-menu"><strong>{displayName}</strong><span>{user.email}</span><button type="button" onClick={signOut}><LogOut size={15} aria-hidden="true" /> Sign out</button></div></details>
+            <Link className="dashboard-topbar-profile-link" to="/profile"><UserRound size={16} aria-hidden="true" /><span>My profile</span></Link>
+            <details className="dashboard-profile"><summary aria-label="Account menu"><span className="dashboard-avatar">{firstName.slice(0, 1).toUpperCase()}</span><span className="dashboard-profile-name">{displayName}</span></summary><div className="dashboard-profile-menu"><strong>{displayName}</strong><span>{user.email}</span><Link to="/profile" className="dashboard-profile-setting">Profile settings</Link><button type="button" onClick={signOut}><LogOut size={15} aria-hidden="true" /> Sign out</button></div></details>
           </div>
         </header>
 
         <main className="dashboard-content">
           <div className="dashboard-intro"><div><span className="dashboard-eyebrow">YOUR LEARNING SPACE</span><h1>Keep building.</h1><p>Pick up where you left off, {firstName}.</p></div><span className="dashboard-today">{new Intl.DateTimeFormat('en', { timeZone: 'Asia/Bangkok', weekday: 'long', month: 'short', day: 'numeric' }).format(new Date())}</span></div>
-          {isDemo ? <p className="dashboard-mode-note"><span /> Demo workspace · sample learning data</p> : <p className="dashboard-availability-note">{profileState === 'unavailable' ? <>Practice details could not be loaded. <button type="button" onClick={() => setProfileRetry(value => value + 1)}>Try again</button></> : profileState === 'restricted' ? 'Practice details are unavailable for this account.' : 'Learning activity will appear here as your workspace becomes available.'}</p>}
+          {isDemo ? <p className="dashboard-mode-note"><span /> Demo workspace · sample learning data</p> : dashboardQuery.data && <p className="dashboard-availability-note" role="status">{profileQuery.isError ? 'Profile details could not be loaded; your learning data is still available.' : 'Your learning activity is up to date.'}</p>}
 
-          <div className="dashboard-grid">
+          {!isDemo && (dashboardQuery.isPending || dashboardQuery.isError) ? <div className="dashboard-fetch-state" role={dashboardQuery.isError ? 'alert' : 'status'}><span className="dashboard-eyebrow">YOUR LEARNING SPACE</span><h2>{dashboardQuery.isPending ? 'Loading your workspace…' : profileState === 'restricted' ? 'Access restricted.' : 'Learning activity unavailable.'}</h2>{dashboardQuery.isError && <><p>{profileState === 'restricted' ? 'This account cannot access the student dashboard.' : 'We could not load your learning data.'}</p>{profileState !== 'restricted' && <button type="button" onClick={() => dashboardQuery.refetch()}>Try again</button>}</>}</div> : <div className="dashboard-grid">
             <div className="dashboard-primary">
               <section aria-labelledby="learning-title" id="learning" className="dashboard-learning-section">
                 <div className="dashboard-section-heading"><span className="dashboard-eyebrow">01 / THE NEXT STEP</span><h2 id="learning-title">Continue learning</h2></div>
                 <div className="dashboard-learning-card">
                   {featuredCourse ? <>
-                    <div className="dashboard-learning-content"><span className="dashboard-learning-label">CURRENT COURSE · {featuredCourse.topic}</span><h3>{featuredCourse.title}</h3><p>Up next: {featuredCourse.currentLesson}</p><div className="dashboard-progress-info"><span>Course progress</span><strong>{featuredCourse.progressPercent}%</strong></div><div className="dashboard-progress-track" role="progressbar" aria-label={`${featuredCourse.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={featuredCourse.progressPercent}><span style={{ width: `${featuredCourse.progressPercent}%` }} /></div>{featuredCourse.href && <Link className="dashboard-learning-action" to={featuredCourse.href}>Explore course preview <ArrowRight size={16} aria-hidden="true" /></Link>}</div>
+                    <div className="dashboard-learning-content"><span className="dashboard-learning-label">CURRENT COURSE · {featuredCourse.topic}</span><h3>{featuredCourse.title}</h3>{featuredCourse.currentLesson && <p>Up next: {featuredCourse.currentLesson}</p>}<div className="dashboard-progress-info"><span>Course progress</span><strong>{featuredCourse.progressPercent}%</strong></div><div className="dashboard-progress-track" role="progressbar" aria-label={`${featuredCourse.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={featuredCourse.progressPercent}><span style={{ width: `${featuredCourse.progressPercent}%` }} /></div>{featuredCourse.href && <Link className="dashboard-learning-action" to={featuredCourse.href}>Explore course preview <ArrowRight size={16} aria-hidden="true" /></Link>}</div>
                     <span className="dashboard-learning-index" aria-hidden="true">&lt; / &gt;</span>
                   </> : <>
                     <div className="dashboard-learning-content"><span className="dashboard-learning-label">YOUR NEXT CHAPTER</span><h3>Your next chapter starts here.</h3><p>Choose a topic that interests you and start learning at your pace.</p><Link className="dashboard-learning-action" to="/courses">Explore courses <ArrowRight size={16} aria-hidden="true" /></Link></div>
@@ -137,12 +120,12 @@ export const DashboardPage = () => {
 
               <section aria-labelledby="deadlines-title" id="deadlines" className="dashboard-section">
                 <div className="dashboard-section-heading"><span className="dashboard-eyebrow">02 / WHAT'S AHEAD</span><h2 id="deadlines-title">Upcoming deadlines</h2></div>
-                {groupedDeadlines.length ? <div className="dashboard-agenda">{groupedDeadlines.map(group => <div className="dashboard-agenda-group" key={group.label}><h3>{group.label}</h3>{group.items.map((item: LearningDeadline) => <div className="dashboard-agenda-row" key={item.id}><span className="dashboard-agenda-mark" data-urgency={group.label} /><div className="dashboard-agenda-main"><strong>{item.title}</strong><span>{item.className} · {item.kind} · {item.status}</span></div><time dateTime={item.dueAt}>{dateLabel(item.dueAt)}</time>{item.href && <Link to={item.href} aria-label={`Open ${item.title}`}><ArrowRight size={16} /></Link>}</div>)}</div>)}</div> : <div className="dashboard-empty dashboard-empty-line"><CalendarDays size={19} strokeWidth={1.5} aria-hidden="true" /><div><strong>No deadlines to show yet.</strong><p>Assignments and quizzes will appear here when available.</p></div></div>}
+                {groupedDeadlines.length ? <div className="dashboard-agenda">{groupedDeadlines.map(group => <div className="dashboard-agenda-group" key={group.label}><h3>{group.label}</h3>{group.items.map((item: LearningDeadline) => <div className="dashboard-agenda-row" key={item.id}><span className="dashboard-agenda-mark" data-urgency={group.label} /><div className="dashboard-agenda-main"><strong>{item.title}</strong><span>{item.className} · {item.kind}{item.status && ` · ${item.status}`}</span></div><time dateTime={item.dueAt}>{dateLabel(item.dueAt)}</time>{item.href && <Link to={item.href} aria-label={`Open ${item.title}`}><ArrowRight size={16} /></Link>}</div>)}</div>)}</div> : <div className="dashboard-empty dashboard-empty-line"><CalendarDays size={19} strokeWidth={1.5} aria-hidden="true" /><div><strong>No deadlines to show yet.</strong><p>Assignments and quizzes will appear here when available.</p></div></div>}
               </section>
 
               <section aria-labelledby="classes-title" id="classes" className="dashboard-section">
                 <div className="dashboard-section-heading"><span className="dashboard-eyebrow">03 / YOUR COMMUNITY</span><h2 id="classes-title">My classes</h2></div>
-                {data.classes.length ? <div className="dashboard-class-list">{data.classes.map(classroom => <div className="dashboard-class-row" key={classroom.id}><span className="dashboard-class-initial" aria-hidden="true">{classroom.name.slice(0, 1)}</span><div><strong>{classroom.name}</strong><span>{classroom.teacher ? `${classroom.teacher} · ` : ''}{classroom.code}</span></div>{classroom.href && <Link to={classroom.href} aria-label={`Open ${classroom.name}`}><ArrowRight size={16} /></Link>}</div>)}</div> : <div className="dashboard-empty dashboard-empty-line"><BookOpen size={19} strokeWidth={1.5} aria-hidden="true" /><div><strong>Your classes will show up here.</strong><p>Class information is not available yet.</p></div></div>}
+                {data.classes.length ? <div className="dashboard-class-list">{data.classes.map(classroom => <div className="dashboard-class-row" key={classroom.id}><span className="dashboard-class-initial" aria-hidden="true">{classroom.name.slice(0, 1)}</span><div><strong>{classroom.name}</strong>{(classroom.teacher || classroom.code) && <span>{classroom.teacher ? `${classroom.teacher} · ` : ''}{classroom.code}</span>}</div>{classroom.href && <Link to={classroom.href} aria-label={`Open ${classroom.name}`}><ArrowRight size={16} /></Link>}</div>)}</div> : <div className="dashboard-empty dashboard-empty-line"><BookOpen size={19} strokeWidth={1.5} aria-hidden="true" /><div><strong>Your classes will show up here.</strong><p>Class information is not available yet.</p></div></div>}
               </section>
             </div>
 
@@ -156,10 +139,10 @@ export const DashboardPage = () => {
 
               <section aria-labelledby="notifications-title" id="notifications" className="dashboard-notifications">
                 <div className="dashboard-section-heading"><span className="dashboard-eyebrow">05 / STAY IN THE LOOP</span><h2 id="notifications-title">Recent notifications</h2></div>
-                {data.notifications.length ? <div className="dashboard-notification-list">{data.notifications.map(notification => <div className="dashboard-notification-row" key={notification.id}><span className="dashboard-notification-indicator" data-unread={!notification.read} aria-label={notification.read ? 'Read' : 'Unread'} /><div><strong>{notification.title}</strong><p>{notification.detail}</p><time dateTime={notification.createdAt}>{dateLabel(notification.createdAt)}</time></div>{notification.href && <a href={notification.href} aria-label={`Go to ${notification.title}`}><ArrowRight size={15} /></a>}</div>)}</div> : <div className="dashboard-empty dashboard-empty-notifications"><Bell size={18} strokeWidth={1.5} aria-hidden="true" /><strong>All caught up.</strong><p>New updates will appear here.</p></div>}
+                {data.notifications.length ? <div className="dashboard-notification-list">{data.notifications.map(notification => <div className="dashboard-notification-row" key={notification.id}><span className="dashboard-notification-indicator" data-unread={!notification.read} aria-label={notification.read ? 'Read' : 'Unread'} /><div><strong>{notification.title}</strong>{notification.detail && <p>{notification.detail}</p>}<time dateTime={notification.createdAt}>{dateLabel(notification.createdAt)}</time></div>{notification.href && <a href={notification.href} aria-label={`Go to ${notification.title}`}><ArrowRight size={15} /></a>}</div>)}</div> : <div className="dashboard-empty dashboard-empty-notifications"><Bell size={18} strokeWidth={1.5} aria-hidden="true" /><strong>All caught up.</strong><p>New updates will appear here.</p></div>}
               </section>
             </aside>
-          </div>
+          </div>}
         </main>
         <footer className="dashboard-footer"><span>© {new Date().getFullYear()} AlgoLearn</span><span>Think. Code. Repeat.</span></footer>
       </div>
