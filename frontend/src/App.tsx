@@ -8,7 +8,6 @@ import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { AuthExperience } from '@/features/auth/components/AuthExperience';
-import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -37,7 +36,6 @@ export const App: React.FC = () => {
         <Route path="/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/courses" element={<CoursePreviewPage />} />
       </Route>
       <Route
         path="/"

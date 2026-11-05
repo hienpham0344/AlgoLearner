@@ -92,7 +92,7 @@ export function authDemoPlugin(): Plugin {
 
         if (route === '/api/v1/auth/forgot-password') {
           challenges.set(email, { expiresAt: now + CODE_LIFETIME_MS, resendAt: now + RESEND_WAIT_MS, failures: 0 });
-          respond(response, 200, successBody({ message: 'Demo reset code: 123456' }, 'Reset code sent.'));
+          respond(response, 200, successBody({ message: 'Reset code sent.' }, 'Reset code sent.'));
           return;
         }
 
@@ -102,7 +102,7 @@ export function authDemoPlugin(): Plugin {
             fail(429, 'RESEND_TOO_SOON', 'Wait before requesting another code.', Math.ceil((challenge.resendAt - now) / 1000)); return;
           }
           challenges.set(email, { expiresAt: now + CODE_LIFETIME_MS, resendAt: now + RESEND_WAIT_MS, failures: 0 });
-          respond(response, 200, successBody({ success: true, message: 'Demo reset code: 123456' }, 'Reset code sent.'));
+          respond(response, 200, successBody({ success: true, message: 'Reset code sent.' }, 'Reset code sent.'));
           return;
         }
 
