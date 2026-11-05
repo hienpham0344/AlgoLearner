@@ -86,3 +86,5 @@ coverage/
 # Temp files
 *.tmp
 *.bak
+.qa-browser-*/
+frontend/.qa/
