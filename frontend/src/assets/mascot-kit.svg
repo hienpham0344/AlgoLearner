@@ -1,5 +1,9 @@
 <svg width="280" height="280" viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
 <style>
+@media (prefers-reduced-motion: reduce) {
+  * { animation-play-state: paused !important; }
+}
+
 @keyframes kf_Group_transform_0 {
   0% {
     animation-timing-function: ease-in-out;
@@ -49,7 +53,7 @@
 }
 #Group {
   transform-origin: 0 0;
-  animation: kf_Group_transform_0 6s linear infinite;
+  animation: kf_Group_transform_0 7.8s linear infinite;
 }
 @keyframes kf_Ch__n_ph___i_transform_0 {
   0% {
@@ -96,7 +100,7 @@
 }
 #Ch__n_ph___i {
   transform-origin: 0 0;
-  animation: kf_Ch__n_ph___i_transform_0 6s linear infinite;
+  animation: kf_Ch__n_ph___i_transform_0 7.8s linear infinite;
 }
 @keyframes kf_Ch__n_tr__i_transform_0 {
   0% {
@@ -143,7 +147,7 @@
 }
 #Ch__n_tr__i {
   transform-origin: 0 0;
-  animation: kf_Ch__n_tr__i_transform_0 6s linear infinite;
+  animation: kf_Ch__n_tr__i_transform_0 7.8s linear infinite;
 }
 @keyframes kf_Tay_ph___i_transform_0 {
   0% {
@@ -190,7 +194,7 @@
 }
 #Tay_ph___i {
   transform-origin: 0 0;
-  animation: kf_Tay_ph___i_transform_0 6s linear infinite;
+  animation: kf_Tay_ph___i_transform_0 7.8s linear infinite;
 }
 @keyframes kf_Tay_tr__i_transform_0 {
   0% {
@@ -237,7 +241,7 @@
 }
 #Tay_tr__i {
   transform-origin: 0 0;
-  animation: kf_Tay_tr__i_transform_0 6s linear infinite;
+  animation: kf_Tay_tr__i_transform_0 7.8s linear infinite;
 }
 @keyframes kf_Vector_transform_0 {
   0% {
@@ -281,7 +285,7 @@
 }
 #Vector {
   transform-origin: 0 0;
-  animation: kf_Vector_transform_0 6s linear infinite;
+  animation: kf_Vector_transform_0 7.8s linear infinite;
 }
 @keyframes kf_Vector_2_transform_0 {
   0% {
@@ -325,7 +329,7 @@
 }
 #Vector_2 {
   transform-origin: 0 0;
-  animation: kf_Vector_2_transform_0 6s linear infinite;
+  animation: kf_Vector_2_transform_0 7.8s linear infinite;
 }
 @keyframes kf_M___t_t___i_gi___n_transform_0 {
   0% {
@@ -574,8 +578,8 @@
   offset-rotate: 0deg;
   offset-anchor: 0px 0px;
   animation:
-    kf_M___t_t___i_gi___n_transform_0 6s linear infinite,
-    kf_M___t_t___i_gi___n_offset_distance_0 6s linear infinite;
+    kf_M___t_t___i_gi___n_transform_0 7.8s linear infinite,
+    kf_M___t_t___i_gi___n_offset_distance_0 7.8s linear infinite;
 }
 </style>
 <g id="Kit_____M__o_l___p_tr__nh" clip-path="url(#clip0_11_44)">

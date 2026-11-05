@@ -107,3 +107,17 @@ Dự án được tích hợp bộ công cụ phát triển chuyên sâu từ **
 ## Chạy dịch vụ local
 
 Đặt biến `POSTGRES_PASSWORD` trong môi trường shell hoặc trong tệp `docker/.env` (tệp này không được đưa lên Git), rồi chạy `docker compose -f docker/docker-compose.yml up -d`.
+
+### Thử giao diện đăng nhập khi chưa có backend
+
+Trong thư mục `frontend`, chạy `npm.cmd run dev:auth-demo` trên Windows hoặc `npm run dev:auth-demo` trên hệ điều hành khác, rồi mở `http://localhost:3000/login`.
+
+- Tài khoản thử: `learner@example.test`; mật khẩu đúng: `DemoPass123!`.
+- Nhập một mật khẩu sai năm lần cho cùng tài khoản để thấy bốn phản hồi `401` và phản hồi khóa `423` ở lần thứ năm. Giao diện hiển thị thời gian từ header `Retry-After` và vô hiệu hóa nút đăng nhập.
+- Dừng và chạy lại dev server để xóa bộ đếm thử nghiệm trong bộ nhớ.
+
+Để thử luồng quên mật khẩu khi chưa có backend, mở `/forgot-password`, nhập `learner@example.test`, rồi dùng mã demo `123456` ở màn hình xác minh. Form đặt mật khẩu mới chỉ hiện sau khi xác minh thành công. Mật khẩu mới dùng được để đăng nhập tài khoản demo trong cùng phiên dev server. Chế độ này không gửi email thật.
+
+Backend thật cần trả `resetToken` ngắn hạn từ `POST /api/v1/auth/verify-otp` với `purpose: RESET_PASSWORD`, rồi xác thực và tiêu thụ token đó trong `POST /api/v1/auth/reset-password`. Token phải hết hạn và chỉ dùng một lần.
+
+Chế độ này chỉ mô phỏng API trong Vite khi dùng lệnh `dev:auth-demo`; nó không kiểm chứng bảo mật hay dữ liệu của Spring backend thật.

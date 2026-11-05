@@ -1,4 +1,5 @@
 import { apiClient } from '@/services/apiClient';
+import { isAxiosError } from 'axios';
 import { ApiResponse } from '@/types/api';
 import {
   AuthResponseData,
@@ -8,6 +9,7 @@ import {
   RegisterRequest,
   ResendOtpRequest,
   ResetPasswordRequest,
+  ResetVerificationData,
   VerifyOtpRequest,
 } from '../types';
 
@@ -18,6 +20,7 @@ export const authApi = {
       const response = await apiClient.post<ApiResponse<AuthResponseData>>('/auth/login', payload);
       return response.data.data;
     } catch (err: unknown) {
+      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       // Dev mock fallback if /auth/login is not yet deployed on backend
       const { usernameOrEmail } = payload;
       if (
@@ -40,6 +43,7 @@ export const authApi = {
       );
       return response.data.data;
     } catch (err: unknown) {
+      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       // Simulate dev success if endpoint not implemented yet
       return {
         email: payload.email,
@@ -57,6 +61,7 @@ export const authApi = {
       );
       return response.data.data;
     } catch (err: unknown) {
+      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       // If mock/dev fallback:
       const mockRole = payload.email.includes('teacher') ? 'TEACHER' : 'STUDENT';
       return {
@@ -73,6 +78,13 @@ export const authApi = {
     }
   },
 
+  // Reset verification grants a short-lived, single-use token; it does not sign the user in.
+  verifyResetOtp: async (payload: VerifyOtpRequest): Promise<ResetVerificationData> => {
+    const response = await apiClient.post<ApiResponse<ResetVerificationData>>('/auth/verify-otp', payload);
+    if (!response.data.data?.resetToken) throw new Error('Reset verification did not return a token.');
+    return response.data.data;
+  },
+
   // Resend OTP
   resendOtp: async (payload: ResendOtpRequest): Promise<{ success: boolean; message: string }> => {
     try {
@@ -82,6 +94,7 @@ export const authApi = {
       );
       return response.data.data;
     } catch (err: unknown) {
+      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       return {
         success: true,
         message: 'Mã xác thực mới đã được gửi lại thành công.',
@@ -91,28 +104,14 @@ export const authApi = {
 
   // Forgot password (request OTP)
   forgotPassword: async (payload: ForgotPasswordRequest): Promise<{ message: string }> => {
-    try {
-      const response = await apiClient.post<ApiResponse<{ message: string }>>(
-        '/auth/forgot-password',
-        payload
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      return { message: 'Mã đặt lại mật khẩu đã được gửi đến email.' };
-    }
+    const response = await apiClient.post<ApiResponse<{ message: string }>>('/auth/forgot-password', payload);
+    return response.data.data;
   },
 
-  // Reset password with OTP
+  // Reset password with a server-issued grant from verified OTP
   resetPassword: async (payload: ResetPasswordRequest): Promise<{ success: boolean; message: string }> => {
-    try {
-      const response = await apiClient.post<ApiResponse<{ success: boolean; message: string }>>(
-        '/auth/reset-password',
-        payload
-      );
-      return response.data.data;
-    } catch (err: unknown) {
-      return { success: true, message: 'Mật khẩu đã được cập nhật thành công.' };
-    }
+    const response = await apiClient.post<ApiResponse<{ success: boolean; message: string }>>('/auth/reset-password', payload);
+    return response.data.data;
   },
 
   // Get current user profile from /users/me/profile (matching live backend!)
@@ -123,6 +122,7 @@ export const authApi = {
 
   // Quick dev login using backend mock tokens (mock-student, mock-teacher, mock-admin)
   quickLogin: async (role: 'STUDENT' | 'TEACHER' | 'ADMIN'): Promise<AuthResponseData> => {
+    if (!import.meta.env.DEV) throw new Error('Demo sign-in is only available in development.');
     const roleTokenMap: Record<'STUDENT' | 'TEACHER' | 'ADMIN', string> = {
       STUDENT: 'mock-student',
       TEACHER: 'mock-teacher',

@@ -37,7 +37,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.setItem('algolearner_user', JSON.stringify(me));
         } catch {
           // If profile fetch fails but token is valid mock token
-          if (savedToken.startsWith('mock-')) {
+          if (import.meta.env.DEV && savedToken.startsWith('mock-')) {
             const role = savedToken.replace('mock-', '').toUpperCase() as 'STUDENT' | 'TEACHER' | 'ADMIN';
             const fallbackUser: AuthUser = {
               id: 'mock-user-id',

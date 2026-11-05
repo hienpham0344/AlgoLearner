@@ -1,5 +1,9 @@
 <svg width="280" height="280" viewBox="0 0 280 280" fill="none" xmlns="http://www.w3.org/2000/svg">
 <style>
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; }
+}
+
 @keyframes kf_Group_transform_0 {
   0% {
     transform: translateX(65px) translateY(116px) translateY(0px);
