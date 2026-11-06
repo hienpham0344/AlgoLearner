@@ -425,7 +425,7 @@
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 450px;
+  max-width: 480px;
 }
 
 .dashboard-learning-label {
@@ -436,29 +436,21 @@
 }
 
 .dashboard-learning-content h3 {
-  max-width: 440px;
-  margin: 14px 0 6px;
+  margin: 14px 0 8px;
   color: #fff;
   font-size: clamp(26px, 2.7vw, 34px);
   line-height: 1.16;
   letter-spacing: -0.035em;
   font-weight: 700;
-}
-
-.dashboard-learning-module {
-  display: block;
-  margin-bottom: 4px;
-  color: #c8ccd1;
-  font: 500 11px / 1.5 'JetBrains Mono', monospace;
-  letter-spacing: 0.02em;
+  text-wrap: balance;
 }
 
 .dashboard-learning-content p {
-  max-width: 390px;
   margin: 0;
   color: #9da2aa;
   font-size: 13px;
   line-height: 1.6;
+  text-wrap: pretty;
 }
 
 .dashboard-learning-action {
@@ -929,6 +921,7 @@ a.dashboard-timeline-title:hover {
   font: 600 10px / 1.3 'JetBrains Mono', monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* 2. Coding Activity Grid */

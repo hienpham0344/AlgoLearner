@@ -20,7 +20,7 @@ import { profileApi } from '@/features/profile/api/profileApi';
 import logoMark from '@/assets/logo-mark.svg';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
-import type { CourseProgress, EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
+import type { EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
 import { dashboardApi, dashboardKeys, profileKeys } from '../api/dashboardApi';
 import { mapStudentDashboard } from '../mapStudentDashboard';
 import { RoleDashboardPage } from './RoleDashboardPage';
@@ -113,13 +113,6 @@ const resolveLoadState = (isPending: boolean, isError: boolean, error: unknown):
   if (isPending) return 'loading';
   if (!isError) return 'ready';
   return isAxiosError(error) && error.response?.status === 403 ? 'restricted' : 'unavailable';
-};
-
-const formatUnitSummary = (course: CourseProgress) => {
-  if (typeof course.completedUnits === 'number' && typeof course.totalUnits === 'number' && course.totalUnits > 0) {
-    return ` · ${course.completedUnits} of ${course.totalUnits} units`;
-  }
-  return '';
 };
 
 const resolveModuleCounts = (classroom: EnrolledClass) => {
@@ -348,12 +341,9 @@ export const DashboardPage = () => {
                             CURRENT COURSE · {featuredCourse.topic}
                           </span>
                           <h3>{featuredCourse.title}</h3>
-                          {featuredCourse.currentModule && (
-                            <span className="dashboard-learning-module">{featuredCourse.currentModule}</span>
-                          )}
-                          {featuredCourse.currentLesson && <p>Next lesson: {featuredCourse.currentLesson}</p>}
+                          {featuredCourse.currentLesson && <p>Up next: {featuredCourse.currentLesson}</p>}
                           <div className="dashboard-progress-info">
-                            <span>Course progress{formatUnitSummary(featuredCourse)}</span>
+                            <span>Course progress</span>
                             <strong>{featuredCourse.progressPercent}%</strong>
                           </div>
                           <div
