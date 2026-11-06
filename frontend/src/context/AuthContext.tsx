@@ -56,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               username: role.toLowerCase(),
               email: `${role.toLowerCase()}@example.test`,
               role,
-              fullName: `Demo ${role}`,
+              fullName: role.charAt(0) + role.slice(1).toLowerCase(),
               lifecycleStatus: 'ACTIVE',
             };
             setUser(fallbackUser);

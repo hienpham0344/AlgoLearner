@@ -42,13 +42,13 @@ async function body(request: IncomingMessage, limit: number): Promise<Buffer> {
 export function profileDemoPlugin(): Plugin {
   const profiles: Record<'learner' | 'teacher', DemoProfile> = {
     learner: {
-      fullName: 'Demo Learner', username: 'learner', email: 'learner@example.test', avatarUrl: null,
+      fullName: 'Learner', username: 'learner', email: 'learner@example.test', avatarUrl: null,
       shortBio: 'Learning to build, one small step at a time.', role: 'STUDENT',
       joinedAt: '2026-01-01T00:00:00Z', isPublic: false,
       publicPracticeStatistics: { solved: 18 }, streak: { currentStreak: 7, highestStreak: 12 },
     },
     teacher: {
-      fullName: 'Demo Teacher', username: 'teacher', email: 'teacher@example.test', avatarUrl: null,
+      fullName: 'Teacher', username: 'teacher', email: 'teacher@example.test', avatarUrl: null,
       shortBio: 'Helping students learn to code.', role: 'TEACHER',
       joinedAt: '2025-09-01T00:00:00Z', isPublic: false,
       publicPracticeStatistics: { solved: 4 }, streak: { currentStreak: 0, highestStreak: 2 },

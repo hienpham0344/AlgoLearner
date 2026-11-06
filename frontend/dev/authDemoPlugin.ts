@@ -167,8 +167,8 @@ export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'
           attempts.delete(identity);
           respond(response, 200, successBody({ token: `mock-${roleIdentity}`, user: {
             id: `backend-mock-${roleIdentity}`, username: roleIdentity, email: `${roleIdentity}@example.test`, role,
-            fullName: `Demo ${roleIdentity[0].toUpperCase()}${roleIdentity.slice(1)}`, lifecycleStatus: 'ACTIVE',
-          } }, roleAccountMode === 'backend-mock' ? 'Signed in to the backend mock' : 'Signed in to the demo workspace'));
+            fullName: `${roleIdentity[0].toUpperCase()}${roleIdentity.slice(1)}`, lifecycleStatus: 'ACTIVE',
+          } }, 'Signed in successfully'));
           return;
         }
         const now = Date.now();
@@ -192,7 +192,7 @@ export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'
                 username: 'learner',
                 email: DEMO_IDENTITY,
                 role: 'STUDENT',
-                fullName: 'Demo Learner',
+                fullName: 'Learner',
                 lifecycleStatus: 'ACTIVE',
               },
             },

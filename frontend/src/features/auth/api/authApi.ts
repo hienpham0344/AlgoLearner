@@ -135,7 +135,7 @@ export const authApi = {
       username: role.toLowerCase(),
       email: `${role.toLowerCase()}@example.test`,
       role,
-      fullName: `Demo ${role.charAt(0) + role.slice(1).toLowerCase()}`,
+      fullName: role.charAt(0) + role.slice(1).toLowerCase(),
       lifecycleStatus: 'ACTIVE',
     };
 
