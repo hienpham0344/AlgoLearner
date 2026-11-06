@@ -74,7 +74,6 @@ export const VerifyOtpPage = () => {
   return (
     <>
       <h1 tabIndex={-1}>{purpose === 'RESET_PASSWORD' ? 'Verify your reset code.' : 'Check your inbox.'}</h1>
-      {import.meta.env.MODE === 'auth-demo' && purpose === 'RESET_PASSWORD' && <p className="auth-demo-code">Demo code: <strong>123456</strong></p>}
       <AuthFeedback title={error ? 'Check your code.' : notice ? 'Code sent.' : undefined} tone={notice && !error ? 'success' : 'error'} description={error || notice || (email ? <>Enter the 6-digit code sent to <strong>{email}</strong>.</> : purpose === 'RESET_PASSWORD' ? 'Request a reset code to get started.' : 'Return to registration to request a code.')} />
       <form className="auth-form" onSubmit={handleSubmit} aria-busy={busy}>
         <div className="auth-otp-row" onPaste={handlePaste} role="group" aria-label="6-digit verification code">

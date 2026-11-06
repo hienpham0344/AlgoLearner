@@ -116,6 +116,5 @@ export const LoginPage = () => {
       <AuthSubmit loading={isLoading} locked={locked}>{locked ? 'Sign-in temporarily unavailable' : isLoading ? 'Signing in…' : 'Sign in'}</AuthSubmit>
     </form>
     <div className="auth-secondary"><span className="auth-description">New to AlgoLearn? </span><Link to="/register" className="auth-text-link">Create an account</Link></div>
-    <Link className="auth-explore-link" to="/courses">Explore courses <span aria-hidden="true">↗</span></Link>
   </>;
 };
