@@ -12,6 +12,7 @@ import type { LearningDeadline, PracticeStats, StudentDashboardData } from '../t
 import { dashboardApi, dashboardKeys, profileKeys } from '../api/dashboardApi';
 import { mapStudentDashboard } from '../mapStudentDashboard';
 import { RoleDashboardPage } from './RoleDashboardPage';
+import { CourseCanvas } from '../components/CourseCanvas';
 import '../styles/dashboard.css';
 
 const isDemo = import.meta.env.MODE === 'auth-demo';
@@ -108,8 +109,8 @@ export const DashboardPage = () => {
                 <div className="dashboard-section-heading"><span className="dashboard-eyebrow">01 / THE NEXT STEP</span><h2 id="learning-title">Continue learning</h2></div>
                 <div className="dashboard-learning-card">
                   {featuredCourse ? <>
+                    <CourseCanvas />
                     <div className="dashboard-learning-content"><span className="dashboard-learning-label">CURRENT COURSE · {featuredCourse.topic}</span><h3>{featuredCourse.title}</h3>{featuredCourse.currentLesson && <p>Up next: {featuredCourse.currentLesson}</p>}<div className="dashboard-progress-info"><span>Course progress</span><strong>{featuredCourse.progressPercent}%</strong></div><div className="dashboard-progress-track" role="progressbar" aria-label={`${featuredCourse.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={featuredCourse.progressPercent}><span style={{ width: `${featuredCourse.progressPercent}%` }} /></div>{featuredCourse.href && <Link className="dashboard-learning-action" to={featuredCourse.href}>Explore course preview <ArrowRight size={16} aria-hidden="true" /></Link>}</div>
-                    <span className="dashboard-learning-index" aria-hidden="true">&lt; / &gt;</span>
                   </> : <>
                     <div className="dashboard-learning-content"><span className="dashboard-learning-label">YOUR NEXT CHAPTER</span><h3>Your next chapter starts here.</h3><p>Choose a topic that interests you and start learning at your pace.</p><Link className="dashboard-learning-action" to="/courses">Explore courses <ArrowRight size={16} aria-hidden="true" /></Link></div>
                     <img className="dashboard-learning-mascot" src={byteMascot} alt="" width="280" height="280" />
