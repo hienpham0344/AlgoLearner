@@ -72,6 +72,20 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
   const [shortBio, setShortBio] = useState(profile.shortBio ?? '');
   const [feedback, setFeedback] = useState<{ message: string; error: boolean } | null>(null);
   const [avatarError, setAvatarError] = useState('');
+  const feedbackTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  // Auto-dismiss feedback notification after 3.5 seconds
+  useEffect(() => {
+    if (feedback) {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = setTimeout(() => {
+        setFeedback(null);
+      }, 3500);
+    }
+    return () => {
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
+    };
+  }, [feedback]);
 
   // Selected avatar file pending upload
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
@@ -130,6 +144,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
     return () => {
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
       if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
+      if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       if (transitionFrameRef.current !== null) cancelAnimationFrame(transitionFrameRef.current);
       if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
     };
@@ -478,11 +493,6 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
                               <span className="folder-avatar-hint">
                                 PNG or JPEG · up to 5 MB
                               </span>
-                              {selectedAvatarFile && (
-                                <span className="folder-avatar-pending-tag">
-                                  Selected: {selectedAvatarFile.name} (unsaved)
-                                </span>
-                              )}
                               {avatarError && (
                                 <p className="folder-avatar-error" role="alert">
                                   {avatarError}
@@ -778,9 +788,15 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
           </div>
         </div>
 
-        {/* Global Feedback Toast */}
+        {/* Global Feedback Toast (Auto-dismisses in 3.5s or click to dismiss) */}
         {feedback && (
-          <div className="folder-feedback-toast" role={feedback.error ? 'alert' : 'status'}>
+          <div
+            className="folder-feedback-toast"
+            role={feedback.error ? 'alert' : 'status'}
+            onClick={() => setFeedback(null)}
+            style={{ cursor: 'pointer' }}
+            title="Click to dismiss"
+          >
             {!feedback.error && <Check size={14} aria-hidden="true" />}
             <span>{feedback.message}</span>
           </div>
