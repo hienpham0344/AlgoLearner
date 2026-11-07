@@ -16,11 +16,19 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(() => {
+const savedAuthUser = (): AuthUser | null => {
+  try {
     const saved = localStorage.getItem('algolearner_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+    if (!saved) return null;
+    const value: unknown = JSON.parse(saved);
+    if (typeof value !== 'object' || value === null || !('role' in value) || !('username' in value)
+      || typeof value.role !== 'string' || typeof value.username !== 'string') return null;
+    return value as AuthUser;
+  } catch { return null; }
+};
+
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<AuthUser | null>(savedAuthUser);
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem('algolearner_token');
   });
@@ -30,6 +38,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initAuth = async () => {
       const savedToken = localStorage.getItem('algolearner_token');
       if (savedToken) {
+        if (['auth-demo', 'backend-mock'].includes(import.meta.env.MODE) && savedToken.startsWith('mock-')) {
+          const storedUser = savedAuthUser();
+          if (storedUser) { setUser(storedUser); setIsLoading(false); return; }
+        }
         try {
           // If token exists, try fetching profile from live backend
           const me = await authApi.getCurrentUser();
@@ -44,7 +56,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               username: role.toLowerCase(),
               email: `${role.toLowerCase()}@example.test`,
               role,
-              fullName: `Demo ${role}`,
+              fullName: role.charAt(0) + role.slice(1).toLowerCase(),
               lifecycleStatus: 'ACTIVE',
             };
             setUser(fallbackUser);

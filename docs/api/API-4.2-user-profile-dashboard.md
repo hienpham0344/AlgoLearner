@@ -52,7 +52,7 @@ interface PublicUserProfile {
 }
 ```
 
-- PATCH chỉ nhận fullName/shortBio: bỏ trường giữ nguyên, null/blank xóa, trim chuỗi. Giới hạn thiết kế theo ERD: 150/500 Unicode code point. PATCH rỗng, sai kiểu, trường lạ/username/email/role/isPublic/trường hệ thống trả 400 và giữ dữ liệu cũ.
+- PATCH chỉ nhận fullName/shortBio: bỏ trường giữ nguyên, null/blank xóa, trim chuỗi. Giới hạn: 150/200 Unicode code point. PATCH rỗng, sai kiểu, trường lạ/username/email/role/isPublic/trường hệ thống trả 400 và giữ dữ liệu cũ.
 - Privacy chỉ nhận boolean thật, không nhận null, số hoặc chuỗi. Account mục tiêu lấy từ principal, không nhận ID do client gửi.
 - joinedAt lấy accounts.created_at. Solved đếm Public Problem phân biệt có Official Submission ACCEPTED. Streak tính ngày UTC+7 theo submitted_at của submission Accepted, không gồm RUN/Class Practice/Assignment.
 - Avatar kiểm tra bytes JPEG/PNG thực tế, dung lượng và số pixel theo cấu hình, re-encode trước khi lưu. Không nhận URL/storage key từ client. Upload/validation/repository lỗi giữ avatar cũ. Mock: remove the new file on repository failure; delete the old file only after a successful update. Private avatar reads require the owner token.
