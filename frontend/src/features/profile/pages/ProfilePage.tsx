@@ -91,6 +91,8 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
   const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
   const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | null>(null);
   const [serverAvatarSrc, setServerAvatarSrc] = useState<string | null>(null);
+  const [avatarVersion, setAvatarVersion] = useState(0);
+  const serverBlobRef = useRef<string | null>(null);
 
   // Synchronize form fields with incoming profile
   useEffect(() => {
@@ -98,7 +100,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
     setShortBio(profile.shortBio ?? '');
   }, [profile.fullName, profile.shortBio]);
 
-  // Load authenticated server avatar
+  // Load authenticated server avatar with cache-busting
   useEffect(() => {
     if (!profile.avatarUrl || !profile.avatarUrl.startsWith('/api/v1/') || !token) {
       setServerAvatarSrc(profile.avatarUrl);
@@ -106,19 +108,29 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
     }
 
     const controller = new AbortController();
-    let objectUrl: string | null = null;
+    const fetchUrl = `${profile.avatarUrl}?t=${Date.now()}`;
 
-    fetch(profile.avatarUrl, {
+    fetch(fetchUrl, {
       signal: controller.signal,
       headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store',
     })
       .then(response => {
         if (!response.ok) throw new Error('Avatar unavailable');
         return response.blob();
       })
       .then(blob => {
-        objectUrl = URL.createObjectURL(blob);
-        setServerAvatarSrc(objectUrl);
+        const objectUrl = URL.createObjectURL(blob);
+        setServerAvatarSrc(() => {
+          if (serverBlobRef.current) URL.revokeObjectURL(serverBlobRef.current);
+          serverBlobRef.current = objectUrl;
+          return objectUrl;
+        });
+        // Clear temporary preview once the real server avatar blob is loaded
+        setPreviewAvatarUrl(prev => {
+          if (prev) URL.revokeObjectURL(prev);
+          return null;
+        });
       })
       .catch(() => {
         if (!controller.signal.aborted) setServerAvatarSrc(null);
@@ -126,9 +138,8 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
 
     return () => {
       controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [profile.avatarUrl, token]);
+  }, [profile.avatarUrl, token, avatarVersion]);
 
   // Clean up preview avatar object URL
   useEffect(() => {
@@ -147,6 +158,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       if (transitionFrameRef.current !== null) cancelAnimationFrame(transitionFrameRef.current);
       if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+      if (serverBlobRef.current) URL.revokeObjectURL(serverBlobRef.current);
     };
   }, []);
 
@@ -207,10 +219,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
       updateCache(next);
       setAvatarError('');
       setSelectedAvatarFile(null);
-      if (previewAvatarUrl) {
-        URL.revokeObjectURL(previewAvatarUrl);
-        setPreviewAvatarUrl(null);
-      }
+      setAvatarVersion(v => v + 1);
       setFeedback({ message: 'Avatar updated successfully.', error: false });
     },
     onError: error => setAvatarError(resolveErrorText(error)),

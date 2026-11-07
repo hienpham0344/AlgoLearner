@@ -28,6 +28,9 @@ export function PublicProfilePage() {
   });
 
   const isNotFound = isAxiosError(query.error) && query.error.response?.status === 404;
+  const avatarSrc = query.data?.avatarUrl
+    ? `${query.data.avatarUrl}?t=${query.dataUpdatedAt}`
+    : null;
 
   // Physical extraction choreograph: document glides up from behind the folder backing
   useEffect(() => {
@@ -257,9 +260,9 @@ export function PublicProfilePage() {
               {/* MIDDLE: Learner Identity (Prominent Squircle Avatar + Bold Name + Handle) */}
               <div className="folio-identity-row">
                 <div className="folio-avatar-squircle">
-                  {query.data.avatarUrl ? (
+                  {avatarSrc ? (
                     <img
-                      src={query.data.avatarUrl}
+                      src={avatarSrc}
                       alt={query.data.username}
                       className="folio-avatar-image"
                     />
