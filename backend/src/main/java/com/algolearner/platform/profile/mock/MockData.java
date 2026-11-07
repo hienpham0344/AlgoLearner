@@ -43,7 +43,7 @@ public class MockData implements AccountRepository, PracticeRepository {
         Instant now=clock.instant();
         for (String name:List.of("student","student2","empty","teacher","teacher2","admin","suspended","deactivated","locked")) {
             String role=name.startsWith("teacher")?"TEACHER":name.equals("admin")?"ADMIN":"STUDENT";
-            accounts.add(new Account(id(name),name,role,name.equals("deactivated")?"DEACTIVATED":"ACTIVE",now.minus(Duration.ofDays(20))));
+            accounts.add(new Account(id(name),name,name+"@example.test",role,name.equals("deactivated")?"DEACTIVATED":"ACTIVE",now.minus(Duration.ofDays(20))));
             profiles.put(id(name),new ProfileRepository.Profile(id(name),"Demo "+name,name,name+"@example.test",null,"Learning algorithms",role,now.minus(Duration.ofDays(20)),!Set.of("student2","empty").contains(name)));
         }
         restrictions.add(new Restriction(id("suspended"),"SUSPENSION",now.minusSeconds(60),null,null));
