@@ -1,6 +1,7 @@
 package com.algolearner.platform.profile.mock;
 
 import com.algolearner.platform.profile.dashboard.InMemoryDashboardRepository;
+import com.algolearner.platform.classroom.mock.InMemoryClassroomRepository;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -46,7 +47,7 @@ class PublishedStatisticsTest {
                 data.contents.add(new MockData.Content(id(status + kind), id("teacher"), kind, status, "APPROVED", now));
             }
         }
-        var totals = new InMemoryDashboardRepository(data).totals();
+        var totals = new InMemoryDashboardRepository(data, new InMemoryClassroomRepository(data)).totals();
         assertThat(totals.publicCourseCount()).isEqualTo(1);
         assertThat(totals.publicProblemCount()).isEqualTo(1);
         assertThat(totals.officialSubmissionCount()).isEqualTo(data.judge.stream().filter(MockData.Judge::official).count());

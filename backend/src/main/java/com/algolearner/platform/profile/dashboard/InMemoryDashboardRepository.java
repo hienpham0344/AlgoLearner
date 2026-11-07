@@ -2,6 +2,8 @@ package com.algolearner.platform.profile.dashboard;
 
 import com.algolearner.platform.profile.mock.MockData;
 import com.algolearner.platform.profile.mock.MockData.*;
+import com.algolearner.platform.classroom.ClassroomRepository;
+import com.algolearner.platform.classroom.ClassroomTypes;
 import org.springframework.stereotype.Repository;
 import java.time.*;
 import java.util.*;
@@ -12,20 +14,22 @@ import static com.algolearner.platform.profile.dashboard.DashboardResponse.*;
 @org.springframework.context.annotation.Profile("mock")
 public class InMemoryDashboardRepository implements DashboardRepository {
     private final MockData data;
-    public InMemoryDashboardRepository(MockData data) { this.data=data; }
+    private final ClassroomRepository classrooms;
+    public InMemoryDashboardRepository(MockData data,ClassroomRepository classrooms) { this.data=data; this.classrooms=classrooms; }
     private <T> Preview<T> preview(Stream<T> source,Context c) {
         List<T> all=source.toList();
         return new Preview<>(all.stream().limit(c.limit()).toList(),all.size(),all.size()>c.limit());
     }
-    private boolean active(UUID classroom) { return data.classes.stream().anyMatch(x -> x.value().classroomId().equals(classroom) && x.status().equals("ACTIVE")); }
-    private boolean owns(UUID classroom,UUID account) { return data.classes.stream().anyMatch(x -> x.value().classroomId().equals(classroom) && x.owner().equals(account) && x.status().equals("ACTIVE")); }
-    private boolean member(UUID classroom,UUID account) { return active(classroom) && data.memberships.stream().anyMatch(x -> x.classroom().equals(classroom) && x.student().equals(account) && x.status().equals("ACTIVE")); }
+    private boolean active(UUID classroom) { return classrooms.findById(classroom).map(x -> x.status()==ClassroomTypes.ClassroomStatus.ACTIVE).orElse(false); }
+    private boolean owns(UUID classroom,UUID account) { return classrooms.findById(classroom).map(x -> x.ownerAccountId().equals(account) && x.status()==ClassroomTypes.ClassroomStatus.ACTIVE).orElse(false); }
+    private boolean member(UUID classroom,UUID account) { return active(classroom) && classrooms.findMembership(classroom,account).map(x -> x.status()==ClassroomTypes.MembershipStatus.ACTIVE).orElse(false); }
     private boolean upcoming(Instant deadline,Context c) { return deadline!=null && !deadline.isBefore(c.now()) && deadline.isBefore(c.upcomingEnd()); }
-    private Stream<ClassSource> owned(Context c) { return data.classes.stream().filter(x -> owns(x.value().classroomId(),c.accountId())).sorted(Comparator.comparing(x -> x.value().name())); }
+    private Stream<ClassroomTypes.Classroom> owned(Context c) { return classrooms.findAll().stream().filter(x -> owns(x.id(),c.accountId())).sorted(Comparator.comparing(ClassroomTypes.Classroom::name)); }
     public Preview<Classroom> studentClassrooms(Context c) {
-        return preview(data.classes.stream().filter(x -> member(x.value().classroomId(),c.accountId())).map(ClassSource::value).sorted(Comparator.comparing(Classroom::name)),c);
+        return preview(classrooms.findAll().stream().filter(x -> member(x.id(),c.accountId()))
+                .map(x -> new Classroom(x.id(),x.name())).sorted(Comparator.comparing(Classroom::name)),c);
     }
-    public Preview<Classroom> teacherClassrooms(Context c) { return preview(owned(c).map(ClassSource::value),c); }
+    public Preview<Classroom> teacherClassrooms(Context c) { return preview(owned(c).map(x -> new Classroom(x.id(),x.name())),c); }
     public Preview<Assignment> studentAssignments(Context c) {
         return preview(data.assignments.stream().filter(x -> x.status().equals("PUBLISHED") && member(x.value().classroomId(),c.accountId()))
             .map(x -> { var a=x.value(); return new Assignment(a.assignmentId(),a.classroomId(),a.classroomName(),a.title(),a.opensAt(),x.extensions().getOrDefault(c.accountId(),a.effectiveDueAt())); })
@@ -71,8 +75,8 @@ public class InMemoryDashboardRepository implements DashboardRepository {
     }
     public Preview<ClassStatistics> classStatistics(Context c) {
         return preview(owned(c).map(x -> {
-            UUID id=x.value().classroomId();
-            return new ClassStatistics(id,x.value().name(),data.memberships.stream().filter(m -> m.classroom().equals(id) && m.status().equals("ACTIVE")).count(),
+            UUID id=x.id();
+            return new ClassStatistics(id,x.name(),classrooms.findMemberships(id).stream().filter(m -> m.status()==ClassroomTypes.MembershipStatus.ACTIVE).count(),
                 data.assignments.stream().filter(a -> a.value().classroomId().equals(id) && a.status().equals("PUBLISHED")).count(),
                 data.quizzes.stream().filter(q -> q.value().classroomId().equals(id) && q.status().equals("PUBLISHED")).count(),
                 latestPending(c.accountId()).filter(w -> w.value().classroomId().equals(id)).count());
@@ -84,7 +88,7 @@ public class InMemoryDashboardRepository implements DashboardRepository {
         return new Contributions(pending.stream().filter(x -> x.kind().equals("COURSE")).count(),pending.stream().filter(x -> x.kind().equals("PROBLEM")).count());
     }
     public Totals totals() {
-        return new Totals(data.accounts.stream().filter(a -> a.role().equals("STUDENT")).count(),data.accounts.stream().filter(a -> a.role().equals("TEACHER")).count(),data.classes.size(),
+        return new Totals(data.accounts.stream().filter(a -> a.role().equals("STUDENT")).count(),data.accounts.stream().filter(a -> a.role().equals("TEACHER")).count(),classrooms.findAll().size(),
             data.contents.stream().filter(x -> x.kind().equals("COURSE") && x.status().equals("PUBLISHED")).count(),
             data.contents.stream().filter(x -> x.kind().equals("PROBLEM") && x.status().equals("PUBLISHED")).count(),data.judge.stream().filter(Judge::official).count());
     }
@@ -101,7 +105,7 @@ public class InMemoryDashboardRepository implements DashboardRepository {
     public List<ChartEvent> chartEvents(Instant from,Instant to) {
         List<ChartEvent> events=new ArrayList<>();
         data.accounts.stream().filter(a -> Set.of("STUDENT","TEACHER").contains(a.role())).forEach(a -> events.add(new ChartEvent(a.createdAt(),a.role(),1)));
-        data.classes.forEach(x -> events.add(new ChartEvent(x.createdAt(),"CLASSROOM",1)));
+        classrooms.findAll().forEach(x -> events.add(new ChartEvent(x.createdAt(),"CLASSROOM",1)));
         data.contents.forEach(x -> events.add(new ChartEvent(x.createdAt(),x.kind(),1)));
         data.judge.stream().filter(Judge::official).forEach(x -> events.add(new ChartEvent(x.submittedAt(),"SUBMISSION",1)));
         return events.stream().filter(e -> !e.occurredAt().isBefore(from) && e.occurredAt().isBefore(to)).toList();
