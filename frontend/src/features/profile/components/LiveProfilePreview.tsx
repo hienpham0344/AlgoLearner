@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+
 interface LiveProfilePreviewProps {
   avatarSrc: string | null;
   displayName: string;
@@ -25,6 +27,11 @@ export function LiveProfilePreview({
 }: LiveProfilePreviewProps) {
   const initial = username.slice(0, 1).toUpperCase();
   const effectiveName = displayName.trim() || username;
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarSrc]);
 
   return (
     <aside className="folder-identity-preview" aria-label="Live profile editorial preview">
@@ -55,8 +62,13 @@ export function LiveProfilePreview({
 
         {/* Squircle Profile Photo */}
         <div className="identity-avatar-squircle">
-          {avatarSrc ? (
-            <img src={avatarSrc} alt={effectiveName} className="identity-avatar-img" />
+          {avatarSrc && !imageError ? (
+            <img
+              src={avatarSrc}
+              alt={effectiveName}
+              className="identity-avatar-img"
+              onError={() => setImageError(true)}
+            />
           ) : (
             <span className="identity-avatar-fallback">{initial}</span>
           )}

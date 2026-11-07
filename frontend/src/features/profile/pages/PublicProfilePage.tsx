@@ -17,6 +17,7 @@ export function PublicProfilePage() {
   const { username = '' } = useParams();
   const [copied, setCopied] = useState(false);
   const [isExtracted, setIsExtracted] = useState(false);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
   const [parallax, setParallax] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const extractTimerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -31,6 +32,10 @@ export function PublicProfilePage() {
   const avatarSrc = query.data?.avatarUrl
     ? `${query.data.avatarUrl}?t=${query.dataUpdatedAt}`
     : null;
+
+  useEffect(() => {
+    setAvatarLoadError(false);
+  }, [avatarSrc]);
 
   // Physical extraction choreograph: document glides up from behind the folder backing
   useEffect(() => {
@@ -260,11 +265,12 @@ export function PublicProfilePage() {
               {/* MIDDLE: Learner Identity (Prominent Squircle Avatar + Bold Name + Handle) */}
               <div className="folio-identity-row">
                 <div className="folio-avatar-squircle">
-                  {avatarSrc ? (
+                  {avatarSrc && !avatarLoadError ? (
                     <img
                       src={avatarSrc}
                       alt={query.data.username}
                       className="folio-avatar-image"
+                      onError={() => setAvatarLoadError(true)}
                     />
                   ) : (
                     <span className="folio-avatar-fallback">

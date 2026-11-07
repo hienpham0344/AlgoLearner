@@ -92,7 +92,10 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
   const [previewAvatarUrl, setPreviewAvatarUrl] = useState<string | null>(null);
   const [serverAvatarSrc, setServerAvatarSrc] = useState<string | null>(null);
   const [avatarVersion, setAvatarVersion] = useState(0);
+  const [avatarLoadError, setAvatarLoadError] = useState(false);
   const serverBlobRef = useRef<string | null>(null);
+  const previewBlobRef = useRef<string | null>(null);
+  previewBlobRef.current = previewAvatarUrl;
 
   // Synchronize form fields with incoming profile
   useEffect(() => {
@@ -102,8 +105,19 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
 
   // Load authenticated server avatar with cache-busting
   useEffect(() => {
-    if (!profile.avatarUrl || !profile.avatarUrl.startsWith('/api/v1/') || !token) {
+    if (!profile.avatarUrl) {
+      setServerAvatarSrc(null);
+      return;
+    }
+
+    // Public external URL or inline data
+    if (!profile.avatarUrl.startsWith('/api/v1/')) {
       setServerAvatarSrc(profile.avatarUrl);
+      return;
+    }
+
+    if (!token) {
+      setServerAvatarSrc(null);
       return;
     }
 
@@ -122,15 +136,13 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
       .then(blob => {
         const objectUrl = URL.createObjectURL(blob);
         setServerAvatarSrc(() => {
-          if (serverBlobRef.current) URL.revokeObjectURL(serverBlobRef.current);
+          if (serverBlobRef.current && serverBlobRef.current !== objectUrl) {
+            URL.revokeObjectURL(serverBlobRef.current);
+          }
           serverBlobRef.current = objectUrl;
           return objectUrl;
         });
-        // Clear temporary preview once the real server avatar blob is loaded
-        setPreviewAvatarUrl(prev => {
-          if (prev) URL.revokeObjectURL(prev);
-          return null;
-        });
+        setAvatarLoadError(false);
       })
       .catch(() => {
         if (!controller.signal.aborted) setServerAvatarSrc(null);
@@ -141,16 +153,12 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
     };
   }, [profile.avatarUrl, token, avatarVersion]);
 
-  // Clean up preview avatar object URL
+  // Reset image error state whenever effective avatar source changes
   useEffect(() => {
-    return () => {
-      if (previewAvatarUrl) {
-        URL.revokeObjectURL(previewAvatarUrl);
-      }
-    };
-  }, [previewAvatarUrl]);
+    setAvatarLoadError(false);
+  }, [previewAvatarUrl, serverAvatarSrc]);
 
-  // Clean up animation timers on unmount
+  // Clean up animation timers and blob URLs on unmount
   useEffect(() => {
     return () => {
       if (transitionTimerRef.current) clearTimeout(transitionTimerRef.current);
@@ -158,6 +166,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
       if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
       if (transitionFrameRef.current !== null) cancelAnimationFrame(transitionFrameRef.current);
       if (revealFrameRef.current !== null) cancelAnimationFrame(revealFrameRef.current);
+      if (previewBlobRef.current) URL.revokeObjectURL(previewBlobRef.current);
       if (serverBlobRef.current) URL.revokeObjectURL(serverBlobRef.current);
     };
   }, []);
@@ -475,11 +484,12 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
                                 }
                               }}
                             >
-                              {effectiveAvatarSrc ? (
+                              {effectiveAvatarSrc && !avatarLoadError ? (
                                 <img
                                   src={effectiveAvatarSrc}
                                   alt={displayName}
                                   className="folder-avatar-img"
+                                  onError={() => setAvatarLoadError(true)}
                                 />
                               ) : (
                                 <span className="folder-avatar-fallback">{initial}</span>
