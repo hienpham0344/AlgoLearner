@@ -85,7 +85,7 @@ export function profileDemoPlugin(): Plugin {
             if (fields.some(key => input[key] !== null && typeof input[key] !== 'string')) throw new Error('INVALID');
             const name = fields.includes('fullName') ? (input.fullName as string | null)?.trim() ?? '' : profile.fullName;
             const bio = fields.includes('shortBio') ? (input.shortBio as string | null)?.trim() ?? '' : profile.shortBio;
-            if ((name && [...name].length > 150) || (bio && [...bio].length > 500)) throw new Error('INVALID');
+            if ((name && [...name].length > 150) || (bio && [...bio].length > 200)) throw new Error('INVALID');
             profile.fullName = name || null;
             profile.shortBio = bio || null;
             json(response, 200, profile, 'Profile saved.');

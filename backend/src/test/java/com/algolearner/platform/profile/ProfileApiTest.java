@@ -94,6 +94,15 @@ class ProfileApiTest {
                 .andExpect(content().contentType("image/png"));
         read("/users/me/profile", "student").andExpect(jsonPath("$.data.shortBio").value("Algorithms"));
     }
+    @Test @DisplayName("Bio accepts 200 characters and rejects 201 without changing saved text")
+    void bioLengthBoundary() throws Exception {
+        var atLimit = "x".repeat(200);
+        patchProfile("", "{\"shortBio\":\"" + atLimit + "\"}")
+                .andExpect(status().isOk());
+        patchProfile("", "{\"shortBio\":\"" + atLimit + "x\"}")
+                .andExpect(status().isBadRequest());
+        read("/users/me/profile", "student").andExpect(jsonPath("$.data.shortBio").value(atLimit));
+    }
     @ParameterizedTest(name="TC-PRO-01-03: immutable {0}")
     @ValueSource(strings={"username", "email", "role", "accountId"})
     void rejectsImmutableFields(String field) throws Exception {
