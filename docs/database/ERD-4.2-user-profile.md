@@ -49,7 +49,7 @@ erDiagram
 | `created_at` | `timestamptz` | NOT NULL, mặc định `now()` | Thời điểm tạo hồ sơ, không phải Join Date |
 | `updated_at` | `timestamptz` | NOT NULL, mặc định `now()` | Thời điểm cập nhật hồ sơ gần nhất |
 
-Giới hạn 150 ký tự cho họ tên, 500 ký tự cho bio, việc cho phép NULL và mặc định riêng tư là **đề xuất thiết kế**, vì mục 4.2 chưa quy định cụ thể. Chuỗi tùy chọn sau khi trim nếu rỗng được chuẩn hóa thành NULL. Không tự đặt giới hạn dung lượng/loại tệp avatar: lấy cấu hình Admin theo `BR-DATA-001`.
+Giới hạn ứng dụng 150 ký tự cho họ tên và 200 ký tự cho bio; cột `varchar(500)` giữ khả năng đọc dữ liệu cũ mà không cắt nội dung. Việc cho phép NULL và mặc định riêng tư là **đề xuất thiết kế**, vì mục 4.2 chưa quy định cụ thể. Chuỗi tùy chọn sau khi trim nếu rỗng được chuẩn hóa thành NULL. Không tự đặt giới hạn dung lượng/loại tệp avatar: lấy cấu hình Admin theo `BR-DATA-001`.
 
 ## Quy tắc thiết kế
 
