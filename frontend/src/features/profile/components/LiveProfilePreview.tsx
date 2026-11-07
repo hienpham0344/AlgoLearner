@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Flame } from 'lucide-react';
 
 interface LiveProfilePreviewProps {
   avatarSrc: string | null;
@@ -102,7 +103,10 @@ export function LiveProfilePreview({
           </div>
           <div className="identity-stats-separator" aria-hidden="true" />
           <div className="identity-stat-cell">
-            <strong className="identity-stat-num">{formatStatNumber(streakDays)}</strong>
+            <div className="identity-stat-value-row">
+              <strong className="identity-stat-num">{formatStatNumber(streakDays)}</strong>
+              <Flame size={16} className="identity-streak-icon" aria-hidden="true" />
+            </div>
             <span className="identity-stat-label">Day streak</span>
           </div>
         </div>

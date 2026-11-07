@@ -1768,6 +1768,37 @@ body:has(.account-page)::-webkit-scrollbar {
   min-width: 0;
 }
 
+.folio-stat-value-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folio-streak-icon {
+  color: #ea580c;
+  fill: #f97316;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 6px rgba(234, 88, 12, 0.32));
+  transition: transform 180ms ease;
+}
+
+.folio-stat-block:hover .folio-streak-icon {
+  transform: scale(1.12) rotate(-5deg);
+}
+
+.identity-stat-value-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.identity-streak-icon {
+  color: #ea580c;
+  fill: #f97316;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 4px rgba(234, 88, 12, 0.24));
+}
+
 .folio-stat-value {
   font-size: clamp(30px, 4.2vw, 40px);
   font-weight: 750;

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, type MouseEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Copy, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Flame, RotateCcw } from 'lucide-react';
 import { profileKeys } from '@/features/dashboard/api/dashboardApi';
 import { profileApi } from '../api/profileApi';
 import '../styles/profile.css';
@@ -305,9 +305,12 @@ export function PublicProfilePage() {
                 <div className="folio-stat-divider" aria-hidden="true" />
 
                 <div className="folio-stat-block">
-                  <strong className="folio-stat-value">
-                    {formatStreakNumber(query.data.streak?.currentStreak)}
-                  </strong>
+                  <div className="folio-stat-value-row">
+                    <strong className="folio-stat-value">
+                      {formatStreakNumber(query.data.streak?.currentStreak)}
+                    </strong>
+                    <Flame size={24} className="folio-streak-icon" aria-hidden="true" />
+                  </div>
                   <span className="folio-stat-caption">Day streak</span>
                 </div>
               </div>
