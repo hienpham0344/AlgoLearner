@@ -16,6 +16,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
@@ -120,7 +121,7 @@ class ClassroomApiTest {
         var created = createClass(teacher, "AUTO_JOIN");
         String id = created.path("id").asText();
         String invitation = mvc.perform(post("/api/v1/classrooms/{id}/invitations", id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"" + student.getEmail() + "\",\"expiresAt\":\"2026-11-02T00:00:00Z\"}"))
+                        .content("{\"email\":\"" + student.getEmail() + "\",\"expiresAt\":\"" + futureExpiry() + "\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String invitationId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(invitation).path("data").asText();
         mvc.perform(post("/api/v1/classrooms/invitations/{id}/accept", invitationId).with(actor(student)))
@@ -148,7 +149,7 @@ class ClassroomApiTest {
                         .content("{\"classCode\":\"" + code + "\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("CLASS_CODE_LOCKED"));
         String invite = mvc.perform(post("/api/v1/classrooms/{id}/invitations", id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"email\":\"" + student.getEmail() + "\",\"expiresAt\":\"2026-11-02T00:00:00Z\"}"))
+                        .content("{\"email\":\"" + student.getEmail() + "\",\"expiresAt\":\"" + futureExpiry() + "\"}"))
                 .andReturn().getResponse().getContentAsString();
         String inviteId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(invite).path("data").asText();
         mvc.perform(post("/api/v1/classrooms/{classroomId}/invitations/{invitationId}/revoke", id, inviteId).with(actor(teacher))).andExpect(status().isNoContent());
@@ -226,6 +227,10 @@ class ClassroomApiTest {
                         .content("{\"name\":\"Algorithms\",\"joinMode\":\"" + joinMode + "\"}"))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response).path("data");
+    }
+
+    private static String futureExpiry() {
+        return Instant.now().plus(Duration.ofDays(1)).toString();
     }
 
     private AccountEntity account(String username, AccountRole role) {
