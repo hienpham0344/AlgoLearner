@@ -12,5 +12,7 @@ public class AlgoLearnerApplication {
     public static void main(String[] args) {
         SpringApplication.run(AlgoLearnerApplication.class, args);
     }
+public class AlgoLearnerApplication {
+    public static void main(String[] args) { SpringApplication.run(AlgoLearnerApplication.class, args); }
     @Bean Clock clock() { return Clock.systemUTC(); }
 }

@@ -25,6 +25,9 @@ replay_pid*
 
 # Maven
 backend/target/
+backend/.tools/
+backend/data/
+backend/data/avatars/
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
@@ -83,3 +86,5 @@ coverage/
 # Temp files
 *.tmp
 *.bak
+.qa-browser-*/
+frontend/.qa/
