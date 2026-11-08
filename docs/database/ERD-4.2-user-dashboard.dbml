@@ -1,0 +1,209 @@
+Project algolearner_user_dashboard_4_2 {
+  database_type: 'PostgreSQL'
+  Note: 'Logical source-data ERD for FR-PRO-003, FR-PRO-004, FR-PRO-005 (Student, Teacher, Admin Dashboards). Partial table projections, NOT a migration or a second set of tables. accounts, account_restrictions and audit_logs are existing references owned by 4.1/4.16. Other table names/fields are proposed contracts pending their owning module ERDs. Merge by reusing each source table once.'
+}
+
+Table accounts {
+  id uuid [pk]
+  role varchar [not null]
+  lifecycle_status varchar [not null]
+  created_at timestamptz [not null]
+  Note: 'EXISTING 4.1 reference. Full account definition remains in ERD-4.1-account-auth.dbml.'
+}
+
+Table classrooms {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  owner_account_id uuid [not null]
+  name varchar [not null]
+  status varchar [not null]
+  indexes {
+    owner_account_id
+  }
+  Note: '4.3 proposed partial projection. Owner must be an eligible Teacher; access depends on classroom lifecycle.'
+}
+
+Table classroom_memberships {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  classroom_id uuid [not null]
+  student_account_id uuid [not null]
+  status varchar [not null]
+  indexes {
+    (classroom_id, student_account_id) [unique]
+    (student_account_id, status)
+  }
+  Note: '4.3 proposed current-membership projection. Pending/rejected/removed memberships do not grant access. History, if required, is separate in the owning module.'
+}
+
+Table assignments {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  classroom_id uuid [not null]
+  title varchar [not null]
+  status varchar [not null]
+  due_at timestamptz
+  indexes {
+    (classroom_id, due_at)
+  }
+  Note: '4.6 proposed partial projection. Publication/visibility and effective deadline must be resolved by assignment rules.'
+}
+
+Table quizzes {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  classroom_id uuid [not null]
+  title varchar [not null]
+  status varchar [not null]
+  opens_at timestamptz
+  closes_at timestamptz
+  indexes {
+    (classroom_id, opens_at)
+  }
+  Note: '4.7 proposed partial projection. Schedule window differs from per-attempt time limit. Student-specific exceptions belong to quiz module.'
+}
+
+Table public_courses {
+  id uuid [pk]
+  contributor_account_id uuid
+  moderation_status varchar [not null]
+  created_at timestamptz [not null]
+  indexes {
+    (contributor_account_id, moderation_status)
+  }
+  title varchar [not null]
+  status varchar [not null]
+  Note: '4.11 proposed partial projection. Only courses accessible to the Student may be returned.'
+}
+
+Table course_enrollments {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  account_id uuid [not null]
+  course_id uuid [not null]
+  status varchar [not null]
+  indexes {
+    (account_id, course_id) [unique]
+    course_id
+  }
+  Note: '4.11 proposed partial projection. Learning progress is resolved by course module, not copied into Dashboard.'
+}
+
+Table public_problems {
+  id uuid [pk]
+  contributor_account_id uuid
+  moderation_status varchar [not null]
+  created_at timestamptz [not null]
+  indexes {
+    (contributor_account_id, moderation_status)
+  }
+  title varchar [not null]
+  difficulty varchar [not null]
+  Note: '4.12 proposed partial projection for Public Practice statistics; excludes Class Practice problems.'
+}
+
+Table submissions {
+  id uuid [pk]
+  account_id uuid [not null]
+  class_practice_problem_id uuid
+  assignment_id uuid
+  public_problem_id uuid [note: 'Logical public-problem reference; context mapping to be finalized in 4.9/4.12']
+  verdict varchar [not null]
+  submitted_at timestamptz [not null]
+  indexes {
+    (account_id, submitted_at)
+    public_problem_id
+    class_practice_problem_id
+    assignment_id
+  }
+  Note: '4.9/4.12 proposed partial projection of OFFICIAL submissions. RUN creates no row. Rows outside Public Practice are excluded from Solved/Streak. Not a new public-only submission table.'
+}
+
+Table notifications {
+  id uuid [pk]
+  recipient_account_id uuid [not null]
+  title varchar [not null]
+  read_at timestamptz
+  deleted_at timestamptz
+  created_at timestamptz [not null]
+  indexes {
+    (recipient_account_id, created_at)
+  }
+  Note: '4.13 proposed partial projection. Apply recipient scope, soft deletion and 90-day retention.'
+}
+
+Ref: classrooms.owner_account_id > accounts.id
+Ref: classroom_memberships.classroom_id > classrooms.id
+Ref: classroom_memberships.student_account_id > accounts.id
+Ref: assignments.classroom_id > classrooms.id
+Ref: quizzes.classroom_id > classrooms.id
+Ref: course_enrollments.account_id > accounts.id
+Ref: course_enrollments.course_id > public_courses.id
+Ref: submissions.account_id > accounts.id
+Ref: submissions.public_problem_id > public_problems.id
+Ref: notifications.recipient_account_id > accounts.id
+
+
+Table class_practice_problems {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  classroom_id uuid [not null]
+  title varchar [not null]
+  indexes {
+    classroom_id
+  }
+  Note: '4.8 partial projection: route class-practice submissions to the owning Teacher.'
+}
+
+Table assignment_submissions {
+  id uuid [pk]
+  created_at timestamptz [not null]
+  assignment_id uuid [not null]
+  student_account_id uuid [not null]
+  grading_status varchar [not null]
+  submitted_at timestamptz [not null]
+  indexes {
+    (assignment_id, grading_status, submitted_at)
+    student_account_id
+  }
+  Note: '4.6 partial projection for essay/file/code assignment attempts awaiting grading. Distinct from judge executions; attempt-selection rules belong to 4.6/4.10.'
+}
+
+Table account_restrictions {
+  id uuid [pk]
+  account_id uuid [not null]
+  kind varchar [not null]
+  reason text
+  starts_at timestamptz [not null]
+  ends_at timestamptz
+  revoked_at timestamptz
+  indexes {
+    (account_id, kind, ends_at)
+  }
+  Note: 'EXISTING 4.1 reference projection, not a new table. Evaluate active intervals for locked/suspended accounts.'
+}
+
+Table audit_logs {
+  id uuid [pk]
+  actor_account_id uuid
+  target_account_id uuid
+  action varchar [not null]
+  outcome varchar [not null]
+  occurred_at timestamptz [not null]
+  indexes {
+    (actor_account_id, occurred_at)
+    (target_account_id, occurred_at)
+  }
+  Note: 'EXISTING 4.1/4.16 reference projection. Keep UUID from current account-auth ERD; final log PK standardization belongs to shared audit design, not Dashboard.'
+}
+
+Ref: public_courses.contributor_account_id > accounts.id
+Ref: public_problems.contributor_account_id > accounts.id
+Ref: class_practice_problems.classroom_id > classrooms.id
+Ref: assignment_submissions.assignment_id > assignments.id
+Ref: assignment_submissions.student_account_id > accounts.id
+Ref: submissions.class_practice_problem_id > class_practice_problems.id
+Ref: submissions.assignment_id > assignments.id
+Ref: account_restrictions.account_id > accounts.id
+Ref: audit_logs.actor_account_id > accounts.id
+Ref: audit_logs.target_account_id > accounts.id

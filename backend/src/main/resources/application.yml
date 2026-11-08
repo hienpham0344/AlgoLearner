@@ -25,3 +25,16 @@ spring:
 app:
   security:
     jwt-secret: ${JWT_SECRET:change-this-development-secret-to-at-least-32-bytes}
+      max-file-size: ${AVATAR_MAX_SIZE:5MB}
+      max-request-size: ${AVATAR_MAX_REQUEST_SIZE:6MB}
+app:
+  security:
+    jwt:
+      issuer: ${JWT_ISSUER:}
+      audience: ${JWT_AUDIENCE:}
+      jwk-set-uri: ${JWT_JWK_SET_URI:}
+  storage:
+    avatar-directory: ${AVATAR_DIRECTORY:./data/avatars}
+    max-bytes: ${AVATAR_MAX_BYTES:5242880}
+    max-pixels: ${AVATAR_MAX_PIXELS:16000000}
+    allowed-types: ${AVATAR_ALLOWED_TYPES:image/jpeg,image/png}

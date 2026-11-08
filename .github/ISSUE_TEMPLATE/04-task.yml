@@ -1,0 +1,99 @@
+name: Công việc kỹ thuật / kiểm thử / tài liệu
+description: Theo dõi công việc hỗ trợ, tích hợp, kiểm thử hoặc quyết định.
+title: '[TASK] '
+labels:
+- task
+body:
+- type: markdown
+  attributes:
+    value: Chọn milestone tuần và label `srs:4.x` ở thanh bên. Đối chiếu SRS trước khi triển khai; ghi rõ các mâu
+      thuẫn hoặc quyết định chưa chốt. Không đưa mật khẩu, OTP, token, nội dung .env hoặc dữ liệu cá nhân vào issue.
+- type: dropdown
+  id: module
+  attributes:
+    label: Phân hệ SRS
+    options:
+    - 4.1 - Tài khoản và xác thực
+    - 4.2 - Hồ sơ và dashboard
+    - 4.3 - Quản lý lớp học
+    - 4.4 - Thông báo lớp học
+    - 4.5 - Bài học trong lớp
+    - 4.6 - Bài tập
+    - 4.7 - Quiz trong lớp
+    - 4.8 - Luyện tập code trong lớp
+    - 4.9 - Code Judge
+    - 4.10 - Sổ điểm và đánh giá
+    - 4.11 - Khóa học công khai
+    - 4.12 - Luyện tập công khai
+    - 4.13 - Thông báo trong ứng dụng
+    - 4.14 - Quản trị hệ thống
+    - 4.15 - Báo cáo và xuất dữ liệu
+    - 4.16 - Audit và logging
+    - Liên phân hệ / hạ tầng
+  validations:
+    required: true
+- type: dropdown
+  id: area
+  attributes:
+    label: Phạm vi kỹ thuật
+    options:
+    - Backend
+    - Frontend
+    - Backend và Frontend
+    - Database
+    - Tài liệu / kiểm thử / hạ tầng
+  validations:
+    required: true
+- type: textarea
+  id: goal
+  attributes:
+    label: Mục tiêu và lý do
+  validations:
+    required: true
+- type: textarea
+  id: deliverables
+  attributes:
+    label: Đầu ra cần bàn giao
+    placeholder: '- [ ] ...
+
+      - [ ] ...'
+  validations:
+    required: true
+- type: textarea
+  id: references
+  attributes:
+    label: Truy vết yêu cầu
+    description: Ghi mục SRS, các mã FR/BR/UC/TC chính xác và liên kết tài liệu; không tự tạo mã yêu cầu.
+    placeholder: SRS 4.x; FR-...; BR-...; UC-...; TC-...
+  validations:
+    required: true
+- type: textarea
+  id: acceptance
+  attributes:
+    label: Tiêu chí nghiệm thu
+    description: Viết điều kiện quan sát được, gồm luồng thành công, lỗi và phân quyền.
+    placeholder: '- [ ] ...
+
+      - [ ] ...'
+  validations:
+    required: true
+- type: textarea
+  id: dependencies
+  attributes:
+    label: Phụ thuộc và công việc liên quan
+    description: Liên kết issues/PR; chỉ rõ phụ thuộc bắt buộc và điều kiện hoàn thành.
+    placeholder: 'Depends on #...; liên quan PR #...; quyết định cần chốt: ...'
+  validations:
+    required: false
+- type: textarea
+  id: verification
+  attributes:
+    label: Kế hoạch kiểm thử và bằng chứng
+    description: Nêu test case, môi trường và kiểm tra cần chạy. Chỉ ghi Pass khi đã quan sát kết quả.
+    placeholder: '- [ ] Kiểm thử luồng chính / lỗi / phân quyền
+
+      - [ ] Tích hợp API và dữ liệu thật
+
+      - [ ] Ghi build, kết quả và bằng chứng vào PR/Test Report'
+  validations:
+    required: true
