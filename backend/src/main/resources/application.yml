@@ -25,15 +25,11 @@ spring:
         max-page-size: 100
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 6MB
-app:
-  security:
-    jwt-secret: ${JWT_SECRET:change-this-development-secret-to-at-least-32-bytes}
       max-file-size: ${AVATAR_MAX_SIZE:5MB}
       max-request-size: ${AVATAR_MAX_REQUEST_SIZE:6MB}
 app:
   security:
+    jwt-secret: ${JWT_SECRET:change-this-development-secret-to-at-least-32-bytes}
     jwt:
       issuer: ${JWT_ISSUER:}
       audience: ${JWT_AUDIENCE:}

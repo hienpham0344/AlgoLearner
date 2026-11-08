@@ -4,7 +4,6 @@ import com.algolearner.platform.common.dto.ApiErrorResponse;
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ErrorCode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -14,12 +13,8 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.*;
-import org.springframework.security.oauth2.jwt.JwtDecoder;
-import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,9 +68,4 @@ public class SecurityConfig {
         return http.build();
     }
 
-    @Bean
-    JwtDecoder jwtDecoder(@Value("${app.security.jwt-secret}") String secret) {
-        if (secret.length() < 32) throw new IllegalStateException("JWT_SECRET must be at least 32 characters");
-        return NimbusJwtDecoder.withSecretKey(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256")).build();
-    }
 }

@@ -1,6 +1,11 @@
 package com.algolearner.platform.classroom;
 
 import com.algolearner.platform.auth.*;
+import com.algolearner.platform.common.security.AccountRepository;
+import com.algolearner.platform.profile.dashboard.DashboardRepository;
+import com.algolearner.platform.profile.dashboard.DashboardResponse;
+import com.algolearner.platform.profile.PracticeRepository;
+import com.algolearner.platform.profile.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +26,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.List;
+import java.util.ArrayList;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -28,7 +34,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:classroom-api;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.flyway.enabled=false", "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false"})
+        "spring.flyway.enabled=false", "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false",
+        "app.security.jwt.issuer=https://issuer.example.test", "app.security.jwt.audience=classroom-tests",
+        "app.security.jwt.jwk-set-uri=https://issuer.example.test/.well-known/jwks.json"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
@@ -36,9 +44,33 @@ class ClassroomApiTest {
     @TestConfiguration
     static class TestConfig {
         @Bean @Primary Clock fixedClock() { return Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC); }
+        @Bean @Primary TestAccounts testAccounts() { return new TestAccounts(); }
+        @Bean @Primary DashboardRepository dashboardRepository() {
+            return org.mockito.Mockito.mock(DashboardRepository.class, invocation -> {
+                Class<?> type = invocation.getMethod().getReturnType();
+                if (type == DashboardResponse.Preview.class) return new DashboardResponse.Preview<>(List.of(), 0, false);
+                if (type == DashboardResponse.Contributions.class) return new DashboardResponse.Contributions(0, 0);
+                if (type == DashboardResponse.Totals.class) return new DashboardResponse.Totals(0, 0, 0, 0, 0, 0);
+                if (type == DashboardResponse.Moderation.class) return new DashboardResponse.Moderation(0, 0, 0);
+                if (List.class.isAssignableFrom(type)) return List.of();
+                return org.mockito.Mockito.RETURNS_DEFAULTS.answer(invocation);
+            });
+        }
+        @Bean @Primary PracticeRepository practiceRepository() { return accountId -> List.of(); }
+        @Bean @Primary ProfileRepository profileRepository() { return org.mockito.Mockito.mock(ProfileRepository.class); }
+    }
+    static class TestAccounts implements AccountRepository {
+        private final List<Account> records = new ArrayList<>();
+        @Override public List<Account> accounts() { return List.copyOf(records); }
+        @Override public List<Restriction> restrictions() { return List.of(); }
+        void add(AccountEntity account) {
+            records.add(new Account(account.getId(), account.getUsername(), account.getRole().name(),
+                    account.getStatus().name(), account.getCreatedAt()));
+        }
     }
     @Autowired MockMvc mvc;
-    @Autowired AccountRepository accounts;
+    @Autowired com.algolearner.platform.auth.AccountRepository accounts;
+    @Autowired TestAccounts testAccounts;
     private AccountEntity teacher;
     private AccountEntity otherTeacher;
     private AccountEntity student;
@@ -236,7 +268,9 @@ class ClassroomApiTest {
     private AccountEntity account(String username, AccountRole role) {
         var account = new AccountEntity(); account.setId(UUID.randomUUID()); account.setUsername(username + UUID.randomUUID());
         account.setEmail(username + UUID.randomUUID() + "@example.test"); account.setRole(role); account.setStatus(AccountStatus.ACTIVE);
-        return accounts.save(account);
+        AccountEntity saved = accounts.save(account);
+        testAccounts.add(saved);
+        return saved;
     }
     private static org.springframework.test.web.servlet.request.RequestPostProcessor actor(AccountEntity account) {
         return authentication(new UsernamePasswordAuthenticationToken(account.getId().toString(), "N/A",
