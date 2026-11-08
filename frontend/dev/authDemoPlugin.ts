@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from 'vite';
+import { demoRoleIdentity } from './demoRoleIdentity';
 
 const MAX_ATTEMPTS = 5;
 const LOCK_DURATION_MS = 15 * 60 * 1000;
@@ -63,7 +64,7 @@ async function readJson(request: IncomingMessage): Promise<unknown> {
   return JSON.parse(raw);
 }
 
-export function authDemoPlugin(): Plugin {
+export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'): Plugin {
   const attempts = new Map<string, AttemptState>();
   const challenges = new Map<string, ResetChallenge>();
   const grants = new Map<string, ResetGrant>();
@@ -92,7 +93,7 @@ export function authDemoPlugin(): Plugin {
 
         if (route === '/api/v1/auth/forgot-password') {
           challenges.set(email, { expiresAt: now + CODE_LIFETIME_MS, resendAt: now + RESEND_WAIT_MS, failures: 0 });
-          respond(response, 200, successBody({ message: 'Reset code sent.' }, 'Reset code sent.'));
+          respond(response, 200, successBody({ message: 'Demo reset code: 123456' }, 'Reset code sent.'));
           return;
         }
 
@@ -102,7 +103,7 @@ export function authDemoPlugin(): Plugin {
             fail(429, 'RESEND_TOO_SOON', 'Wait before requesting another code.', Math.ceil((challenge.resendAt - now) / 1000)); return;
           }
           challenges.set(email, { expiresAt: now + CODE_LIFETIME_MS, resendAt: now + RESEND_WAIT_MS, failures: 0 });
-          respond(response, 200, successBody({ success: true, message: 'Reset code sent.' }, 'Reset code sent.'));
+          respond(response, 200, successBody({ success: true, message: 'Demo reset code: 123456' }, 'Reset code sent.'));
           return;
         }
 
@@ -160,6 +161,16 @@ export function authDemoPlugin(): Plugin {
         }
 
         const identity = payload.usernameOrEmail.trim().toLowerCase();
+        const roleIdentity = demoRoleIdentity(identity, roleAccountMode);
+        if (payload.password === INITIAL_DEMO_PASSWORD && roleIdentity) {
+          const role = roleIdentity.toUpperCase();
+          attempts.delete(identity);
+          respond(response, 200, successBody({ token: `mock-${roleIdentity}`, user: {
+            id: `backend-mock-${roleIdentity}`, username: roleIdentity, email: `${roleIdentity}@example.test`, role,
+            fullName: `${roleIdentity[0].toUpperCase()}${roleIdentity.slice(1)}`, lifecycleStatus: 'ACTIVE',
+          } }, 'Signed in successfully'));
+          return;
+        }
         const now = Date.now();
         const saved = attempts.get(identity);
         const state = saved?.lockedUntil && saved.lockedUntil <= now ? { count: 0, lockedUntil: null } : saved ?? { count: 0, lockedUntil: null };
@@ -181,7 +192,7 @@ export function authDemoPlugin(): Plugin {
                 username: 'learner',
                 email: DEMO_IDENTITY,
                 role: 'STUDENT',
-                fullName: 'Demo Learner',
+                fullName: 'Learner',
                 lifecycleStatus: 'ACTIVE',
               },
             },

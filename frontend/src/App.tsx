@@ -15,6 +15,9 @@ import { StudentClassroomDetailPage } from '@/features/classroom/student/pages/S
 import { AdminClassroomListPage } from '@/features/classroom/admin/pages/AdminClassroomListPage';
 import { AdminClassroomDetailPage } from '@/features/classroom/admin/pages/AdminClassroomDetailPage';
 import { ClassroomRouterPage } from '@/features/classroom/pages/ClassroomRouterPage';
+import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
+import { ProfilePage } from '@/features/profile/pages/ProfilePage';
+import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -43,9 +46,13 @@ export const App: React.FC = () => {
         <Route path="/verify-otp" element={<VerifyOtpPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
+        <Route path="/courses" element={<CoursePreviewPage />} />
       </Route>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/u/:username" element={<PublicProfilePage />} />
+      <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
       <Route
-        path="/"
+        path="/dashboard"
         element={
           <ProtectedRoute>
             <DashboardPage />
