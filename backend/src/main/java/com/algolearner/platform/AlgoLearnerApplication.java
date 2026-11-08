@@ -7,6 +7,8 @@ import java.time.Clock;
 
 @SpringBootApplication
 public class AlgoLearnerApplication {
-    public static void main(String[] args) { SpringApplication.run(AlgoLearnerApplication.class, args); }
+    public static void main(String[] args) {
+        SpringApplication.run(AlgoLearnerApplication.class, args);
+    }
     @Bean Clock clock() { return Clock.systemUTC(); }
 }

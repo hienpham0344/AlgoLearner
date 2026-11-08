@@ -1,0 +1,1 @@
+CREATE INDEX idx_classroom_join_request_student_id ON tbl_classroom_join_request(student_id);
