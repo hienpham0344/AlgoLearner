@@ -108,6 +108,38 @@ class ClassroomServiceTest {
     }
 
     @Test
+    void closedClassRejectsApprovalOfPendingRequest() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        classroom.setJoiningOpen(false);
+        var request = new ClassroomJoinRequestEntity(); request.setId(UUID.randomUUID()); request.setClassroom(classroom);
+        request.setStudent(student); request.setStatus(JoinRequestStatus.PENDING_APPROVAL);
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+
+        assertThatThrownBy(() -> service.approve(owner.getId(), classroom.getId(), request.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("JOINING_CLOSED");
+        verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void directAddApprovesExistingPendingRequest() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        var request = new ClassroomJoinRequestEntity(); request.setId(UUID.randomUUID()); request.setClassroom(classroom);
+        request.setStudent(student); request.setStatus(JoinRequestStatus.PENDING_APPROVAL);
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(accounts.findByUsernameIgnoreCase(student.getUsername())).thenReturn(Optional.of(student));
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId())).thenReturn(Optional.empty());
+        when(requests.findByClassroomIdAndStudentIdAndStatus(classroom.getId(), student.getId(), JoinRequestStatus.PENDING_APPROVAL))
+                .thenReturn(Optional.of(request));
+
+        service.directAdd(owner.getId(), classroom.getId(), new ClassroomDtos.DirectAdd(student.getUsername()));
+
+        assertThat(request.getStatus()).isEqualTo(JoinRequestStatus.APPROVED);
+        verify(memberships).save(any(ClassroomMembershipEntity.class));
+    }
+
+    @Test
     void expiredInvitationCannotCreateMembership() {
         var student = account(AccountRole.STUDENT); var owner = account(AccountRole.TEACHER); var classroom = classroom(owner);
         var invitation = new ClassroomInvitationEntity(); invitation.setId(UUID.randomUUID()); invitation.setClassroom(classroom); invitation.setStudent(student);

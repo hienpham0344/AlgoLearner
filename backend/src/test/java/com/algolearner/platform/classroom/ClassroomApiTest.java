@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -28,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.flyway.enabled=false", "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false"})
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 @Transactional
 class ClassroomApiTest {
     @TestConfiguration
@@ -174,13 +176,49 @@ class ClassroomApiTest {
                         .content("{\"classCode\":\"" + code + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.data.outcome").value("PENDING_APPROVAL"));
         String requests = mvc.perform(get("/api/v1/classrooms/{id}/join-requests", id).with(actor(teacher)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].studentId").value(student.getId().toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].studentId").value(student.getId().toString()))
+                .andExpect(jsonPath("$.data.pagination.page").value(0))
                 .andReturn().getResponse().getContentAsString();
-        String requestId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(requests).path("data").get(0).path("id").asText();
+        String requestId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(requests).path("data").path("items").get(0).path("id").asText();
         mvc.perform(post("/api/v1/classrooms/{classroomId}/join-requests/{requestId}/approve", id, requestId).with(actor(teacher)))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/v1/classrooms").with(actor(student)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.data[0].id").value(id));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].id").value(id));
+    }
+
+    @Test
+    void closedClassRejectsApprovalAndDirectAddResolvesPendingRequest() throws Exception {
+        var created = createClass(teacher, "REQUIRE_APPROVAL"); String id = created.path("id").asText();
+        String code = created.path("classCode").asText();
+        mvc.perform(post("/api/v1/classrooms/join").with(actor(student)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"classCode\":\"" + code + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.outcome").value("PENDING_APPROVAL"));
+        String requests = mvc.perform(get("/api/v1/classrooms/{id}/join-requests", id).with(actor(teacher)))
+                .andReturn().getResponse().getContentAsString();
+        String requestId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(requests).path("data").path("items").get(0).path("id").asText();
+        mvc.perform(patch("/api/v1/classrooms/{id}/join-configuration", id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codeLocked\":false,\"joiningOpen\":false,\"joinMode\":\"REQUIRE_APPROVAL\"}"))
+                .andExpect(status().isOk());
+        mvc.perform(post("/api/v1/classrooms/{classroomId}/join-requests/{requestId}/approve", id, requestId).with(actor(teacher)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("JOINING_CLOSED"));
+
+        mvc.perform(post("/api/v1/classrooms/{id}/members/direct", id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"usernameOrEmail\":\"" + student.getUsername() + "\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/classrooms/{id}/join-requests", id).with(actor(teacher)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isEmpty());
+        mvc.perform(get("/api/v1/classrooms/{id}/members", id).with(actor(teacher)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].studentId").value(student.getId().toString()));
+    }
+
+    @Test
+    void listEndpointsHonorPageSizeAndSortParameters() throws Exception {
+        var created = createClass(teacher, "AUTO_JOIN"); String id = created.path("id").asText();
+        mvc.perform(get("/api/v1/classrooms").with(actor(teacher)).queryParam("page", "0").queryParam("size", "1").queryParam("sort", "createdAt,desc"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.pagination.size").value(1));
+        mvc.perform(get("/api/v1/classrooms/{id}/members", id).with(actor(teacher)).queryParam("size", "101"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.pagination.size").value(100));
     }
 
     private com.fasterxml.jackson.databind.JsonNode createClass(AccountEntity actor, String joinMode) throws Exception {

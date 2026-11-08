@@ -1,8 +1,11 @@
 package com.algolearner.platform.classroom;
 
 import com.algolearner.platform.auth.*;
+import com.algolearner.platform.common.dto.PageResponse;
 import com.algolearner.platform.common.exception.AppException;
 import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,23 +47,28 @@ public class ClassroomService {
         return view(classroom, isAdmin(actor) || classroom.getOwner().getId().equals(actorId));
     }
 
-    public java.util.List<View> list(UUID actorId) {
+    public PageResponse<View> list(UUID actorId, Pageable pageable) {
         var actor = activeAccount(actorId);
-        if (isAdmin(actor)) return classrooms.findAll().stream().map(c -> view(c, true)).toList();
-        if (actor.getRole() == AccountRole.TEACHER) return classrooms.findByOwnerIdOrderByCreatedAtDesc(actorId).stream().map(c -> view(c, true)).toList();
-        return memberships.findByStudentIdAndStatus(actorId, MembershipStatus.ACTIVE).stream().map(m -> view(m.getClassroom(), false)).toList();
+        Page<View> page;
+        if (isAdmin(actor)) page = classrooms.findAll(pageable).map(c -> view(c, true));
+        else if (actor.getRole() == AccountRole.TEACHER) page = classrooms.findByOwnerId(actorId, pageable).map(c -> view(c, true));
+        else page = memberships.findByStudentIdAndStatus(actorId, MembershipStatus.ACTIVE, pageable)
+                .map(m -> view(m.getClassroom(), false));
+        return PageResponse.fromPage(page);
     }
 
-    public java.util.List<Member> activeMembers(UUID actorId, UUID classroomId) {
+    public PageResponse<Member> activeMembers(UUID actorId, UUID classroomId, Pageable pageable) {
         ownedOrAdmin(actorId, classroomId);
-        return memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE).stream()
-                .map(m -> new Member(m.getStudent().getId(), m.getStudent().getUsername(), m.getStudent().getEmail(), m.getStatus(), m.getJoinedAt())).toList();
+        Page<Member> page = memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE, pageable)
+                .map(m -> new Member(m.getStudent().getId(), m.getStudent().getUsername(), m.getStudent().getEmail(), m.getStatus(), m.getJoinedAt()));
+        return PageResponse.fromPage(page);
     }
 
-    public java.util.List<JoinRequest> pendingRequests(UUID actorId, UUID classroomId) {
+    public PageResponse<JoinRequest> pendingRequests(UUID actorId, UUID classroomId, Pageable pageable) {
         owned(actorId, classroomId);
-        return requests.findByClassroomIdAndStatus(classroomId, JoinRequestStatus.PENDING_APPROVAL).stream()
-                .map(r -> new JoinRequest(r.getId(), r.getStudent().getId(), r.getStudent().getUsername(), r.getCreatedAt())).toList();
+        Page<JoinRequest> page = requests.findByClassroomIdAndStatus(classroomId, JoinRequestStatus.PENDING_APPROVAL, pageable)
+                .map(r -> new JoinRequest(r.getId(), r.getStudent().getId(), r.getStudent().getUsername(), r.getCreatedAt()));
+        return PageResponse.fromPage(page);
     }
 
     @Transactional
@@ -153,6 +161,8 @@ public class ClassroomService {
                 .orElseThrow(() -> notFound("STUDENT_NOT_FOUND", "Registered Student not found"));
         if (student.getRole() != AccountRole.STUDENT || student.getStatus() != AccountStatus.ACTIVE) throw bad("INVALID_STUDENT", "Target must be an active Student");
         activateMembership(classroom, student, memberships.findByClassroomIdAndStudentId(classroomId, student.getId()).orElse(null));
+        requests.findByClassroomIdAndStudentIdAndStatus(classroomId, student.getId(), JoinRequestStatus.PENDING_APPROVAL)
+                .ifPresent(request -> request.setStatus(JoinRequestStatus.APPROVED));
     }
 
     @Transactional
@@ -166,6 +176,7 @@ public class ClassroomService {
     @Transactional
     public void approve(UUID actorId, UUID classroomId, UUID requestId) {
         var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        if (!classroom.isJoiningOpen()) throw bad("JOINING_CLOSED", "Classroom is closed for joining");
         var request = requests.findById(requestId).filter(r -> r.getClassroom().getId().equals(classroomId) && r.getStatus() == JoinRequestStatus.PENDING_APPROVAL)
                 .orElseThrow(() -> notFound("JOIN_REQUEST_NOT_FOUND", "Pending join request not found"));
         var student = activeStudent(request.getStudent().getId());

@@ -1,10 +1,14 @@
 package com.algolearner.platform.classroom;
 
 import com.algolearner.platform.common.dto.ApiResponse;
+import com.algolearner.platform.common.dto.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -23,7 +27,10 @@ public class ClassroomController {
     @Operation(summary = "Create a private classroom")
     public ApiResponse<View> create(Authentication auth, @Valid @RequestBody Create input) { return ApiResponse.success(service.create(actor(auth), input)); }
     @GetMapping
-    public ApiResponse<java.util.List<View>> list(Authentication auth) { return ApiResponse.success(service.list(actor(auth))); }
+    public PageResponse<View> list(Authentication auth,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return service.list(actor(auth), pageable);
+    }
     @GetMapping("/{classroomId}")
     public ApiResponse<View> get(Authentication auth, @PathVariable UUID classroomId) { return ApiResponse.success(service.get(actor(auth), classroomId)); }
     @PatchMapping("/{classroomId}")
@@ -45,9 +52,15 @@ public class ClassroomController {
     @DeleteMapping("/{classroomId}/members/{studentId}") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(Authentication auth, @PathVariable UUID classroomId, @PathVariable UUID studentId) { service.removeStudent(actor(auth), classroomId, studentId); }
     @GetMapping("/{classroomId}/members")
-    public ApiResponse<java.util.List<Member>> members(Authentication auth, @PathVariable UUID classroomId) { return ApiResponse.success(service.activeMembers(actor(auth), classroomId)); }
+    public PageResponse<Member> members(Authentication auth, @PathVariable UUID classroomId,
+            @PageableDefault(size = 20, sort = "joinedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return service.activeMembers(actor(auth), classroomId, pageable);
+    }
     @GetMapping("/{classroomId}/join-requests")
-    public ApiResponse<java.util.List<JoinRequest>> requests(Authentication auth, @PathVariable UUID classroomId) { return ApiResponse.success(service.pendingRequests(actor(auth), classroomId)); }
+    public PageResponse<JoinRequest> requests(Authentication auth, @PathVariable UUID classroomId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.ASC) Pageable pageable) {
+        return service.pendingRequests(actor(auth), classroomId, pageable);
+    }
     @PostMapping("/{classroomId}/join-requests/{requestId}/approve") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void approve(Authentication auth, @PathVariable UUID classroomId, @PathVariable UUID requestId) { service.approve(actor(auth), classroomId, requestId); }
     @PostMapping("/{classroomId}/invitations") @ResponseStatus(HttpStatus.CREATED)
