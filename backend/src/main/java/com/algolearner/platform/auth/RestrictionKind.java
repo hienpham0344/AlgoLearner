@@ -5,3 +5,4 @@ public enum RestrictionKind {
     ADMIN_LOCK,
     SUSPENSION
 }
+

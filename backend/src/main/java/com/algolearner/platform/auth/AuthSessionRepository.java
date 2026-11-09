@@ -24,3 +24,4 @@ public interface AuthSessionRepository extends JpaRepository<AuthSessionEntity, 
     @Query("UPDATE AuthSessionEntity s SET s.revokedAt = :now WHERE s.account.id = :accountId AND s.id <> :excludedSessionId AND s.revokedAt IS NULL")
     int revokeOtherSessions(@Param("accountId") UUID accountId, @Param("excludedSessionId") UUID excludedSessionId, @Param("now") Instant now);
 }
+

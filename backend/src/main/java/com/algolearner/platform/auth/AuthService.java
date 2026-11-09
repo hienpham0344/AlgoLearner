@@ -15,6 +15,7 @@ import java.util.UUID;
 import static com.algolearner.platform.auth.AuthDtos.*;
 
 @Service
+@org.springframework.context.annotation.Profile("!mock")
 @Transactional(readOnly = true)
 public class AuthService {
 
@@ -579,3 +580,4 @@ public class AuthService {
         );
     }
 }
+

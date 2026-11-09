@@ -288,3 +288,4 @@ class AuthApiTest {
         assertThat(updated.getStatus()).isEqualTo(AccountStatus.DEACTIVATED);
     }
 }
+

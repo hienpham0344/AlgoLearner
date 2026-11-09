@@ -67,3 +67,4 @@ CREATE TABLE IF NOT EXISTS tbl_audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_actor_time ON tbl_audit_log(actor_account_id, occurred_at);
 CREATE INDEX IF NOT EXISTS idx_audit_target_time ON tbl_audit_log(target_account_id, occurred_at);
+

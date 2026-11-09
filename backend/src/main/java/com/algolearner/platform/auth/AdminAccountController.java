@@ -17,6 +17,7 @@ import static com.algolearner.platform.auth.AuthDtos.MessageResponse;
 import static com.algolearner.platform.auth.AuthDtos.SuspendAccountRequest;
 
 @RestController
+@org.springframework.context.annotation.Profile("!mock")
 @RequestMapping(value = "/api/v1/admin/accounts", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Admin Account Management", description = "FR-ACC-006: Admin account lifecycle management, suspensions, and reactivation")
 @PreAuthorize("hasRole('ADMIN')")
@@ -67,3 +68,4 @@ public class AdminAccountController {
         return UUID.fromString(authentication.getName());
     }
 }
+

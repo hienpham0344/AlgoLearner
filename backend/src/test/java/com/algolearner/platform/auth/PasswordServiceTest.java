@@ -53,3 +53,4 @@ class PasswordServiceTest {
                 .satisfies(ex -> assertThat(((ApiException) ex).getErrorCode()).isEqualTo(ErrorCode.PASSWORD_POLICY_VIOLATION.getCode()));
     }
 }
+

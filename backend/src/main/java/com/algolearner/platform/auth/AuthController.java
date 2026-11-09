@@ -19,6 +19,7 @@ import java.util.UUID;
 import static com.algolearner.platform.auth.AuthDtos.*;
 
 @RestController
+@org.springframework.context.annotation.Profile("!mock")
 @RequestMapping(value = "/api/v1/auth", produces = MediaType.APPLICATION_JSON_VALUE)
 @Tag(name = "Authentication & Accounts", description = "SRS 4.1: Registration, Login, OTP, Passwords, and Sessions")
 public class AuthController {
@@ -166,3 +167,4 @@ public class AuthController {
         return UUID.fromString(authentication.getName());
     }
 }
+

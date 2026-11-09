@@ -48,3 +48,4 @@ public class AuditLogEntity {
     @Column(name = "occurred_at", nullable = false)
     private Instant occurredAt;
 }
+

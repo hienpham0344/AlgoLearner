@@ -17,3 +17,4 @@ public class LoggingAuthMailAdapter implements AuthMailPort {
                 email, username, purpose, otpCode, expiresAt);
     }
 }
+

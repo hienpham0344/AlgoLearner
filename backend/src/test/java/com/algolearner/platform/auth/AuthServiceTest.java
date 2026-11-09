@@ -359,3 +359,4 @@ class AuthServiceTest {
         verify(auditPort).record(eq(accountId), eq(accountId), eq(AuditActorType.USER), eq("ACCOUNT_DEACTIVATED"), eq(AuditOutcome.SUCCESS), eq(now));
     }
 }
+

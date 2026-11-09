@@ -49,3 +49,4 @@ public class AuthSessionEntity extends BaseAuditableEntity {
     @Column(name = "revoked_at")
     private Instant revokedAt;
 }
+

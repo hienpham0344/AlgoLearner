@@ -50,3 +50,4 @@ public class OtpChallengeEntity extends BaseAuditableEntity {
     @Column(name = "consumed_at")
     private Instant consumedAt;
 }
+

@@ -4,3 +4,4 @@ public enum AuditActorType {
     USER,
     SYSTEM
 }
+

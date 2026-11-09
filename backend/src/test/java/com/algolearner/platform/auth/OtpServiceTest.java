@@ -152,3 +152,4 @@ class OtpServiceTest {
                 .satisfies(ex -> assertThat(((ApiException) ex).getErrorCode()).isEqualTo(ErrorCode.OTP_EXPIRED.getCode()));
     }
 }
+

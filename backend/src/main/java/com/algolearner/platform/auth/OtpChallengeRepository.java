@@ -23,3 +23,4 @@ public interface OtpChallengeRepository extends JpaRepository<OtpChallengeEntity
             @Param("now") Instant now
     );
 }
+

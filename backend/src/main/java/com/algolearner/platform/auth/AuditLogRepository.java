@@ -6,3 +6,4 @@ import java.util.UUID;
 
 public interface AuditLogRepository extends JpaRepository<AuditLogEntity, UUID> {
 }
+

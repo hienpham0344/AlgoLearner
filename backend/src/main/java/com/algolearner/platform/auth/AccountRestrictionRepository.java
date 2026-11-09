@@ -20,3 +20,4 @@ public interface AccountRestrictionRepository extends JpaRepository<AccountRestr
             @Param("now") Instant now
     );
 }
+
