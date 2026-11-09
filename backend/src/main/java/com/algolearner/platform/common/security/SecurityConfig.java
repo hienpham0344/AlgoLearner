@@ -28,6 +28,15 @@ public class SecurityConfig {
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers(
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/verify-otp",
+                    "/api/v1/auth/resend-otp",
+                    "/api/v1/auth/forgot-password",
+                    "/api/v1/auth/reset-password",
+                    "/api/v1/auth/refresh-token"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/users/me/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/users/*/profile", "/api/v1/users/*/profile/avatar").permitAll()
                 .anyRequest().authenticated())
