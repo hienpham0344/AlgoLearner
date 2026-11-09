@@ -22,6 +22,12 @@ try {
             }
         }
     }
+    $jdk = Join-Path $PSScriptRoot '.tools/jdk21/jdk-21.0.13+9'
+    if (Test-Path $jdk) {
+        $savedEnvironment['JAVA_HOME'] = $env:JAVA_HOME
+        $env:JAVA_HOME = $jdk
+        $env:PATH = "$jdk\bin;$env:PATH"
+    }
     $maven = Get-Command mvn -ErrorAction SilentlyContinue
     if ($maven) { $executable = $maven.Source }
     elseif (Test-Path '.tools/apache-maven-3.9.9/bin/mvn.cmd') {
