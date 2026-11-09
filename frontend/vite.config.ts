@@ -8,6 +8,7 @@ import { dashboardDemoPlugin } from './dev/dashboardDemoPlugin';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
+  cacheDir: `node_modules/.vite-${mode}`,
   plugins: [react(), tailwindcss(), ...(['auth-demo', 'backend-mock'].includes(mode) ? [authDemoPlugin(mode === 'backend-mock' ? 'backend-mock' : 'demo')] : []), ...(mode === 'auth-demo' ? [profileDemoPlugin(), dashboardDemoPlugin()] : [])],
   resolve: {
     alias: {
