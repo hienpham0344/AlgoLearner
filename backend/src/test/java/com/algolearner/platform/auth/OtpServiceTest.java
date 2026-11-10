@@ -67,7 +67,7 @@ class OtpServiceTest {
         assertThat(saved.getPurpose()).isEqualTo(OtpPurpose.REGISTER);
         assertThat(saved.getCodeHash()).isNotBlank();
         assertThat(saved.getSentAt()).isEqualTo(now);
-        assertThat(saved.getExpiresAt()).isEqualTo(now.plus(Duration.ofMinutes(10)));
+        assertThat(saved.getExpiresAt()).isEqualTo(now.plus(Duration.ofMinutes(5)));
         assertThat(saved.getConsumedAt()).isNull();
 
         ArgumentCaptor<String> codeCaptor = ArgumentCaptor.forClass(String.class);

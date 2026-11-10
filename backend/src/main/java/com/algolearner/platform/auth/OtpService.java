@@ -22,7 +22,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class OtpService {
 
-    public static final Duration OTP_EXPIRY = Duration.ofMinutes(10);
+    public static final Duration OTP_EXPIRY = Duration.ofMinutes(5);
     public static final Duration RESEND_COOLDOWN = Duration.ofSeconds(60);
     public static final int MAX_FAILED_ATTEMPTS = 5;
 
@@ -55,6 +55,9 @@ public class OtpService {
             }
         }
 
+        // A resend invalidates every earlier unconsumed code for the same purpose.
+        otpRepository.consumeOutstanding(account.getId(), purpose, now);
+
         // Generate 6-digit code
         int codeInt = 100_000 + random.nextInt(900_000);
         String rawCode = String.valueOf(codeInt);
@@ -79,10 +82,10 @@ public class OtpService {
 
     /**
      * FR-ACC-004: Validate OTP code.
-     * Validates expiration (10 min), max attempts (5), and purpose match.
+     * Validates expiration (5 min), max attempts (5), and purpose match.
      * Marks challenge as consumed on success.
      */
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public void verifyOtp(AccountEntity account, String rawCode, OtpPurpose purpose) {
         Instant now = clock.instant();
 

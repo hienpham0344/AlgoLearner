@@ -12,6 +12,8 @@ import java.util.UUID;
 
 public interface AuthSessionRepository extends JpaRepository<AuthSessionEntity, UUID> {
 
+    boolean existsByIdAndAccountIdAndRevokedAtIsNullAndExpiresAtAfter(UUID id, UUID accountId, Instant now);
+
     Optional<AuthSessionEntity> findByRefreshTokenHash(String refreshTokenHash);
 
     List<AuthSessionEntity> findByAccountIdAndRevokedAtIsNullAndExpiresAtAfter(UUID accountId, Instant now);
