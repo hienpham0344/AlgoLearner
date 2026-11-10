@@ -27,6 +27,7 @@ export const LoginPage = () => {
   const { login, user, isLoading } = useAuth();
   const [usernameOrEmail, setUsernameOrEmail] = useState(savedIdentity);
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const [fieldError, setFieldError] = useState<{ identity?: string; password?: string }>({});
   const [notice, setNotice] = useState<Notice | null>(null);
   const [mascotCue, setMascotCue] = useState(0);
@@ -63,7 +64,7 @@ export const LoginPage = () => {
     inFlight.current = true;
     try {
       try { sessionStorage.setItem('algolearner_login_identity', usernameOrEmail.trim()); } catch { /* Optional convenience only. */ }
-      await login({ usernameOrEmail: usernameOrEmail.trim(), password, rememberMe: true });
+      await login({ usernameOrEmail: usernameOrEmail.trim(), password, rememberMe });
       setSuccess(true);
     } catch (failure: unknown) {
       setMascotCue(current => current + 1);
@@ -113,6 +114,7 @@ export const LoginPage = () => {
     <form className="auth-form" onSubmit={handleSubmit} noValidate aria-busy={isLoading}>
       <AuthField id="login-username" label="Username or email" autoComplete="username" placeholder="Enter your username or email" value={usernameOrEmail} onChange={event => { setUsernameOrEmail(event.target.value); setFieldError(current => ({ ...current, identity: undefined })); setNotice(null); }} required disabled={isLoading} message={fieldError.identity} />
       <AuthField id="login-password" label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={event => { setPassword(event.target.value); setFieldError(current => ({ ...current, password: undefined })); setNotice(current => current?.tone === 'locked' ? current : null); }} required disabled={isLoading} message={fieldError.password} labelAction={<Link className="auth-text-link" to="/forgot-password">Forgot password?</Link>} />
+      <div className="auth-consents"><label htmlFor="login-remember"><input id="login-remember" type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} disabled={isLoading} /><span>Remember me on this device</span></label></div>
       <AuthSubmit loading={isLoading} locked={locked}>{locked ? 'Sign-in temporarily unavailable' : isLoading ? 'Signing in…' : 'Sign in'}</AuthSubmit>
     </form>
     <div className="auth-secondary"><span className="auth-description">New to AlgoLearn? </span><Link to="/register" className="auth-text-link">Create an account</Link></div>

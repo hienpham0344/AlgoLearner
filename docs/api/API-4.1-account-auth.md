@@ -31,7 +31,7 @@ Tất cả đường dẫn có tiền tố `/api/v1`. Request JSON không bọc 
 ## Quy tắc nghiệp vụ cốt lõi
 
 1. **Chính sách mật khẩu (FR-ACC-005)**: Tối thiểu 8 ký tự, ít nhất 1 chữ cái và 1 chữ số. Không bắt buộc ký tự hoa hay ký tự đặc biệt.
-2. **Quy tắc OTP (FR-ACC-004)**: Mã 6 chữ số sinh bằng `SecureRandom`, lưu dạng hash, hạn 10 phút, tối đa 5 lần sai, cooldown 60 giây. Phân biệt mục đích `REGISTER` và `RESET_PASSWORD`.
+2. **Quy tắc OTP (FR-ACC-004)**: Mã 6 chữ số sinh bằng `SecureRandom`, lưu dạng hash, hạn 5 phút, tối đa 5 lần sai, cooldown 60 giây. Phân biệt mục đích `REGISTER` và `RESET_PASSWORD`. SRS ver 1.1 vẫn ghi 10 phút; dự án áp dụng 5 phút theo `AGENTS.md` và `SECURITY_AND_SANDBOX_RULES.md` cho đến khi các tài liệu được thống nhất.
 3. **Khóa tự động (FR-AUTH-002)**: Sau 5 lần đăng nhập thất bại liên tiếp, áp dụng `AUTO_LOCK` trong 15 phút. Hết 15 phút hệ thống tự động gỡ bỏ hạn chế đăng nhập.
 4. **Thời hạn Token (FR-AUTH-005)**: Access Token 15 phút; Refresh Token 7 ngày (hoặc 30 ngày khi chọn Remember Me).
 5. **Đình chỉ & Vô hiệu hóa (FR-ACC-006)**: Đình chỉ hiển thị lý do khi đăng nhập; tự vô hiệu hóa yêu cầu mật khẩu hiện tại và thu hồi toàn bộ phiên.

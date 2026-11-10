@@ -55,6 +55,12 @@ public class AccountEntity extends BaseAuditableEntity {
     @Column(name = "privacy_accepted_at")
     private Instant privacyAcceptedAt;
 
+    @Column(name = "reset_token_hash", length = 64)
+    private String resetTokenHash;
+
+    @Column(name = "reset_token_expires_at")
+    private Instant resetTokenExpiresAt;
+
     @PrePersist
     void prePersist() {
         if (this.passwordHash == null) {

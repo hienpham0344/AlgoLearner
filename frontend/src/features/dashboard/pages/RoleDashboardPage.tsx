@@ -947,6 +947,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
                     Profile settings
                   </Link>
                 )}
+                <Link to="/account/security" className="dashboard-profile-setting">Account security</Link>
                 <button type="button" onClick={signOut}>
                   <LogOut size={15} aria-hidden="true" /> Sign out
                 </button>

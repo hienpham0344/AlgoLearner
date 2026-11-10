@@ -52,6 +52,12 @@ class AuthApiTest {
     static class TestConfig {
         @Bean
         @Primary
+        AuthMailPort testMail() {
+            return new TestMail();
+        }
+
+        @Bean
+        @Primary
         Clock fixedClock() {
             return Clock.fixed(Instant.parse("2026-11-10T10:00:00Z"), ZoneOffset.UTC);
         }
@@ -86,6 +92,15 @@ class AuthApiTest {
         @Primary
         ProfileRepository profileRepository() {
             return org.mockito.Mockito.mock(ProfileRepository.class);
+        }
+    }
+
+    static class TestMail implements AuthMailPort {
+        String lastCode;
+
+        @Override
+        public void sendOtp(String email, String username, String otpCode, OtpPurpose purpose, Instant expiresAt) {
+            lastCode = otpCode;
         }
     }
 
@@ -128,6 +143,9 @@ class AuthApiTest {
 
     @Autowired
     private TestAccounts testAccounts;
+
+    @Autowired
+    private AuthMailPort testMail;
 
     @BeforeEach
     void setUp() {
@@ -173,6 +191,28 @@ class AuthApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("OTP_INVALID"));
+
+        VerifyOtpRequest validOtpReq = new VerifyOtpRequest("newstudent@example.test",
+                ((TestMail) testMail).lastCode, OtpPurpose.REGISTER);
+        MvcResult verified = mvc.perform(post("/api/v1/auth/verify-otp")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(validOtpReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.lifecycleStatus").value("ACTIVE"))
+                .andReturn();
+        String token = mapper.readTree(verified.getResponse().getContentAsString()).path("data").path("token").asText();
+        String refreshToken = mapper.readTree(verified.getResponse().getContentAsString()).path("data").path("refreshToken").asText();
+        testAccounts.add(savedAccount);
+
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("newstudent"));
+        mvc.perform(post("/api/v1/auth/logout")
+                        .header("Authorization", "Bearer " + token)
+                        .header("X-Refresh-Token", refreshToken))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

@@ -119,7 +119,7 @@ public class AuthService {
      * When REGISTER: activates account and returns AuthResponse.
      * When RESET_PASSWORD: returns single-use reset grant token.
      */
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public Object verifyOtp(VerifyOtpRequest request) {
         Instant now = clock.instant();
         String email = request.email().strip().toLowerCase();
@@ -143,6 +143,9 @@ public class AuthService {
             // RESET_PASSWORD grant
             Instant resetExpiresAt = now.plus(TokenService.RESET_TOKEN_EXPIRY);
             String resetToken = tokenService.generateResetToken(account.getId(), resetExpiresAt);
+            account.setResetTokenHash(tokenService.hashResetToken(resetToken));
+            account.setResetTokenExpiresAt(resetExpiresAt);
+            accountRepository.save(account);
 
             auditPort.record(account.getId(), account.getId(), AuditActorType.USER, "VERIFY_RESET_OTP", AuditOutcome.SUCCESS, now);
 
@@ -167,7 +170,7 @@ public class AuthService {
      * FR-AUTH-001 & FR-AUTH-002: Login with username/email and password.
      * Enforces failed attempt lock (15 minutes after 5 failures).
      */
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public AuthResponse login(LoginRequest request, String deviceLabel) {
         Instant now = clock.instant();
         String identifier = request.usernameOrEmail().strip();
@@ -257,16 +260,25 @@ public class AuthService {
         Instant now = clock.instant();
         String email = request.email().strip().toLowerCase();
 
-        AccountEntity account = accountRepository.findByEmailIgnoreCase(email)
+        AccountEntity account = accountRepository.findByEmailForUpdate(email)
                 .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
 
         UUID tokenAccountId = tokenService.parseAndValidateResetToken(request.resetToken(), now);
-        if (tokenAccountId == null || !tokenAccountId.equals(account.getId())) {
+        String suppliedHash = tokenService.hashResetToken(request.resetToken());
+        if (tokenAccountId == null || !tokenAccountId.equals(account.getId())
+                || account.getResetTokenHash() == null
+                || account.getResetTokenExpiresAt() == null
+                || !account.getResetTokenExpiresAt().isAfter(now)
+                || !java.security.MessageDigest.isEqual(
+                    suppliedHash.getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                    account.getResetTokenHash().getBytes(java.nio.charset.StandardCharsets.US_ASCII))) {
             throw new ApiException(ErrorCode.INVALID_RESET_TOKEN, "Password reset token is invalid or expired");
         }
 
         passwordService.validatePassword(request.newPassword());
         account.setPasswordHash(passwordService.hash(request.newPassword()));
+        account.setResetTokenHash(null);
+        account.setResetTokenExpiresAt(null);
         accountRepository.save(account);
 
         // AC-03: Revoke all existing sessions
@@ -313,7 +325,7 @@ public class AuthService {
     /**
      * FR-AUTH-005: Refresh access token.
      */
-    @Transactional
+    @Transactional(noRollbackFor = ApiException.class)
     public AuthResponse refreshToken(RefreshTokenRequest request) {
         Instant now = clock.instant();
         String tokenHash = tokenService.hashRefreshToken(request.refreshToken());
@@ -340,7 +352,7 @@ public class AuthService {
         session.setLastSeenAt(now);
         sessionRepository.save(session);
 
-        String newAccessToken = tokenService.generateAccessToken(account);
+        String newAccessToken = tokenService.generateAccessToken(account, session.getId());
         return new AuthResponse(
                 newAccessToken,
                 request.refreshToken(),
@@ -558,7 +570,7 @@ public class AuthService {
 
         sessionRepository.save(session);
 
-        String accessToken = tokenService.generateAccessToken(account);
+        String accessToken = tokenService.generateAccessToken(account, session.getId());
 
         return new AuthResponse(
                 accessToken,

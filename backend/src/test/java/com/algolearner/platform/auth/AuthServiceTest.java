@@ -168,7 +168,7 @@ class AuthServiceTest {
         when(accountRepository.findByEmailIgnoreCase("student@example.com")).thenReturn(Optional.of(account));
         when(tokenService.generateRawRefreshToken()).thenReturn("raw_refresh_token");
         when(tokenService.hashRefreshToken("raw_refresh_token")).thenReturn("hashed_refresh_token");
-        when(tokenService.generateAccessToken(account)).thenReturn("mock-student1");
+        when(tokenService.generateAccessToken(eq(account), any(UUID.class))).thenReturn("signed-access-token");
 
         VerifyOtpRequest request = new VerifyOtpRequest("student@example.com", "123456", OtpPurpose.REGISTER);
         Object response = authService.verifyOtp(request);
@@ -179,7 +179,7 @@ class AuthServiceTest {
 
         assertThat(response).isInstanceOf(AuthResponse.class);
         AuthResponse authResponse = (AuthResponse) response;
-        assertThat(authResponse.token()).isEqualTo("mock-student1");
+        assertThat(authResponse.token()).isEqualTo("signed-access-token");
         assertThat(authResponse.user().lifecycleStatus()).isEqualTo("ACTIVE");
     }
 
@@ -202,12 +202,12 @@ class AuthServiceTest {
         when(passwordService.matches("Password123", "hashed_pass")).thenReturn(true);
         when(tokenService.generateRawRefreshToken()).thenReturn("raw_refresh");
         when(tokenService.hashRefreshToken("raw_refresh")).thenReturn("hashed_refresh");
-        when(tokenService.generateAccessToken(account)).thenReturn("mock-student1");
+        when(tokenService.generateAccessToken(eq(account), any(UUID.class))).thenReturn("signed-access-token");
 
         LoginRequest request = new LoginRequest("student1", "Password123", false);
         AuthResponse response = authService.login(request, "Chrome/Linux");
 
-        assertThat(response.token()).isEqualTo("mock-student1");
+        assertThat(response.token()).isEqualTo("signed-access-token");
         assertThat(response.refreshToken()).isEqualTo("raw_refresh");
         assertThat(account.getFailedLoginCount()).isEqualTo(0);
 
@@ -277,10 +277,13 @@ class AuthServiceTest {
                 .username("student1")
                 .email("student@example.com")
                 .passwordHash("old_hash")
+                .resetTokenHash("token_hash")
+                .resetTokenExpiresAt(now.plusSeconds(900))
                 .build();
 
-        when(accountRepository.findByEmailIgnoreCase("student@example.com")).thenReturn(Optional.of(account));
+        when(accountRepository.findByEmailForUpdate("student@example.com")).thenReturn(Optional.of(account));
         when(tokenService.parseAndValidateResetToken("valid_reset_token", now)).thenReturn(account.getId());
+        when(tokenService.hashResetToken("valid_reset_token")).thenReturn("token_hash");
         when(passwordService.hash("NewPassword123")).thenReturn("new_hash");
 
         ResetPasswordRequest request = new ResetPasswordRequest("student@example.com", "valid_reset_token", "NewPassword123");
@@ -288,7 +291,12 @@ class AuthServiceTest {
 
         assertThat(response.message()).contains("Password has been reset");
         assertThat(account.getPasswordHash()).isEqualTo("new_hash");
+        assertThat(account.getResetTokenHash()).isNull();
         verify(sessionRepository).revokeAllByAccountId(account.getId(), now);
+        assertThatThrownBy(() -> authService.resetPassword(request))
+                .isInstanceOf(ApiException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_RESET_TOKEN.getCode());
     }
 
     @Test

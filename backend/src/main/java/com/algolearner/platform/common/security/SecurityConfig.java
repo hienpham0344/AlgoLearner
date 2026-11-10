@@ -3,8 +3,10 @@ package com.algolearner.platform.common.security;
 import com.algolearner.platform.common.dto.ApiErrorResponse;
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ErrorCode;
+import com.algolearner.platform.auth.AccessSessionVerifier;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.context.annotation.Bean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -23,7 +25,8 @@ import java.util.UUID;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http, AccountAccess accounts, ObjectMapper mapper) throws Exception {
+    SecurityFilterChain security(HttpSecurity http, AccountAccess accounts, ObjectMapper mapper,
+            ObjectProvider<AccessSessionVerifier> sessionVerifier) throws Exception {
         http.csrf(csrf -> csrf.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
@@ -43,7 +46,12 @@ public class SecurityConfig {
             .oauth2ResourceServer(oauth -> oauth
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(token -> {
                     try {
-                        String role = accounts.activeRole(UUID.fromString(token.getSubject()));
+                        UUID accountId = UUID.fromString(token.getSubject());
+                        String role = accounts.activeRole(accountId);
+                        AccessSessionVerifier verifier = sessionVerifier.getIfAvailable();
+                        if (verifier != null && !verifier.active(accountId, token.getClaimAsString("sid"))) {
+                            throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token"), "Session is revoked");
+                        }
                         return new JwtAuthenticationToken(token, List.of(new SimpleGrantedAuthority("ROLE_" + role)), token.getSubject());
                     } catch (ApiException | IllegalArgumentException ex) {
                         throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token"), "Account access denied");
