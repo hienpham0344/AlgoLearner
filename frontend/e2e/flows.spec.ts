@@ -28,6 +28,26 @@ async function signIn(page: Page, base: string, username: string) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+test('registration explains unavailable account creation in backend preview', async ({ page }) => {
+  await page.route('**/api/v1/auth/register', route => route.fulfill({
+    status: 401,
+    json: {
+      success: false, errorCode: 'UNAUTHORIZED_ACCESS', message: 'Authentication is required',
+      path: '/api/v1/auth/register', timestamp: '2026-11-10T00:00:00Z',
+    },
+  }));
+  await page.goto('http://127.0.0.1:3101/register');
+  await page.getByLabel('Email address').fill('new-user@example.test');
+  await page.getByLabel('Username').fill('new-user');
+  await page.getByLabel('Password', { exact: true }).fill('ExamplePass123!');
+  await page.getByLabel('Confirm password').fill('ExamplePass123!');
+  await page.getByLabel(/I agree to the Terms of Service/).check();
+  await page.getByLabel(/I accept the Privacy Policy/).check();
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('alert')).toContainText('Account creation isn’t available in this preview yet.');
+  await expect(page).toHaveURL(/\/register$/);
+});
+
 test('4.2 student dashboard and profile work in demo mode', async ({ page }) => {
   await signIn(page, 'http://127.0.0.1:3100', 'learner@example.test');
   await expect(page.getByRole('heading', { name: 'Keep building.' })).toBeVisible();

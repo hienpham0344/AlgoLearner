@@ -54,12 +54,16 @@ export const RegisterPage = () => {
     } catch (failure: unknown) {
       if (isAxiosError<ApiErrorResponse>(failure) && failure.response?.data) {
         const response = failure.response.data;
-        const serverErrors: FieldErrors = {};
-        for (const item of response.errors || []) {
-          if (item.field === 'email' || item.field === 'username' || item.field === 'password' || item.field === 'confirmPassword') serverErrors[item.field] = item.message;
+        if (import.meta.env.DEV && failure.response.status === 401 && response.errorCode === 'UNAUTHORIZED_ACCESS') {
+          setNotice('Account creation isn’t available in this preview yet. Sign in with a demo account to try profiles and classrooms.');
+        } else {
+          const serverErrors: FieldErrors = {};
+          for (const item of response.errors || []) {
+            if (item.field === 'email' || item.field === 'username' || item.field === 'password' || item.field === 'confirmPassword') serverErrors[item.field] = item.message;
+          }
+          setErrors(serverErrors);
+          setNotice(response.message || 'We couldn’t create your account. Please try again.');
         }
-        setErrors(serverErrors);
-        setNotice(response.message || 'We couldn’t create your account. Please try again.');
       } else {
         setNotice('We couldn’t create your account. Please try again.');
       }
