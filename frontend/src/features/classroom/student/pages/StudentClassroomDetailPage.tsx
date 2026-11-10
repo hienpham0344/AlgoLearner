@@ -1,22 +1,44 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { ClassroomSummaryCard } from '../../components/ClassroomSummaryCard';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnouncementsList';
 import { UserAvatar } from '../../components/UserAvatar';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
 import { useClassroomStore } from '../../mock/useClassroomStore';
-import { ArrowLeft, Users, LogOut, Calendar, BookOpen } from 'lucide-react';
+import { ArrowLeft, Users, LogOut, Calendar, BookOpen, Bell, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 
 export const StudentClassroomDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { currentRole, currentPersona, getClassroom, leaveClassroom } =
-    useClassroomStore('STUDENT');
+  const {
+    currentRole,
+    currentPersona,
+    getClassroom,
+    leaveClassroom,
+    getAnnouncements,
+    getStudentNotifications,
+    markNotificationRead,
+  } = useClassroomStore('STUDENT');
 
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'CLASSMATES'>('OVERVIEW');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab')?.toUpperCase();
+  const announcementIdParam = searchParams.get('announcementId');
+
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ANNOUNCEMENTS' | 'CLASSMATES'>(() => {
+    if (tabParam === 'ANNOUNCEMENTS' || announcementIdParam) return 'ANNOUNCEMENTS';
+    if (tabParam === 'CLASSMATES') return 'CLASSMATES';
+    return 'OVERVIEW';
+  });
+
+  React.useEffect(() => {
+    if (tabParam === 'ANNOUNCEMENTS' || announcementIdParam) {
+      setActiveTab('ANNOUNCEMENTS');
+    }
+  }, [tabParam, announcementIdParam]);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
 
   const classroom = id ? getClassroom(id) : undefined;
@@ -48,6 +70,11 @@ export const StudentClassroomDetailPage: React.FC = () => {
   );
 
   const activeMembers = classroom.members.filter(m => m.status === 'ACTIVE');
+  const classroomAnnouncements = getAnnouncements(classroom.id);
+  const studentNotifs = getStudentNotifications(currentPersona.id);
+  const unreadAnnouncementNotif = studentNotifs.find(
+    n => n.classroomId === classroom.id && !n.isRead,
+  );
 
   const handleConfirmLeave = () => {
     leaveClassroom(classroom.id);
@@ -89,6 +116,52 @@ export const StudentClassroomDetailPage: React.FC = () => {
         }
       />
 
+      {/* In-App Announcement Notification Alert Banner (FR-ANN-003 & BR-ANN-002) */}
+      {unreadAnnouncementNotif && (
+        <aside
+          aria-label="New Course Announcement Alert"
+          className="mb-5 p-4 rounded-xl bg-blue-50/90 border border-blue-200/90 text-blue-900 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-in fade-in"
+        >
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <Bell size={16} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-blue-900 uppercase tracking-wider">
+                  New Course Announcement
+                </span>
+                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+              </div>
+              <p className="text-xs text-blue-800 font-medium mt-0.5">
+                {unreadAnnouncementNotif.message}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-center">
+            <Button
+              size="sm"
+              onClick={() => {
+                markNotificationRead(unreadAnnouncementNotif.id);
+                setActiveTab('ANNOUNCEMENTS');
+                setSearchParams({ tab: 'announcements', announcementId: unreadAnnouncementNotif.announcementId });
+              }}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl h-8 px-3"
+            >
+              View Announcement →
+            </Button>
+            <button
+              type="button"
+              onClick={() => markNotificationRead(unreadAnnouncementNotif.id)}
+              className="text-xs font-medium text-blue-600 hover:text-blue-900 px-2 py-1"
+            >
+              Dismiss
+            </button>
+          </div>
+        </aside>
+      )}
+
       {/* 03 / Workspace Navigation Tabs */}
       <div className="classroom-tabs mb-6" role="tablist">
         <button
@@ -96,7 +169,10 @@ export const StudentClassroomDetailPage: React.FC = () => {
           role="tab"
           className="classroom-tab-btn"
           data-active={activeTab === 'OVERVIEW'}
-          onClick={() => setActiveTab('OVERVIEW')}
+          onClick={() => {
+            setActiveTab('OVERVIEW');
+            setSearchParams({});
+          }}
         >
           <BookOpen size={14} className="inline mr-1.5" />
           Overview & Curriculum
@@ -105,8 +181,24 @@ export const StudentClassroomDetailPage: React.FC = () => {
           type="button"
           role="tab"
           className="classroom-tab-btn"
+          data-active={activeTab === 'ANNOUNCEMENTS'}
+          onClick={() => {
+            setActiveTab('ANNOUNCEMENTS');
+            setSearchParams({ tab: 'announcements' });
+          }}
+        >
+          <Bell size={14} className="inline mr-1.5" />
+          Announcements ({classroomAnnouncements.length})
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="classroom-tab-btn"
           data-active={activeTab === 'CLASSMATES'}
-          onClick={() => setActiveTab('CLASSMATES')}
+          onClick={() => {
+            setActiveTab('CLASSMATES');
+            setSearchParams({});
+          }}
         >
           <Users size={14} className="inline mr-1.5" />
           Classmates ({activeMembers.length})
@@ -114,8 +206,66 @@ export const StudentClassroomDetailPage: React.FC = () => {
       </div>
 
       {/* 04 / Tab Panels */}
+      {activeTab === 'ANNOUNCEMENTS' && (
+        <ClassroomAnnouncementsList
+          classroomId={classroom.id}
+          isTeacherOrAdmin={false}
+          announcements={classroomAnnouncements}
+          highlightedId={announcementIdParam}
+        />
+      )}
+
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-6">
+          {/* Instructor Announcements Noticeboard Preview (FE 4.4) */}
+          {classroomAnnouncements.length > 0 && (
+            <div className="classroom-glass-card p-6">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Bell size={15} className="text-slate-700" />
+                  <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
+                    Instructor Announcements
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('ANNOUNCEMENTS');
+                    setSearchParams({ tab: 'announcements' });
+                  }}
+                  className="text-xs font-bold text-slate-900 hover:underline flex items-center gap-1"
+                >
+                  View All ({classroomAnnouncements.length}) →
+                </button>
+              </div>
+
+              <div
+                onClick={() => {
+                  setActiveTab('ANNOUNCEMENTS');
+                  setSearchParams({ tab: 'announcements', announcementId: classroomAnnouncements[0].id });
+                }}
+                className="p-4 rounded-xl border border-slate-200/80 bg-white/70 hover:bg-white cursor-pointer transition-all shadow-xs"
+              >
+                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                  {classroomAnnouncements[0].isPinned && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80">
+                      <Pin size={10} className="rotate-45 fill-amber-500 text-amber-600" />
+                      Pinned Notice
+                    </span>
+                  )}
+                  <h3 className="text-sm font-bold text-slate-900">
+                    {classroomAnnouncements[0].title}
+                  </h3>
+                  <span className="text-[11px] text-slate-400 ml-auto">
+                    {new Date(classroomAnnouncements[0].createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                  {classroomAnnouncements[0].content.slice(0, 160)}...
+                </p>
+              </div>
+            </div>
+          )}
           {/* Planned Modules Preview */}
           <div className="classroom-glass-card p-6">
             <div className="flex items-center justify-between mb-4">
