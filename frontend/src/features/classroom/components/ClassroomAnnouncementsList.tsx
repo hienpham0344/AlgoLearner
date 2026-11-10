@@ -18,7 +18,6 @@ interface ClassroomAnnouncementsListProps {
 }
 
 export const ClassroomAnnouncementsList: React.FC<ClassroomAnnouncementsListProps> = ({
-  classroomId,
   isTeacherOrAdmin,
   announcements,
   highlightedId,
@@ -83,7 +82,6 @@ export const ClassroomAnnouncementsList: React.FC<ClassroomAnnouncementsListProp
   }, [announcements, searchQuery, filterMode]);
 
   const pinnedCount = announcements.filter(a => a.isPinned).length;
-  const unpinnedCount = announcements.length - pinnedCount;
 
   // Separate pinned and unpinned for clear layout structure
   const pinnedAnnouncements = useMemo(
