@@ -8,12 +8,7 @@ import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { AuthExperience } from '@/features/auth/components/AuthExperience';
-import { TeacherClassroomListPage } from '@/features/classroom/teacher/pages/TeacherClassroomListPage';
-import { TeacherClassroomDetailPage } from '@/features/classroom/teacher/pages/TeacherClassroomDetailPage';
-import { StudentClassroomListPage } from '@/features/classroom/student/pages/StudentClassroomListPage';
-import { StudentClassroomDetailPage } from '@/features/classroom/student/pages/StudentClassroomDetailPage';
-import { AdminClassroomListPage } from '@/features/classroom/admin/pages/AdminClassroomListPage';
-import { AdminClassroomDetailPage } from '@/features/classroom/admin/pages/AdminClassroomDetailPage';
+import { ClassroomSourceRoute } from '@/features/classroom/pages/ClassroomSourceRoute';
 import { ClassroomRouterPage } from '@/features/classroom/pages/ClassroomRouterPage';
 import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
@@ -69,14 +64,14 @@ export const App: React.FC = () => {
       />
 
       {/* Role-Specific Classroom Routes (FE 4.3 Refactor) */}
-      <Route path="/teacher/classrooms" element={<TeacherClassroomListPage />} />
-      <Route path="/teacher/classrooms/:id" element={<TeacherClassroomDetailPage />} />
+      <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
+      <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 
-      <Route path="/student/classrooms" element={<StudentClassroomListPage />} />
-      <Route path="/student/classrooms/:id" element={<StudentClassroomDetailPage />} />
+      <Route path="/student/classrooms" element={<ClassroomSourceRoute role="STUDENT" detail={false} />} />
+      <Route path="/student/classrooms/:id" element={<ClassroomSourceRoute role="STUDENT" detail />} />
 
-      <Route path="/admin/classrooms" element={<AdminClassroomListPage />} />
-      <Route path="/admin/classrooms/:id" element={<AdminClassroomDetailPage />} />
+      <Route path="/admin/classrooms" element={<ClassroomSourceRoute role="ADMIN" detail={false} />} />
+      <Route path="/admin/classrooms/:id" element={<ClassroomSourceRoute role="ADMIN" detail />} />
 
       {/* Entry Route Router */}
       <Route path="/classrooms" element={<ClassroomRouterPage />} />

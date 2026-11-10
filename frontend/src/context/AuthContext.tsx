@@ -1,6 +1,8 @@
 import React, { createContext, useEffect, useState } from 'react';
 import { AuthUser, LoginRequest, RegisterRequest, VerifyOtpRequest } from '../features/auth/types';
 import { authApi } from '../features/auth/api/authApi';
+import { useQueryClient } from '@tanstack/react-query';
+import { UNAUTHORIZED_EVENT } from '../services/apiClient';
 
 export interface AuthContextType {
   user: AuthUser | null;
@@ -28,11 +30,22 @@ const savedAuthUser = (): AuthUser | null => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(savedAuthUser);
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem('algolearner_token');
   });
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  useEffect(() => {
+    const expireSession = () => {
+      queryClient.clear();
+      setUser(null);
+      setToken(null);
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, expireSession);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, expireSession);
+  }, [queryClient]);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -75,6 +88,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleAuthSuccess = (newToken: string, newUser: AuthUser) => {
+    queryClient.clear();
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('algolearner_token', newToken);
@@ -116,6 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    queryClient.clear();
     setUser(null);
     setToken(null);
     localStorage.removeItem('algolearner_token');

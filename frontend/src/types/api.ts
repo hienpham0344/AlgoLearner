@@ -13,12 +13,14 @@ export interface ApiResponse<T> {
  */
 export interface PaginatedData<T> {
   items: T[];
-  page: number;
-  size: number;
-  totalElements: number;
-  totalPages: number;
-  isFirst: boolean;
-  isLast: boolean;
+  pagination: {
+    page: number;
+    size: number;
+    totalElements: number;
+    totalPages: number;
+    isFirst: boolean;
+    isLast: boolean;
+  };
 }
 
 export type PageResponse<T> = ApiResponse<PaginatedData<T>>;

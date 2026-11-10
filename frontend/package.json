@@ -9,6 +9,8 @@
     "dev:backend-mock": "vite --mode backend-mock",
     "build": "tsc -b && vite build",
     "test": "node --test tests/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:coverage": "playwright test && node scripts/summarize-e2e-coverage.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -22,6 +24,7 @@
     "tailwind-merge": "^3.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.65.0",
     "@tailwindcss/vite": "^4.0.7",
     "@types/node": "^22.13.4",
     "@types/react": "^19.0.8",
