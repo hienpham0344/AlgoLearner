@@ -128,13 +128,12 @@ export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'
 
         const resetToken = stringField(payload, 'resetToken');
         const newPassword = stringField(payload, 'newPassword');
-        const confirmPassword = stringField(payload, 'confirmPassword');
         const grant = resetToken ? grants.get(resetToken) : undefined;
         if (!grant || grant.email !== email || grant.expiresAt <= now) {
           fail(400, 'INVALID_RESET_TOKEN', 'Request and verify a new reset code.'); return;
         }
-        if (!newPassword || newPassword.length < 8 || newPassword !== confirmPassword) {
-          fail(400, 'INVALID_PASSWORD', 'Use at least 8 matching characters.'); return;
+        if (!newPassword || newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+          fail(400, 'INVALID_PASSWORD', 'Use at least 8 characters, including a letter and a number.'); return;
         }
         grants.delete(resetToken!);
         if (email === DEMO_IDENTITY) { demoPassword = newPassword; attempts.delete(email); }

@@ -33,7 +33,7 @@ export const RegisterPage = () => {
     const nextErrors: FieldErrors = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) nextErrors.email = 'Enter a valid email address.';
     if (username.trim().length < 3) nextErrors.username = 'Use at least 3 characters.';
-    if (password.length < 8) nextErrors.password = 'Use at least 8 characters.';
+    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) nextErrors.password = 'Use at least 8 characters, including a letter and a number.';
     if (password !== confirmPassword || !confirmPassword) nextErrors.confirmPassword = 'Passwords must match.';
     setErrors(nextErrors);
     const firstError = (Object.keys(nextErrors) as FieldName[])[0];
@@ -54,7 +54,7 @@ export const RegisterPage = () => {
     } catch (failure: unknown) {
       if (isAxiosError<ApiErrorResponse>(failure) && failure.response?.data) {
         const response = failure.response.data;
-        if (import.meta.env.DEV && failure.response.status === 401 && response.errorCode === 'UNAUTHORIZED_ACCESS') {
+        if (import.meta.env.MODE === 'backend-mock' && failure.response.status === 401 && response.errorCode === 'UNAUTHORIZED_ACCESS') {
           setNotice('Account creation isn’t available in this preview yet. Sign in with a demo account to try profiles and classrooms.');
         } else {
           const serverErrors: FieldErrors = {};

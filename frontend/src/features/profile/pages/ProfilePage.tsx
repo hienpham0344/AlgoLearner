@@ -722,12 +722,11 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
                         <div className="folder-row-info">
                           <strong className="folder-row-title">Account password</strong>
                           <p className="folder-row-desc">
-                            Password reset links are delivered only to your verified email address ({profile.email})
-                            and expire automatically after 1 hour.
+                            Change your password, review signed-in devices and deactivate your account.
                           </p>
                         </div>
-                        <Link to="/forgot-password" className="folder-action-pill">
-                          <span>Reset password</span>
+                        <Link to="/account/security" className="folder-action-pill">
+                          <span>Manage security</span>
                           <ArrowUpRight size={13} aria-hidden="true" />
                         </Link>
                       </div>
