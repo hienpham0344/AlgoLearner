@@ -100,3 +100,5 @@ export interface JoinResultFeedback {
   classroomId: string;
   requestId?: string;
 }
+
+export * from './announcement';
