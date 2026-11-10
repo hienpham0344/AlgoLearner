@@ -65,6 +65,7 @@ export interface ResetVerificationData {
 
 export interface AuthResponseData {
   token: string;
+  refreshToken?: string;
   user: AuthUser;
   expiresIn?: number;
 }

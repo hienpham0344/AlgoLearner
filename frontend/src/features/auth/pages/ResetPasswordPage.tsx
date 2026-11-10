@@ -30,7 +30,7 @@ export const ResetPasswordPage = () => {
     if (inFlight.current || !resetState) return;
     setError(null);
     let issue: typeof error = null;
-    if (newPassword.length < 8) issue = { field: 'reset-new-password', message: 'Use at least 8 characters for your password.' };
+    if (newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) issue = { field: 'reset-new-password', message: 'Use at least 8 characters, including a letter and a number.' };
     else if (newPassword !== confirmPassword) issue = { field: 'reset-confirm-password', message: "Your passwords don't match." };
     if (issue) { setError(issue); if (issue.field) document.getElementById(issue.field)?.focus(); return; }
     inFlight.current = true;

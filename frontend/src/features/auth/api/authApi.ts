@@ -13,6 +13,20 @@ import {
   VerifyOtpRequest,
 } from '../types';
 
+export const authKeys = {
+  all: ['auth'] as const,
+  sessions: () => [...authKeys.all, 'sessions'] as const,
+};
+
+export interface AuthSession {
+  id: string;
+  deviceLabel: string;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+  current: boolean;
+}
+
 export const authApi = {
   // Login with credentials
   login: async (payload: LoginRequest): Promise<AuthResponseData> => {
@@ -20,7 +34,8 @@ export const authApi = {
       const response = await apiClient.post<ApiResponse<AuthResponseData>>('/auth/login', payload);
       return response.data.data;
     } catch (err: unknown) {
-      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
+      if (!['auth-demo', 'backend-mock'].includes(import.meta.env.MODE)
+        || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       // Dev mock fallback if /auth/login is not yet deployed on backend
       const { usernameOrEmail } = payload;
       if (
@@ -37,13 +52,17 @@ export const authApi = {
   // Register new account (Student or Teacher)
   register: async (payload: RegisterRequest): Promise<{ email: string; message: string }> => {
     try {
-      const response = await apiClient.post<ApiResponse<{ email: string; message: string }>>(
+      const response = await apiClient.post<ApiResponse<AuthUser>>(
         '/auth/register',
-        payload
+        {
+          email: payload.email, username: payload.username, password: payload.password,
+          role: payload.role, termsAccepted: payload.termsAccepted, privacyAccepted: payload.privacyAccepted,
+        }
       );
-      return response.data.data;
+      return { email: response.data.data.email, message: response.data.message || 'Verification code sent.' };
     } catch (err: unknown) {
-      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
+      if (import.meta.env.MODE !== 'auth-demo'
+        || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       // Simulate dev success if endpoint not implemented yet
       return {
         email: payload.email,
@@ -61,7 +80,8 @@ export const authApi = {
       );
       return response.data.data;
     } catch (err: unknown) {
-      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
+      if (import.meta.env.MODE !== 'auth-demo'
+        || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       // If mock/dev fallback:
       const mockRole = payload.email.includes('teacher') ? 'TEACHER' : 'STUDENT';
       return {
@@ -88,13 +108,14 @@ export const authApi = {
   // Resend OTP
   resendOtp: async (payload: ResendOtpRequest): Promise<{ success: boolean; message: string }> => {
     try {
-      const response = await apiClient.post<ApiResponse<{ success: boolean; message: string }>>(
+      const response = await apiClient.post<ApiResponse<{ message: string }>>(
         '/auth/resend-otp',
         payload
       );
-      return response.data.data;
+      return { success: response.data.success, message: response.data.message || response.data.data.message };
     } catch (err: unknown) {
-      if (!import.meta.env.DEV || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
+      if (import.meta.env.MODE !== 'auth-demo'
+        || (isAxiosError(err) && err.response && err.response.status < 500)) throw err;
       return {
         success: true,
         message: 'Mã xác thực mới đã được gửi lại thành công.',
@@ -110,14 +131,61 @@ export const authApi = {
 
   // Reset password with a server-issued grant from verified OTP
   resetPassword: async (payload: ResetPasswordRequest): Promise<{ success: boolean; message: string }> => {
-    const response = await apiClient.post<ApiResponse<{ success: boolean; message: string }>>('/auth/reset-password', payload);
+    const response = await apiClient.post<ApiResponse<{ message: string }>>('/auth/reset-password', {
+      email: payload.email, resetToken: payload.resetToken, newPassword: payload.newPassword,
+    });
+    return { success: response.data.success, message: response.data.message || response.data.data.message };
+  },
+
+  // Identity endpoint is available even when profile/dashboard persistence is unavailable.
+  getCurrentUser: async (): Promise<AuthUser> => {
+    const response = await apiClient.get<ApiResponse<AuthUser>>('/auth/me');
     return response.data.data;
   },
 
-  // Get current user profile from /users/me/profile (matching live backend!)
-  getCurrentUser: async (): Promise<AuthUser> => {
-    const response = await apiClient.get<ApiResponse<AuthUser>>('/users/me/profile');
+  refreshToken: async (refreshToken: string): Promise<AuthResponseData> => {
+    const response = await apiClient.post<ApiResponse<AuthResponseData>>('/auth/refresh-token', { refreshToken });
     return response.data.data;
+  },
+
+  logout: async (token: string, refreshToken: string): Promise<void> => {
+    const request = (accessToken: string) => apiClient.post('/auth/logout', null, {
+      headers: { Authorization: `Bearer ${accessToken}`, 'X-Refresh-Token': refreshToken },
+    });
+    try {
+      await request(token);
+    } catch (error) {
+      if (!isAxiosError(error) || error.response?.status !== 401) throw error;
+      const renewed = await authApi.refreshToken(refreshToken);
+      await request(renewed.token);
+    }
+  },
+
+  sessions: async (): Promise<AuthSession[]> => {
+    const refreshToken = localStorage.getItem('algolearner_refresh_token');
+    const response = await apiClient.get<ApiResponse<AuthSession[]>>('/auth/sessions', {
+      headers: refreshToken ? { 'X-Refresh-Token': refreshToken } : {},
+    });
+    return response.data.data;
+  },
+
+  revokeSession: async (id: string): Promise<void> => {
+    await apiClient.delete(`/auth/sessions/${encodeURIComponent(id)}`);
+  },
+
+  logoutAll: async (): Promise<void> => {
+    await apiClient.post('/auth/logout-all');
+  },
+
+  changePassword: async (currentPassword: string, newPassword: string): Promise<void> => {
+    const refreshToken = localStorage.getItem('algolearner_refresh_token');
+    await apiClient.post('/auth/change-password', { currentPassword, newPassword }, {
+      headers: refreshToken ? { 'X-Refresh-Token': refreshToken } : {},
+    });
+  },
+
+  deactivate: async (password: string): Promise<void> => {
+    await apiClient.post('/auth/deactivate', { password, confirm: true });
   },
 
   // Quick dev login using backend mock tokens (mock-student, mock-teacher, mock-admin)

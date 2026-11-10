@@ -120,6 +120,10 @@ Trong thư mục `frontend`, chạy `npm.cmd run dev:auth-demo` trên Windows ho
 
 Backend thật cần trả `resetToken` ngắn hạn từ `POST /api/v1/auth/verify-otp` với `purpose: RESET_PASSWORD`, rồi xác thực và tiêu thụ token đó trong `POST /api/v1/auth/reset-password`. Token phải hết hạn và chỉ dùng một lần.
 
+### Kết nối 4.1 với backend thật
+
+Chạy backend không có profile `mock` với PostgreSQL, SMTP/Mailpit và các biến JWT trong [`backend/.env.example`](backend/.env.example), sau đó chạy `npm run dev` trong `frontend` (hoặc đặt `ALGOLEARN_API_TARGET` nếu API không ở cổng 8080). Giao diện dùng API thật cho đăng ký, OTP, đăng nhập, quên/đặt lại mật khẩu, `/auth/me`, refresh token và logout. Sau khi đăng nhập, mở `/account/security` để đổi mật khẩu, xem/thu hồi phiên, đăng xuất mọi thiết bị hoặc vô hiệu hóa tài khoản. `dev:auth-demo` và `dev:backend-mock` tiếp tục là chế độ thử riêng; chế độ `dev` mặc định không giả lập đăng ký/OTP khi API lỗi.
+
 Chế độ này chỉ mô phỏng API trong Vite khi dùng lệnh `dev:auth-demo`; nó không kiểm chứng bảo mật hay dữ liệu của Spring backend thật.
 
 Sau khi đăng nhập tài khoản demo, mở `/dashboard` để xem Dashboard Student với dữ liệu mẫu được gắn nhãn. Các phần dữ liệu thật còn thiếu API được ghi tại [`docs/student-dashboard-integration.md`](docs/student-dashboard-integration.md).

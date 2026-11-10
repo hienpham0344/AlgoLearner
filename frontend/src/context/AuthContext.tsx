@@ -2,7 +2,7 @@ import React, { createContext, useEffect, useState } from 'react';
 import { AuthUser, LoginRequest, RegisterRequest, VerifyOtpRequest } from '../features/auth/types';
 import { authApi } from '../features/auth/api/authApi';
 import { useQueryClient } from '@tanstack/react-query';
-import { UNAUTHORIZED_EVENT } from '../services/apiClient';
+import { TOKEN_REFRESHED_EVENT, UNAUTHORIZED_EVENT } from '../services/apiClient';
 
 export interface AuthContextType {
   user: AuthUser | null;
@@ -43,8 +43,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setToken(null);
     };
+    const updateToken = () => setToken(localStorage.getItem('algolearner_token'));
     window.addEventListener(UNAUTHORIZED_EVENT, expireSession);
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, expireSession);
+    window.addEventListener(TOKEN_REFRESHED_EVENT, updateToken);
+    return () => {
+      window.removeEventListener(UNAUTHORIZED_EVENT, expireSession);
+      window.removeEventListener(TOKEN_REFRESHED_EVENT, updateToken);
+    };
   }, [queryClient]);
 
   useEffect(() => {
@@ -56,9 +61,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (storedUser) { setUser(storedUser); setIsLoading(false); return; }
         }
         try {
-          // If token exists, try fetching profile from live backend
+          // 4.1 identity works even if 4.2 profile persistence is unavailable.
           const me = await authApi.getCurrentUser();
           setUser(me);
+          setToken(localStorage.getItem('algolearner_token'));
           localStorage.setItem('algolearner_user', JSON.stringify(me));
         } catch {
           // If profile fetch fails but token is valid mock token
@@ -75,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(fallbackUser);
           } else {
             localStorage.removeItem('algolearner_token');
+            localStorage.removeItem('algolearner_refresh_token');
             localStorage.removeItem('algolearner_user');
             setUser(null);
             setToken(null);
@@ -87,11 +94,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
-  const handleAuthSuccess = (newToken: string, newUser: AuthUser) => {
+  const handleAuthSuccess = (newToken: string, newUser: AuthUser, refreshToken?: string) => {
     queryClient.clear();
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('algolearner_token', newToken);
+    if (refreshToken) localStorage.setItem('algolearner_refresh_token', refreshToken);
+    else localStorage.removeItem('algolearner_refresh_token');
     localStorage.setItem('algolearner_user', JSON.stringify(newUser));
   };
 
@@ -99,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authApi.login(credentials);
-      handleAuthSuccess(res.token, res.user);
+      handleAuthSuccess(res.token, res.user, res.refreshToken);
     } finally {
       setIsLoading(false);
     }
@@ -113,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authApi.verifyOtp(data);
-      handleAuthSuccess(res.token, res.user);
+      handleAuthSuccess(res.token, res.user, res.refreshToken);
     } finally {
       setIsLoading(false);
     }
@@ -123,17 +132,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const res = await authApi.quickLogin(role);
-      handleAuthSuccess(res.token, res.user);
+      handleAuthSuccess(res.token, res.user, res.refreshToken);
     } finally {
       setIsLoading(false);
     }
   };
 
   const logout = () => {
+    const currentToken = localStorage.getItem('algolearner_token');
+    const refreshToken = localStorage.getItem('algolearner_refresh_token');
+    if (currentToken && refreshToken && !currentToken.startsWith('mock-')) {
+      void authApi.logout(currentToken, refreshToken).catch(() => {
+        // The local session is cleared even when the server is unavailable.
+      });
+    }
     queryClient.clear();
     setUser(null);
     setToken(null);
     localStorage.removeItem('algolearner_token');
+    localStorage.removeItem('algolearner_refresh_token');
     localStorage.removeItem('algolearner_user');
   };
 
