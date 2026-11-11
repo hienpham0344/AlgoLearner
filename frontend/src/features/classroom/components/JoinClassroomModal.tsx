@@ -28,7 +28,11 @@ export const JoinClassroomModal: React.FC<JoinClassroomModalProps> = ({
       setError(null);
       setResult(null);
       const timer = setTimeout(() => {
-        inputRefs.current[0]?.focus();
+        const isAnyInputFocused = inputRefs.current.some(el => el && el === document.activeElement);
+        const hasAnyValue = inputRefs.current.some(el => Boolean(el?.value));
+        if (!isAnyInputFocused && !hasAnyValue) {
+          inputRefs.current[0]?.focus();
+        }
       }, 60);
       return () => clearTimeout(timer);
     }
@@ -43,16 +47,16 @@ export const JoinClassroomModal: React.FC<JoinClassroomModalProps> = ({
     const clean = text.toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!clean) return;
 
-    const next = [...chars];
-    let lastFilled = startIndex;
-    for (let i = 0; i < clean.length && startIndex + i < 8; i++) {
-      next[startIndex + i] = clean[i];
-      lastFilled = startIndex + i;
-    }
-    setChars(next);
+    setChars(prev => {
+      const next = [...prev];
+      for (let i = 0; i < clean.length && startIndex + i < 8; i++) {
+        next[startIndex + i] = clean[i];
+      }
+      return next;
+    });
     setError(null);
 
-    const nextFocus = Math.min(lastFilled + 1, 7);
+    const nextFocus = Math.min(startIndex + clean.length, 7);
     inputRefs.current[nextFocus]?.focus();
   };
 
@@ -72,17 +76,21 @@ export const JoinClassroomModal: React.FC<JoinClassroomModalProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
     if (e.key === 'Backspace') {
       e.preventDefault();
-      if (!chars[index] && index > 0) {
+      if ((!chars[index] || !e.currentTarget.value) && index > 0) {
         // Current box is empty -> clear previous box and focus it
-        const next = [...chars];
-        next[index - 1] = '';
-        setChars(next);
+        setChars(prev => {
+          const next = [...prev];
+          next[index - 1] = '';
+          return next;
+        });
         inputRefs.current[index - 1]?.focus();
       } else {
         // Clear current box
-        const next = [...chars];
-        next[index] = '';
-        setChars(next);
+        setChars(prev => {
+          const next = [...prev];
+          next[index] = '';
+          return next;
+        });
       }
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
@@ -96,18 +104,22 @@ export const JoinClassroomModal: React.FC<JoinClassroomModalProps> = ({
       }
     } else if (e.key === 'Delete') {
       e.preventDefault();
-      const next = [...chars];
-      next[index] = '';
-      setChars(next);
+      setChars(prev => {
+        const next = [...prev];
+        next[index] = '';
+        return next;
+      });
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const val = e.target.value;
     if (!val) {
-      const next = [...chars];
-      next[index] = '';
-      setChars(next);
+      setChars(prev => {
+        const next = [...prev];
+        next[index] = '';
+        return next;
+      });
       return;
     }
 
@@ -124,9 +136,11 @@ export const JoinClassroomModal: React.FC<JoinClassroomModalProps> = ({
     }
 
     const char = clean.charAt(clean.length - 1);
-    const next = [...chars];
-    next[index] = char;
-    setChars(next);
+    setChars(prev => {
+      const next = [...prev];
+      next[index] = char;
+      return next;
+    });
     setError(null);
 
     // Auto-focus next box
