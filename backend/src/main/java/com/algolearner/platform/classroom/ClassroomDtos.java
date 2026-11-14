@@ -21,4 +21,6 @@ public final class ClassroomDtos {
     public record JoinResult(String outcome, UUID classroomId, UUID requestId) { }
     public record Member(UUID studentId, String username, String email, MembershipStatus status, Instant joinedAt) { }
     public record JoinRequest(UUID id, UUID studentId, String username, Instant createdAt) { }
+    public record InvitationView(UUID id, UUID classroomId, String classroomName, UUID studentId,
+                                 String studentEmail, String status, Instant expiresAt, Instant createdAt) { }
 }

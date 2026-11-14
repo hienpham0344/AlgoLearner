@@ -16,6 +16,7 @@ import java.util.UUID;
 import static com.algolearner.platform.classroom.ClassroomDtos.*;
 
 @RestController
+@org.springframework.context.annotation.Profile("!mock")
 @RequestMapping("/api/v1/classrooms")
 @Tag(name = "Classroom Management", description = "SRS 4.3 private classroom lifecycle and membership")
 @SecurityRequirement(name = "bearerAuth")
@@ -65,6 +66,18 @@ public class ClassroomController {
     public void approve(Authentication auth, @PathVariable UUID classroomId, @PathVariable UUID requestId) { service.approve(actor(auth), classroomId, requestId); }
     @PostMapping("/{classroomId}/invitations") @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UUID> invite(Authentication auth, @PathVariable UUID classroomId, @Valid @RequestBody Invite input) { return ApiResponse.success(service.invite(actor(auth), classroomId, input)); }
+    @GetMapping("/{classroomId}/invitations")
+    @Operation(summary = "List invitations sent by the classroom owner")
+    public PageResponse<InvitationView> sentInvitations(Authentication auth, @PathVariable UUID classroomId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return service.sentInvitations(actor(auth), classroomId, pageable);
+    }
+    @GetMapping("/invitations/me")
+    @Operation(summary = "List invitations addressed to the current Student")
+    public PageResponse<InvitationView> myInvitations(Authentication auth,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return service.myInvitations(actor(auth), pageable);
+    }
     @PostMapping("/invitations/{invitationId}/accept") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void acceptInvitation(Authentication auth, @PathVariable UUID invitationId) { service.acceptInvitation(actor(auth), invitationId); }
     @PostMapping("/invitations/{invitationId}/decline") @ResponseStatus(HttpStatus.NO_CONTENT)

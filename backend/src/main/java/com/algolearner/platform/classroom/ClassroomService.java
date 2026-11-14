@@ -4,6 +4,9 @@ import com.algolearner.platform.auth.*;
 import com.algolearner.platform.common.dto.PageResponse;
 import com.algolearner.platform.common.exception.AppException;
 import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import com.algolearner.platform.notification.NotificationEntity;
+import com.algolearner.platform.notification.NotificationRepository;
+import jakarta.persistence.EntityManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -19,6 +22,7 @@ import java.util.UUID;
 import static com.algolearner.platform.classroom.ClassroomDtos.*;
 
 @Service
+@org.springframework.context.annotation.Profile("!mock")
 @Transactional(readOnly = true)
 public class ClassroomService {
     private static final char[] CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789".toCharArray();
@@ -26,15 +30,20 @@ public class ClassroomService {
     private final ClassroomMembershipRepository memberships;
     private final ClassroomJoinRequestRepository requests;
     private final ClassroomInvitationRepository invitations;
+    private final NotificationRepository notifications;
     private final AccountRepository accounts;
+    private final ClassroomPairLock pairLock;
+    private final EntityManager entityManager;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
     public ClassroomService(ClassroomRepository classrooms, ClassroomMembershipRepository memberships,
                             ClassroomJoinRequestRepository requests, ClassroomInvitationRepository invitations,
-                            AccountRepository accounts, Clock clock) {
+                            NotificationRepository notifications, AccountRepository accounts, Clock clock,
+                            ClassroomPairLock pairLock, EntityManager entityManager) {
         this.classrooms = classrooms; this.memberships = memberships; this.requests = requests;
-        this.invitations = invitations; this.accounts = accounts; this.clock = clock;
+        this.invitations = invitations; this.notifications = notifications; this.accounts = accounts; this.clock = clock;
+        this.pairLock = pairLock; this.entityManager = entityManager;
     }
 
     public View get(UUID actorId, UUID classroomId) {
@@ -69,6 +78,16 @@ public class ClassroomService {
         Page<JoinRequest> page = requests.findByClassroomIdAndStatus(classroomId, JoinRequestStatus.PENDING_APPROVAL, pageable)
                 .map(r -> new JoinRequest(r.getId(), r.getStudent().getId(), r.getStudent().getUsername(), r.getCreatedAt()));
         return PageResponse.fromPage(page);
+    }
+
+    public PageResponse<InvitationView> sentInvitations(UUID actorId, UUID classroomId, Pageable pageable) {
+        owned(actorId, classroomId);
+        return PageResponse.fromPage(invitations.findByClassroomId(classroomId, pageable).map(this::invitationView));
+    }
+
+    public PageResponse<InvitationView> myInvitations(UUID studentId, Pageable pageable) {
+        activeStudent(studentId);
+        return PageResponse.fromPage(invitations.findByStudentId(studentId, pageable).map(this::invitationView));
     }
 
     @Transactional
@@ -130,6 +149,7 @@ public class ClassroomService {
         var student = activeStudent(studentId);
         var classroom = classrooms.findByClassCode(input.classCode().strip().toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> notFound("CLASS_CODE_NOT_FOUND", "Class code is invalid"));
+        pairLock.lock(classroom.getId(), studentId);
         requireJoinable(classroom);
         var membership = memberships.findByClassroomIdAndStudentId(classroom.getId(), studentId).orElse(null);
         if (membership != null && membership.getStatus() == MembershipStatus.ACTIVE) throw conflict("ALREADY_MEMBER", "Student is already a member");
@@ -149,9 +169,11 @@ public class ClassroomService {
         activeStudent(studentId);
         var classroom = classroom(classroomId);
         requireActiveClass(classroom); requireOwnerActiveForWrite(classroom);
+        pairLock.lock(classroomId, studentId);
         var membership = memberships.findByClassroomIdAndStudentId(classroomId, studentId)
                 .filter(m -> m.getStatus() == MembershipStatus.ACTIVE).orElseThrow(() -> notFound("MEMBERSHIP_NOT_FOUND", "Active membership not found"));
         membership.setStatus(MembershipStatus.LEFT); membership.setEndedAt(clock.instant());
+        revokePendingInvitations(classroomId, studentId);
     }
 
     @Transactional
@@ -160,6 +182,7 @@ public class ClassroomService {
         var student = accounts.findByUsernameIgnoreCase(input.usernameOrEmail()).or(() -> accounts.findByEmailIgnoreCase(input.usernameOrEmail()))
                 .orElseThrow(() -> notFound("STUDENT_NOT_FOUND", "Registered Student not found"));
         if (student.getRole() != AccountRole.STUDENT || student.getStatus() != AccountStatus.ACTIVE) throw bad("INVALID_STUDENT", "Target must be an active Student");
+        pairLock.lock(classroomId, student.getId());
         activateMembership(classroom, student, memberships.findByClassroomIdAndStudentId(classroomId, student.getId()).orElse(null));
         requests.findByClassroomIdAndStudentIdAndStatus(classroomId, student.getId(), JoinRequestStatus.PENDING_APPROVAL)
                 .ifPresent(request -> request.setStatus(JoinRequestStatus.APPROVED));
@@ -168,9 +191,11 @@ public class ClassroomService {
     @Transactional
     public void removeStudent(UUID actorId, UUID classroomId, UUID studentId) {
         var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        pairLock.lock(classroomId, studentId);
         var membership = memberships.findByClassroomIdAndStudentId(classroomId, studentId)
                 .filter(m -> m.getStatus() == MembershipStatus.ACTIVE).orElseThrow(() -> notFound("MEMBERSHIP_NOT_FOUND", "Active membership not found"));
         membership.setStatus(MembershipStatus.REMOVED); membership.setEndedAt(clock.instant());
+        revokePendingInvitations(classroomId, studentId);
     }
 
     @Transactional
@@ -180,6 +205,11 @@ public class ClassroomService {
         var request = requests.findById(requestId).filter(r -> r.getClassroom().getId().equals(classroomId) && r.getStatus() == JoinRequestStatus.PENDING_APPROVAL)
                 .orElseThrow(() -> notFound("JOIN_REQUEST_NOT_FOUND", "Pending join request not found"));
         var student = activeStudent(request.getStudent().getId());
+        pairLock.lock(classroomId, student.getId());
+        entityManager.flush();
+        entityManager.refresh(request);
+        if (request.getStatus() != JoinRequestStatus.PENDING_APPROVAL)
+            throw notFound("JOIN_REQUEST_NOT_FOUND", "Pending join request not found");
         activateMembership(classroom, student, memberships.findByClassroomIdAndStudentId(classroomId, student.getId()).orElse(null));
         request.setStatus(JoinRequestStatus.APPROVED);
     }
@@ -189,9 +219,14 @@ public class ClassroomService {
         var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
         var student = accounts.findByEmailIgnoreCase(input.email()).orElseThrow(() -> notFound("STUDENT_NOT_FOUND", "Registered Student not found"));
         if (student.getRole() != AccountRole.STUDENT || student.getStatus() != AccountStatus.ACTIVE) throw bad("INVALID_STUDENT", "Invitation target must be an active Student");
+        pairLock.lock(classroomId, student.getId());
         var invitation = new ClassroomInvitationEntity(); invitation.setId(UUID.randomUUID()); invitation.setClassroom(classroom);
         invitation.setStudent(student); invitation.setStatus(InvitationStatus.PENDING); invitation.setExpiresAt(input.expiresAt());
         invitations.save(invitation);
+        var notification = new NotificationEntity();
+        notification.setId(UUID.randomUUID()); notification.setRecipient(student);
+        notification.setInvitation(invitation); notification.setType("CLASS_INVITATION");
+        notifications.save(notification);
         return invitation.getId();
     }
 
@@ -200,30 +235,45 @@ public class ClassroomService {
         var student = activeStudent(studentId);
         var invitation = invitations.findById(invitationId).filter(i -> i.getStudent().getId().equals(studentId))
                 .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Invitation not found"));
-        if (invitation.getStatus() != InvitationStatus.PENDING || !invitation.getExpiresAt().isAfter(clock.instant())) {
-            if (invitation.getStatus() == InvitationStatus.PENDING) invitation.setStatus(InvitationStatus.EXPIRED);
+        pairLock.lock(invitation.getClassroom().getId(), studentId);
+        entityManager.flush();
+        entityManager.refresh(invitation);
+        if (invitation.effectiveStatus(clock.instant()) != InvitationStatus.PENDING) {
             throw bad("INVITATION_UNAVAILABLE", "Invitation has expired or was revoked");
         }
         requireActiveClass(invitation.getClassroom());
         requireOwnerActiveForWrite(invitation.getClassroom());
+        if (!invitation.getClassroom().isJoiningOpen()) throw bad("JOINING_CLOSED", "Classroom is closed for joining");
         activateMembership(invitation.getClassroom(), student, memberships.findByClassroomIdAndStudentId(invitation.getClassroom().getId(), studentId).orElse(null));
         invitation.setStatus(InvitationStatus.ACCEPTED);
+        markInvitationNotificationRead(invitationId);
     }
 
     @Transactional
     public void declineInvitation(UUID studentId, UUID invitationId) {
         activeStudent(studentId);
-        var invitation = invitations.findById(invitationId).filter(i -> i.getStudent().getId().equals(studentId) && i.getStatus() == InvitationStatus.PENDING)
-                .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Pending invitation not found"));
+        var invitation = invitations.findById(invitationId).filter(i -> i.getStudent().getId().equals(studentId))
+                .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Invitation not found"));
+        pairLock.lock(invitation.getClassroom().getId(), studentId);
+        entityManager.flush();
+        entityManager.refresh(invitation);
+        if (invitation.effectiveStatus(clock.instant()) != InvitationStatus.PENDING)
+            throw bad("INVITATION_UNAVAILABLE", "Invitation has expired or was revoked");
         requireOwnerActiveForWrite(invitation.getClassroom());
         invitation.setStatus(InvitationStatus.DECLINED);
+        markInvitationNotificationRead(invitationId);
     }
 
     @Transactional
     public void revokeInvitation(UUID actorId, UUID classroomId, UUID invitationId) {
         var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
-        var invitation = invitations.findById(invitationId).filter(i -> i.getClassroom().getId().equals(classroomId) && i.getStatus() == InvitationStatus.PENDING)
-                .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Pending invitation not found"));
+        var invitation = invitations.findById(invitationId).filter(i -> i.getClassroom().getId().equals(classroomId))
+                .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Invitation not found"));
+        pairLock.lock(classroomId, invitation.getStudent().getId());
+        entityManager.flush();
+        entityManager.refresh(invitation);
+        if (invitation.effectiveStatus(clock.instant()) != InvitationStatus.PENDING)
+            throw bad("INVITATION_UNAVAILABLE", "Invitation has expired or was revoked");
         invitation.setStatus(InvitationStatus.REVOKED);
     }
 
@@ -241,6 +291,22 @@ public class ClassroomService {
         }
         membership.setStatus(MembershipStatus.ACTIVE); membership.setJoinedAt(clock.instant()); membership.setEndedAt(null);
         if (isNew) memberships.save(membership);
+    }
+    private InvitationView invitationView(ClassroomInvitationEntity invitation) {
+        return new InvitationView(invitation.getId(), invitation.getClassroom().getId(), invitation.getClassroom().getName(),
+                invitation.getStudent().getId(), invitation.getStudent().getEmail(),
+                invitation.effectiveStatus(clock.instant()).name(), invitation.getExpiresAt(), invitation.getCreatedAt());
+    }
+    private void markInvitationNotificationRead(UUID invitationId) {
+        notifications.findByInvitationId(invitationId).ifPresent(notification -> {
+            if (notification.getReadAt() == null) notification.setReadAt(clock.instant());
+        });
+    }
+    private void revokePendingInvitations(UUID classroomId, UUID studentId) {
+        var now = clock.instant();
+        invitations.findByClassroomIdAndStudentIdAndStatus(classroomId, studentId, InvitationStatus.PENDING)
+                .stream().filter(invitation -> invitation.effectiveStatus(now) == InvitationStatus.PENDING)
+                .forEach(invitation -> invitation.setStatus(InvitationStatus.REVOKED));
     }
     private ClassroomEntity owned(UUID actorId, UUID classroomId) { activeAccount(actorId); var c = classroom(classroomId); if (!c.getOwner().getId().equals(actorId)) throw forbidden("Only the classroom owner may perform this operation"); return c; }
     private ClassroomEntity ownedOrAdmin(UUID actorId, UUID classroomId) { var a = activeAccount(actorId); return isAdmin(a) ? classroom(classroomId) : owned(actorId, classroomId); }
