@@ -1,191 +1,108 @@
-# AlgoLearner Backend - SRS 4.2, mock mode
+# AlgoLearner Backend
 
-Implements FR-PRO-001 through FR-PRO-005: five profile APIs and three dashboards.
-Requires Java 21+ and Maven 3.9+. No PostgreSQL/Supabase, Docker, database password or JWT secret is required.
+## Chạy ứng dụng với Supabase
 
-## Run
+Yêu cầu Java 21+, Maven 3.9+, Supabase PostgreSQL và Gmail SMTP. Module 4.1 dùng
+xác thực nội bộ Spring Boot; Supabase chỉ lưu dữ liệu, không dùng Supabase Auth.
+Module 4.2 đọc/ghi profile và dashboard qua DB; module 4.3 dùng các JPA repository
+cho lớp học, thành viên, yêu cầu tham gia và lời mời. Không dùng H2 hoặc backend mock
+trong luồng chạy ứng dụng. Thiếu cấu hình Supabase thì backend dừng và báo lỗi.
 
-From `backend`:
+1. Nếu chưa có `backend/.env`, tạo từ `.env.example`; không ghi đè file đang có.
+2. Trong Supabase **Connect**, lấy JDBC host/username của **Session pooler**, cổng 5432
+   ([hướng dẫn Spring Boot chính thức](https://supabase.com/docs/guides/getting-started/quickstarts/spring-boot)).
+   Điền `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` vào `.env`. URL cần `sslmode=require`
+   hoặc xác minh chứng chỉ; không đặt mật khẩu trong URL. Dùng role sở hữu các bảng
+   ứng dụng và đủ quyền chạy Flyway. Có thể dùng direct host `db.<ref>.supabase.co`
+   nếu máy truy cập được địa chỉ mạng đó.
+3. Điền `MAIL_USERNAME`, `MAIL_PASSWORD` (Google App Password), `JWT_SECRET`
+   ngẫu nhiên ít nhất 32 byte và `OTP_HMAC_SECRET` là Base64 của ít nhất 32 byte
+   ngẫu nhiên. Tạo một lần bằng `openssl rand -hex 32` cho JWT và
+   `openssl rand -base64 32` cho OTP; giữ hai khóa riêng qua các lần restart.
+   `MAIL_FROM` để trống sẽ dùng địa chỉ gửi. Giữ `.env` qua các lần pull/restart.
+4. Trong thư mục `backend`, chạy `bash scripts/run-local-email.sh`.
+5. Trong `frontend`, chạy `npm run dev`, mở http://127.0.0.1:3000.
 
-```powershell
-mvn compile
-$env:SPRING_PROFILES_ACTIVE = 'mock,dev'
-mvn spring-boot:run
-```
+Launcher tự đọc `.env` từ thư mục backend; biến môi trường đã có được ưu tiên.
+Parser chỉ đọc literal `KEY=VALUE`, chấp nhận dấu nháy bao quanh, comment nguyên dòng,
+CRLF; không chạy shell expression, nội suy biến hoặc inline comment.
+Mật khẩu không xuất hiện trong command arguments. File `.env` được Git bỏ qua.
+Spring Boot tự nó không nạp `.env`; khi chạy Maven trực tiếp cần truyền biến môi trường.
+`mvn-local.ps1` hỗ trợ nạp file cho PowerShell.
 
-Mock mode is opt-in: set `SPRING_PROFILES_ACTIVE=mock,dev` locally (tests use `mock,test`).
-There is no default mock profile. The unsigned decoder is disabled for `prod` and `production`,
-even if mock/dev/test profiles are also enabled. Never enable mock mode on a public deployment.
-Production requires real repository adapters (not implemented here), plus `JWT_ISSUER`,
-`JWT_AUDIENCE` and `JWT_JWK_SET_URI` (see `.env.example`). Issuer and JWK URL must use HTTPS.
-`JwtAuthenticationConfiguration` verifies RS256/ES256 signatures using the provider's public
-JWKs, exact issuer, audience membership and canonical UUID subject. Tokens require `iat` and
-`exp`; future `iat`/`nbf` and expired tokens are rejected with no clock skew allowance.
-Unsigned mock tokens and HMAC tokens are rejected. Missing/invalid settings fail decoder startup;
-JWK retrieval/signature verification happens when decoding a token. Role still comes from the server account.
-Swagger UI: http://localhost:8080/swagger-ui/index.html. OpenAPI: http://localhost:8080/v3/api-docs.
-`.env.example` lists local settings; Spring does not load this file automatically.
-Use `./mvn-local.ps1 spring-boot:run` in PowerShell to load `backend/.env` for that invocation.
-Existing environment variables take precedence; imported variables are restored afterward.
+Flyway quản lý schema; Hibernate chỉ `validate`, không xóa/tạo lại bảng khi restart.
+Các bảng nghiệp vụ bật RLS và thu hồi quyền trực tiếp của `anon`/`authenticated`:
+frontend chỉ gọi Spring API, không truy cập bảng tài khoản qua Supabase Data API.
+Backend dùng JDBC owner role; phân quyền role/owner/student được kiểm tra trong Spring.
+Xem [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security) về quyền owner và việc bật RLS.
+Chưa cung cấp thông tin Supabase thì chưa thể xác nhận kết nối hay áp dụng migration lên đó.
+Dữ liệu từng mất trong những lần chạy DB RAM cũ không tự phục hồi.
 
-## Optional Supabase JDBC connection check
+Profile, tài khoản và lớp học lưu trong PostgreSQL. Avatar hiện lưu file tại
+`AVATAR_DIRECTORY`; cần giữ/backup thư mục này cùng cấu hình riêng khi chuyển máy chủ.
+Dashboard đếm tài khoản, lớp học và thành viên thật. Các nhóm assignment, quiz,
+course, notification, submission, audit chưa có storage trong phạm vi hiện tại sẽ
+trả danh sách rỗng/0, không trả số liệu demo.
 
-Copy `.env.example` to `.env` if missing (do not overwrite an existing file).
-Fill `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD` with the project's Supabase JDBC settings.
-Use `sslmode=require` (or certificate verification) in the URL. Keep the password only in
-`DB_PASSWORD`, never in the URL. `.env` is ignored by Git; `.env.example` contains placeholders only.
-The loader supports literal `KEY=VALUE` lines, optional surrounding quotes, and full-line comments;
-it does not expand variables or support inline comments. Quote values with leading/trailing spaces.
+## Frontend khi backend dừng
 
-From `backend`, run explicitly:
+Vite luôn chuyển API tới backend trước, kể cả khi dùng alias `dev:auth-demo` hay
+`dev:backend-mock`. Chỉ kết nối bị từ chối trước khi gửi request mới dùng mock frontend.
+HTTP 400/401/403/404/5xx và lỗi sau khi đã kết nối không kích hoạt mock hoặc gửi lại thao tác.
+Giao diện có banner dữ liệu mẫu, tách phiên thật/mẫu; khi backend trở lại phải đăng nhập
+bằng tài khoản thật. Mock chỉ phục vụ Vite development, không được đóng gói thành backend.
+Dữ liệu mẫu không đồng bộ lên Supabase. Có thể đăng nhập mẫu bằng
+`learner@example.test`, `teacher`, `admin` với mật khẩu `DemoPass123!`.
+Các thao tác chưa có mô phỏng sẽ báo cần backend; không giả vờ đăng ký/gửi Gmail thành công.
 
-```powershell
-./mvn-local.ps1 '-Dsupabase.check=true' '-Dtest=SupabaseConnectionTest' test
-```
+## Auth và profile (4.1, 4.2)
 
-With variables already exported (any shell), use:
+- Mật khẩu ít nhất 8 ký tự, gồm chữ ASCII và số, tối đa 72 byte UTF-8; BCrypt.
+- OTP đăng ký/reset: 6 số, hết hạn 10 phút, cooldown 60 giây, tối đa 5 lần sai; chỉ dùng một lần.
+- Quên mật khẩu: `/api/v1/auth/forgot-password` → `/verify-otp` với `RESET_PASSWORD`
+  → `/reset-password` bằng grant 5 phút. Reset thu hồi mọi session; đổi mật khẩu yêu cầu
+  mật khẩu hiện tại và giữ session hiện tại, thu hồi những session khác.
+- Access JWT 15 phút; refresh session 7 ngày, Remember me 30 ngày; token refresh xoay vòng,
+  lưu hash trong DB và cookie HttpOnly/SameSite=Strict. Refresh/logout cần
+  `X-Requested-With: XMLHttpRequest`. Triển khai HTTPS để cookie có Secure.
+- `/auth/me` khôi phục identity; `/users/me/profile` đọc/ghi hồ sơ, avatar, privacy.
+  Profile công khai không lộ email, profile riêng tư trả 404. Admin không tự đăng ký.
+- Sai mật khẩu 5 lần khóa 15 phút. SMTP lỗi trả 503 và rollback thay đổi OTP.
+- Để tạo Admin cố định lần đầu, cấu hình đồng thời `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_USERNAME`, `ADMIN_BOOTSTRAP_PASSWORD` trong `.env` trước khi chạy backend. Backend chỉ tạo khi chưa có tài khoản đó; khởi động lại không đổi mật khẩu hoặc vai trò. Cấu hình thiếu hoặc trùng định danh tài khoản khác khiến khởi động thất bại.
+- `GET /api/v1/auth/sessions` liệt kê phiên của chính tài khoản; `DELETE /api/v1/auth/sessions/{id}` thu hồi phiên khác; `POST /api/v1/auth/logout-all` thu hồi mọi phiên. `POST /api/v1/auth/deactivate` yêu cầu `{ "currentPassword": "...", "confirmed": true }` và thu hồi mọi phiên.
+- Admin dùng `GET /api/v1/admin/accounts` (phân trang), `POST /api/v1/admin/accounts/{id}/suspend` với `{ "reason": "...", "endsAt": null }`, `POST /unsuspend` và `POST /reactivate`. Đình chỉ có thời hạn được tự gỡ khi hết hạn; các thao tác đổi trạng thái ghi vào `tbl_account_audit_log`.
 
-```text
-mvn -Dsupabase.check=true -Dtest=SupabaseConnectionTest test
-```
+Swagger: http://localhost:8080/swagger-ui/index.html; đăng nhập lấy JWT thật để Authorize.
+Không dùng token `mock-*` với backend ứng dụng. `/api/v1/status` chỉ báo backend đang chạy.
 
-This test uses JDBC directly and executes only `SELECT 1;`, with connection/socket/query timeouts.
-It prints `Supabase connection successful` only when the result is 1. Failures report missing
-variable names or a sanitized SQLState category, never raw driver errors or credentials.
-It requires no schema, Spring context, entities or repositories. Normal builds skip this test;
-starting the mock backend never runs it or connects to Supabase.
+## Kiểm thử
 
-In Swagger, click **Authorize** and enter `mock-student` without the Bearer prefix.
-In Postman, choose Bearer Token and enter the same value, or send:
+`python3 -B -m unittest discover -s scripts/tests` kiểm tra launcher không cần DB.
+`mvn verify` chạy unit/API mock tests; JDBC probe và integration tests được bỏ qua nếu
+chưa cấu hình DB test. Không còn dependency H2.
 
-```http
-Authorization: Bearer mock-student
-```
+Điều kiện `TEST_DB_URL` được khai báo trực tiếp trên từng lớp integration test;
+JUnit không kế thừa `@EnabledIfEnvironmentVariable` từ lớp cha.
+Trong `frontend`, chạy `npm test`, `npm run build` và
+`npm run test:e2e -- e2e/backend-source.spec.ts` để kiểm tra nguồn dữ liệu của 4.1–4.3:
+backend khả dụng trả account/profile/dashboard/classroom; backend tắt mới dùng mẫu;
+backend trở lại kết thúc phiên mẫu; lỗi HTTP hoặc mất kết nối sau khi gửi request
+không chuyển sang mock hay chạy lại thao tác ghi. E2E này dùng HTTP fixture localhost,
+không xác nhận kết nối hoặc lưu dữ liệu trên Supabase thật.
 
-| Token | Scenario |
-| --- | --- |
-| mock-student | Student, public profile, two active classes, practice history |
-| mock-student2 | Another Student, private profile, teacher2's class, broken streak |
-| mock-empty | Student with no learning data; LEFT memberships are excluded |
-| mock-teacher | Teacher owning two active classes and one archived class |
-| mock-teacher2 | Another Teacher with a separate class |
-| mock-admin | Admin only; cannot access Student/Teacher profile management |
-| mock-suspended / mock-deactivated / mock-locked | Authentication denied; suspended/deactivated public profiles hidden |
+Để chạy integration tests, đặt `TEST_DB_URL`, `TEST_DB_USERNAME`, `TEST_DB_PASSWORD`
+trỏ tới PostgreSQL dành riêng cho test, tên database phải kết thúc bằng `_test`.
+Không dùng DB ứng dụng hoặc schema public. Mỗi JVM tạo schema ngẫu nhiên, chạy Flyway
+và Hibernate validate, rồi xóa đúng schema của nó khi thoát; dữ liệu ở schema khác giữ nguyên.
+Có thể lưu biến test trong `.env.test` (Git ignore), chạy `python3 -B scripts/run-postgres-tests.py`.
+Tests dùng mail transport giả để không phát email; không chứng minh Gmail đã tới inbox.
+Profile `mock,test` và fixture chỉ dùng bên trong test, không phải cách chạy ứng dụng.
 
-Mock tokens are development credentials, not signed JWTs. The decoder requires `mock` plus `dev` or `test`.
-Role and current access status come from AccountRepository, never client-supplied IDs or role claims.
-
-## Call the APIs
-
-### Adding API errors
-
-Define the stable string code, HTTP status and default public message in
-`common/exception/ErrorCode.java`. Throw `new ApiException(ErrorCode.PROFILE_NOT_FOUND)`
-for business errors; an optional second argument supplies a more specific public message.
-For a new framework exception, add an `@ExceptionHandler` mapping in `ApiExceptionHandler`
-and return `error(ErrorCode.YOUR_CODE, request, fields)`.
-For example, `MethodArgumentNotValidException` maps to `VALIDATION_FAILED`, HTTP 400,
-`Invalid request parameters`, with field validation details in `errors`.
-
-Solved counts distinct PUBLISHED public problems with an ACCEPTED official submission.
-Admin `publicCourseCount` and `publicProblemCount` count only PUBLISHED content.
-Draft, Unpublished and Archived content are excluded from these statistics.
-
-All paths below have prefix `/api/v1` and use the existing response envelopes.
-
-| Method | Path | Authentication / body |
-| --- | --- | --- |
-| GET | /users/me/profile | Student or Teacher |
-| PATCH | /users/me/profile | `{"fullName":"Nguyen An","shortBio":"Learning algorithms"}` |
-| PUT | /users/me/profile/avatar | multipart/form-data; file field named `file`, actual PNG/JPEG |
-| PATCH | /users/me/profile/privacy | `{"isPublic":true}` or false |
-| GET | /users/{username}/profile | Public; try student, student2, suspended, deactivated |
-| GET | /dashboards/student | mock-student / mock-student2 / mock-empty |
-| GET | /dashboards/teacher | mock-teacher / mock-teacher2 |
-| GET | /admin/dashboard | mock-admin |
-
-The existing `GET /users/{username}/profile/avatar` supports the avatarUrl returned by profile APIs.
-Upload an image first; reading a private image requires the owner's token. This is an auxiliary image route, not a new business feature.
-
-PowerShell examples:
-
-```powershell
-$headers = @{ Authorization = 'Bearer mock-student' }
-Invoke-RestMethod http://localhost:8080/api/v1/users/me/profile -Headers $headers
-Invoke-RestMethod http://localhost:8080/api/v1/users/me/profile -Method Patch -Headers $headers -ContentType application/json -Body '{"fullName":"Nguyen An"}'
-Invoke-RestMethod 'http://localhost:8080/api/v1/dashboards/student?previewSize=1&upcomingDays=7' -Headers $headers
-```
-
-PATCH preserves omitted fields, clears null/blank text and rejects username/email/role or unknown fields.
-Privacy requires a real JSON boolean. Public profiles expose only username/avatarUrl/shortBio/solved/streak.
-Missing credentials return 401; Student accessing Admin dashboard returns 403; hidden profiles return 404; invalid fields/queries return 400.
-
-Student/Teacher dashboards accept previewSize=1..20 (default 5) and upcomingDays=1..30 (default 7).
-Admin accepts previewSize, from/to UTC instants with `[from,to)` up to 366 days, and interval=day|week|month.
-Default charts cover the preceding 30 days; days/months and Monday-start weeks use UTC+7. All response timestamps use UTC Z.
-
-Fixtures cover draft/archived sources, personal deadlines, a newer graded attempt superseding an older pending attempt,
-deleted/expired notifications and pending teacher contributions. Counts and charts are derived from source records.
-Solved counts distinct public problems with official ACCEPTED submissions. Streak uses actual accepted submission dates in UTC+7,
-excluding RUN, class practice, assignments and problems that are not PUBLISHED. Initial student results are Solved=1, Current Streak=3, Highest Streak=4, calculated from fixture history.
-
-## Storage boundaries and future integration
-
-Controller -> Service -> ProfileRepository, PracticeRepository, DashboardRepository, AccountRepository interfaces.
-MockData supplies shared source fixtures. InMemoryProfileRepository stores immutable profile snapshots using atomic map updates.
-InMemoryDashboardRepository filters account/owner scope before sorting and limiting previews.
-Services retain validation, role checks, DTO mapping, Solved/Streak calculations and chart bucketing.
-
-Profile writes live in RAM and reset on restart. Avatar files live in `./data/avatars` and are validated and re-encoded.
-Upload/repository failures preserve the previous avatar reference; successful updates then remove the old file.
-Files survive restart but mock profile links reset; remove disposable avatar files after stopping the app if desired.
-There are no database transactions in mock mode.
-
-When the team's schema is ready:
-
-1. Implement the four repository interfaces against the official PostgreSQL/JPA schema, preserving DTOs and Service logic.
-2. Preserve visibility, membership/ownership, personal deadlines, latest-attempt selection, official public ACCEPTED filtering and preview ordering.
-3. Replace MockAuthenticationConfiguration with a real JwtDecoder validating signature, issuer, audience, expiry and UUID subject; use a real AccountRepository for current restrictions.
-4. Configure datasource and real transactions, including profile write locking and avatar commit/rollback cleanup.
-5. Read dashboard source data from the respective modules; coordinate schema/migrations with their owners.
-
-spring-data-jpa and jakarta.persistence-api are retained only to compile the team's existing shared BaseAuditableEntity.
-The PostgreSQL JDBC driver is available at runtime solely for the opt-in connection check.
-No datasource properties, database profile, 4.2 JPA entities/repositories or migrations are added.
-The mock profile continues to exclude DataSource and Hibernate auto-configuration.
-
-## Verification
-
-Run `./mvn-local.ps1 clean verify` to build and run the existing unit/API tests.
-If PowerShell reports that `mvn` is not recognized, Maven is not installed on `PATH`.
-This checkout can use its local Maven installation instead, from `backend`:
-
-```powershell
-.\.tools\apache-maven-3.9.9\bin\mvn.cmd '-Dmaven.repo.local=.tools/repository' clean verify
-```
-
-`.tools` is ignored by Git and is not included in a fresh clone. For a fresh clone,
-install Maven and add its `bin` directory to `PATH`, then open a new terminal.
-The `mvn-local.ps1` helper selects Maven from `PATH` or falls back to the local installation;
-it also loads `.env` settings. The direct command above does not load `.env`.
-
-GitHub Actions workflow `.github/workflows/backend-ci.yml` runs `clean verify` on Java 21
-for pushes and pull requests. Each run uploads Surefire reports as `backend-test-reports`,
-including when tests fail. View the check on the PR's latest commit after pushing the workflow.
-The Supabase test is skipped unless `-Dsupabase.check=true` is explicitly supplied.
-Java 21+ and access to Maven Central (or a populated local Maven cache) are required.
-
-## Refactor file inventory
-
-Modified: pom.xml, .env.example, README.md, application.yml, ApiConfiguration.java,
-SecurityConfig.java, AccountAccess.java, ProfileRepository.java, ProfileService.java,
-PracticeStatisticsService.java, DashboardRepository.java, DashboardService.java,
-and docs/api/API-4.2-user-profile-dashboard.md.
-
-Added: application-mock.yml, AccountRepository.java, MockAuthenticationConfiguration.java,
-PracticeRepository.java, profile/mock/MockData.java, profile/mock/InMemoryProfileRepository.java,
-and profile/dashboard/InMemoryDashboardRepository.java.
-
-Removed: V202610290001__account_profile_baseline.sql, V202610290002__dashboard_source_baseline.sql,
-and the existing 4.2 profile/dashboard/security/schema tests and Mockito test configuration.
-Controllers, DTOs, AvatarStorage and shared base classes are preserved. No frontend or other module functionality is changed.
+Probe Supabase chỉ đọc `SELECT 1`, không migration: sau khi xuất biến DB từ `.env`, chạy
+`mvn -Dsupabase.check=true -Dtest=SupabaseConnectionTest test`, hoặc PowerShell
+`./mvn-local.ps1 '-Dsupabase.check=true' '-Dtest=SupabaseConnectionTest' test`.
+Probe thành công không có nghĩa ứng dụng đã được khởi động hay có đủ bảng.
+Kiểm thử HTTP/JPA trực tiếp trên Supabase ứng dụng chỉ chạy khi chủ động đặt
+`-Dlive.supabase.check=true -Dtest=LiveSupabaseFlowTest`. Bài này tạo hai tài khoản
+và một lớp/lời mời/thông báo có tiền tố `codexlive`, dùng mail sender giả, và giữ dữ liệu
+để đối chiếu sau kiểm thử; không gửi email thật.
