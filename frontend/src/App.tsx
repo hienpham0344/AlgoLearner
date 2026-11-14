@@ -1,3 +1,4 @@
+import { BackendStatusBanner } from '@/components/BackendStatusBanner';
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,6 +14,7 @@ import { ClassroomRouterPage } from '@/features/classroom/pages/ClassroomRouterP
 import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
+import { AdminAccountsPage } from '@/features/admin/pages/AdminAccountsPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -34,6 +36,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 export const App: React.FC = () => {
   return (
+    <>
+    <BackendStatusBanner />
     <Routes>
       <Route element={<AuthExperience />}>
         <Route path="/login" element={<LoginPage />} />
@@ -46,14 +50,7 @@ export const App: React.FC = () => {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/u/:username" element={<PublicProfilePage />} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/admin/accounts" element={<ProtectedRoute><AdminAccountsPage /></ProtectedRoute>} />
       <Route
         path="/dashboard"
         element={
@@ -79,5 +76,6 @@ export const App: React.FC = () => {
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
+    </>
   );
 };
