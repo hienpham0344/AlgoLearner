@@ -42,7 +42,7 @@ class ProfileServiceTest {
         var request=new ProfileDtos.ProfileUpdate();
         request.fullName("  ");
         service.update(id,request);
-        verify(repository).update(id,null,"Bio",clock.instant());
+        verify(repository).update(id,true,null,false,null,clock.instant());
     }
     @Test void unicodeLengthBoundaryUsesCodePoints() {
         when(statistics.forAccount(id)).thenReturn(new PracticeStatisticsService.Statistics(0,new PracticeStatisticsService.Streak(0,0)));
@@ -51,6 +51,6 @@ class ProfileServiceTest {
         service.update(id,request);
         request.fullName("😀".repeat(151));
         assertThatThrownBy(() -> service.update(id,request)).isInstanceOf(com.algolearner.platform.common.exception.ApiException.class);
-        verify(repository,times(1)).update(any(),any(),any(),any());
+        verify(repository,times(1)).update(any(),anyBoolean(),any(),anyBoolean(),any(),any());
     }
 }

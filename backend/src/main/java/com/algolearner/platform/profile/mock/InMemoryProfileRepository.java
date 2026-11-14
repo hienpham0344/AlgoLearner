@@ -24,8 +24,8 @@ public class InMemoryProfileRepository implements ProfileRepository {
         if(!p.isPublic() || !active || suspended || !java.util.Set.of("STUDENT","TEACHER").contains(p.role())) throw missing();
         return p;
     }
-    public void update(UUID id,String name,String bio,Instant now) {
-        data.profiles.compute(id,(key,p) -> { if(p==null) throw missing(); return copy(p,name,bio,p.avatarKey(),p.isPublic()); });
+    public void update(UUID id,boolean updateName,String name,boolean updateBio,String bio,Instant now) {
+        data.profiles.compute(id,(key,p) -> { if(p==null) throw missing(); return copy(p,updateName?name:p.fullName(),updateBio?bio:p.shortBio(),p.avatarKey(),p.isPublic()); });
     }
     public void privacy(UUID id,boolean visible,Instant now) {
         data.profiles.compute(id,(key,p) -> { if(p==null) throw missing(); return copy(p,p.fullName(),p.shortBio(),p.avatarKey(),visible); });

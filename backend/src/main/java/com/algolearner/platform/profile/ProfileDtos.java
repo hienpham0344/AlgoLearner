@@ -26,7 +26,7 @@ public final class ProfileDtos {
         @Schema(maxLength=150, nullable=true)
         public void fullName(String value) { fullName=value; hasFullName=true; }
         @JsonSetter("shortBio")
-        @Schema(maxLength=500, nullable=true)
+        @Schema(maxLength=200, nullable=true)
         public void shortBio(String value) { shortBio=value; hasShortBio=true; }
     }
     @Schema(name="ProfilePrivacyUpdate",additionalProperties=Schema.AdditionalPropertiesValue.FALSE)

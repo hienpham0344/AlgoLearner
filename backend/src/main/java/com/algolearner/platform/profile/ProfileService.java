@@ -23,12 +23,11 @@ public class ProfileService {
         this.repository=repository; this.statistics=statistics; this.storage=storage; this.access=access; this.clock=clock;
     }
     public UserProfile own(UUID id) { requireProfileRole(id); return ownResponse(repository.own(id)); }
-    public synchronized UserProfile update(UUID id,ProfileUpdate request) {
+    public UserProfile update(UUID id,ProfileUpdate request) {
         requireProfileRole(id);
         if(!request.hasFullName && !request.hasShortBio) throw new ApiException(ErrorCode.INVALID_REQUEST_BODY,"At least one editable field is required");
         String name=normalize(request.fullName,150),bio=normalize(request.shortBio,200);
-        var old=repository.own(id);
-        repository.update(id,request.hasFullName?name:old.fullName(),request.hasShortBio?bio:old.shortBio(),clock.instant());
+        repository.update(id,request.hasFullName,name,request.hasShortBio,bio,clock.instant());
         return ownResponse(repository.own(id));
     }
     public synchronized UserProfile privacy(UUID id,PrivacyUpdate request) {

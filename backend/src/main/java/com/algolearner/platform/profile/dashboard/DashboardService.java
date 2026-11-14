@@ -13,6 +13,7 @@ import java.util.*;
 import static com.algolearner.platform.profile.dashboard.DashboardResponse.*;
 
 @Service
+@org.springframework.transaction.annotation.Transactional(readOnly = true)
 public class DashboardService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private final DashboardRepository repository;
