@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@SecurityScheme(name="bearerAuth",type=SecuritySchemeType.HTTP,scheme="bearer",bearerFormat="mock-<username> (mock profile); JWT when integrated")
+@SecurityScheme(name="bearerAuth",type=SecuritySchemeType.HTTP,scheme="bearer",bearerFormat="JWT (internal-auth profile); mock-<username> (mock profile)")
 public class ApiConfiguration {
     @Bean
     Jackson2ObjectMapperBuilderCustomizer strictJson() {

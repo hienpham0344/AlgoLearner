@@ -1,9 +1,24 @@
 spring:
+  profiles:
+    default: internal-auth
   application:
     name: algolearner-platform
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/algolearner}
-    username: ${DB_USERNAME:algolearner}
+    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL:}
+    username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
   jpa:
     hibernate:
@@ -28,8 +43,16 @@ spring:
       max-file-size: ${AVATAR_MAX_SIZE:5MB}
       max-request-size: ${AVATAR_MAX_REQUEST_SIZE:6MB}
 app:
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
   security:
-    jwt-secret: ${JWT_SECRET:change-this-development-secret-to-at-least-32-bytes}
+    jwt-secret: ${JWT_SECRET:}
+    otp-hmac-secret: ${OTP_HMAC_SECRET:}
+    internal-issuer: ${INTERNAL_JWT_ISSUER:https://algolearner.local}
+    admin-bootstrap:
+      email: ${ADMIN_BOOTSTRAP_EMAIL:}
+      username: ${ADMIN_BOOTSTRAP_USERNAME:}
+      password: ${ADMIN_BOOTSTRAP_PASSWORD:}
     jwt:
       issuer: ${JWT_ISSUER:}
       audience: ${JWT_AUDIENCE:}

@@ -3,7 +3,9 @@ package com.algolearner.platform.common.security;
 import com.algolearner.platform.common.dto.ApiErrorResponse;
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ErrorCode;
+import com.algolearner.platform.auth.InternalSessionAccess;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -23,18 +25,29 @@ import java.util.UUID;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain security(HttpSecurity http, AccountAccess accounts, ObjectMapper mapper) throws Exception {
+    SecurityFilterChain security(HttpSecurity http, AccountAccess accounts,
+            ObjectProvider<InternalSessionAccess> internalSessions, ObjectMapper mapper) throws Exception {
         http.csrf(csrf -> csrf.disable())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers("/api/v1/status", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/v1/auth/register", "/api/v1/auth/login",
+                        "/api/v1/auth/verify-otp", "/api/v1/auth/resend-otp", "/api/v1/auth/forgot-password",
+                        "/api/v1/auth/reset-password", "/api/v1/auth/refresh-token", "/api/v1/auth/logout").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/v1/users/me/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/v1/users/*/profile", "/api/v1/users/*/profile/avatar").permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth -> oauth
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(token -> {
                     try {
-                        String role = accounts.activeRole(UUID.fromString(token.getSubject()));
+                        UUID accountId = UUID.fromString(token.getSubject());
+                        String role = accounts.activeRole(accountId);
+                        var sessionAccess = internalSessions.getIfAvailable();
+                        if (sessionAccess != null) {
+                            String sid = token.getClaimAsString("sid");
+                            if (sid == null || !sessionAccess.active(accountId, UUID.fromString(sid)))
+                                throw new ApiException(ErrorCode.UNAUTHORIZED_ACCESS);
+                        }
                         return new JwtAuthenticationToken(token, List.of(new SimpleGrantedAuthority("ROLE_" + role)), token.getSubject());
                     } catch (ApiException | IllegalArgumentException ex) {
                         throw new OAuth2AuthenticationException(new OAuth2Error("invalid_token"), "Account access denied");

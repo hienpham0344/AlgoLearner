@@ -19,7 +19,7 @@ import org.springframework.web.client.RestTemplate;
 
 /** Signed tokens are mandatory outside explicitly enabled local mock mode. */
 @Configuration
-@Profile("!mock | (!dev & !test) | prod | production")
+@Profile("!internal-auth & (!mock | (!dev & !test) | prod | production)")
 public class JwtAuthenticationConfiguration {
     @Bean
     JwtDecoder jwtDecoder(
