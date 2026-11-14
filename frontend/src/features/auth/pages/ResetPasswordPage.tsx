@@ -3,15 +3,19 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
 import { AuthField, AuthSubmit } from '../components/AuthControls';
 import { AuthFeedback } from '../components/AuthFeedback';
+import { isAxiosError } from 'axios';
+import type { ApiErrorResponse } from '@/types/api';
+import { clearSession } from '@/services/apiClient';
+import type { AuthIdentity } from '../types';
 
-interface ResetState {
-  email: string;
+type ResetState = AuthIdentity & {
   resetToken: string;
-}
+};
 
 function isResetState(value: unknown): value is ResetState {
   return typeof value === 'object' && value !== null
-    && 'email' in value && typeof value.email === 'string' && value.email.length > 0
+    && (('email' in value && typeof value.email === 'string' && value.email.length > 0)
+      || ('usernameOrEmail' in value && typeof value.usernameOrEmail === 'string' && value.usernameOrEmail.length > 0))
     && 'resetToken' in value && typeof value.resetToken === 'string' && value.resetToken.length > 0;
 }
 
@@ -19,6 +23,7 @@ export const ResetPasswordPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const resetState = isResetState(location.state) ? location.state : null;
+  const identity = resetState?.usernameOrEmail || resetState?.email || '';
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<{ field?: string; message: string } | null>(null);
@@ -31,14 +36,20 @@ export const ResetPasswordPage = () => {
     setError(null);
     let issue: typeof error = null;
     if (newPassword.length < 8) issue = { field: 'reset-new-password', message: 'Use at least 8 characters for your password.' };
+    else if (!/[A-Za-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) issue = { field: 'reset-new-password', message: 'Use at least one letter and one number.' };
+    else if (new TextEncoder().encode(newPassword).length > 72) issue = { field: 'reset-new-password', message: 'Use at most 72 UTF-8 bytes.' };
     else if (newPassword !== confirmPassword) issue = { field: 'reset-confirm-password', message: "Your passwords don't match." };
     if (issue) { setError(issue); if (issue.field) document.getElementById(issue.field)?.focus(); return; }
     inFlight.current = true;
     setIsLoading(true);
     try {
       await authApi.resetPassword({ ...resetState, newPassword, confirmPassword });
+      clearSession();
       navigate('/login?resetSuccess=true', { replace: true, state: null });
-    } catch { setError({ message: 'This reset session has expired or could not be used. Request a new code and try again.' }); }
+    } catch (failure: unknown) {
+      setError({ message: isAxiosError<ApiErrorResponse>(failure) && failure.response?.data.message
+        ? failure.response.data.message : 'This reset session has expired or could not be used. Request a new code and try again.' });
+    }
     finally { setIsLoading(false); inFlight.current = false; }
   };
 
@@ -47,9 +58,9 @@ export const ResetPasswordPage = () => {
   return (
     <>
       <h1 tabIndex={-1}>Set a new password.</h1>
-      <AuthFeedback title={error ? 'Check your details.' : undefined} description={error?.message || <>Email verified for <strong>{resetState.email}</strong>. Choose a new password.</>} />
+      <AuthFeedback title={error ? 'Check your details.' : undefined} description={error?.message || <>Code verified for <strong>{identity}</strong>. Choose a new password.</>} />
       <form className="auth-form" onSubmit={handleSubmit} noValidate aria-busy={isLoading}>
-        <input className="auth-visually-hidden" type="text" name="username" autoComplete="username" value={resetState.email} readOnly tabIndex={-1} aria-hidden="true" />
+        <input className="auth-visually-hidden" type="text" name="username" autoComplete="username" value={identity} readOnly tabIndex={-1} aria-hidden="true" />
         <AuthField id="reset-new-password" label="New password" type="password" autoComplete="new-password" placeholder="At least 8 characters" value={newPassword} onChange={event => setNewPassword(event.target.value)} required disabled={isLoading} aria-invalid={error?.field === 'reset-new-password'} aria-describedby="auth-feedback" />
         <AuthField id="reset-confirm-password" label="Confirm password" type="password" autoComplete="new-password" placeholder="Repeat your password" value={confirmPassword} onChange={event => setConfirmPassword(event.target.value)} required disabled={isLoading} aria-invalid={error?.field === 'reset-confirm-password'} aria-describedby="auth-feedback" />
         <AuthSubmit loading={isLoading}>{isLoading ? 'Updating password…' : 'Update password'}</AuthSubmit>

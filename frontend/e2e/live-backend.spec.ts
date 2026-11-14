@@ -1,20 +1,22 @@
 import { expect, test } from '@playwright/test';
 
-test.skip(process.env.ALGOLEARN_LIVE_BACKEND !== '1', 'Requires the local Spring Boot/H2 integration server');
+const required = ['LIVE_TEACHER_EMAIL', 'LIVE_TEACHER_PASSWORD', 'LIVE_STUDENT_EMAIL', 'LIVE_STUDENT_PASSWORD'];
+test.skip(process.env.ALGOLEARN_LIVE_BACKEND !== '1' || required.some(key => !process.env[key]), 'Requires a Supabase-backed Spring server and dedicated test account credentials.');
+test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 
 test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) => {
   const base = 'http://127.0.0.1:3101';
   const classroomName = `Live integration ${Date.now()}`;
-  const signIn = async (username: string) => {
+  const signIn = async (username: string, password: string) => {
     await page.goto(`${base}/login`);
     await page.getByLabel('Username or email').fill(username);
-    await page.getByLabel('Password', { exact: true }).fill('DemoPass123!');
+    await page.getByLabel('Password', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByRole('button', { name: 'Continue to your workspace' }).click();
     await expect(page).toHaveURL(/\/dashboard$/);
   };
 
-  await signIn('teacher');
+  await signIn(process.env.LIVE_TEACHER_EMAIL!, process.env.LIVE_TEACHER_PASSWORD!);
   await expect(page.getByRole('heading', { name: 'Keep the class moving.' })).toBeVisible();
   await page.getByRole('link', { name: 'My profile', exact: true }).first().click();
   const nameInput = page.getByRole('textbox', { name: 'Display name' });
@@ -48,9 +50,9 @@ test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) =>
   await page.getByRole('link', { name: 'Dashboard' }).click();
   await page.getByLabel('Account menu').click();
   await page.getByRole('button', { name: 'Sign out' }).click();
-  await signIn('student');
+  await signIn(process.env.LIVE_STUDENT_EMAIL!, process.env.LIVE_STUDENT_PASSWORD!);
   await page.goto(`${base}/profile`);
-  await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Demo student');
+  await expect(page.getByRole('textbox', { name: 'Display name' })).toBeVisible();
   await page.goto(`${base}/student/classrooms`);
   await expect(page.getByRole('heading', { name: 'Join with class code' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Class code' }).fill(classCode!);

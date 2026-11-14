@@ -37,27 +37,24 @@ export interface RegisterRequest {
   privacyAccepted: boolean;
 }
 
-export interface VerifyOtpRequest {
-  email: string;
+export type AuthIdentity = { email: string; usernameOrEmail?: never } | { usernameOrEmail: string; email?: never };
+
+export type VerifyOtpRequest = AuthIdentity & {
   code: string;
   purpose: OtpPurpose;
-}
+};
 
-export interface ResendOtpRequest {
-  email: string;
+export type ResendOtpRequest = AuthIdentity & {
   purpose: OtpPurpose;
-}
+};
 
-export interface ForgotPasswordRequest {
-  email: string;
-}
+export type ForgotPasswordRequest = AuthIdentity;
 
-export interface ResetPasswordRequest {
-  email: string;
+export type ResetPasswordRequest = AuthIdentity & {
   resetToken: string;
   newPassword: string;
   confirmPassword?: string;
-}
+};
 
 export interface ResetVerificationData {
   resetToken: string;
