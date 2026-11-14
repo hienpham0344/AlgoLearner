@@ -11,6 +11,7 @@ import com.algolearner.platform.classroom.ClassroomRepository;
 import com.algolearner.platform.classroom.ClassroomStatus;
 import com.algolearner.platform.classroom.MembershipStatus;
 import com.algolearner.platform.common.exception.ApiException;
+import com.algolearner.platform.common.exception.ResourceNotFoundException;
 import com.algolearner.platform.common.exception.ErrorCode;
 import com.algolearner.platform.notification.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -174,6 +175,7 @@ class AssignmentServiceTest {
 
     @Test
     void submitAttempt_GradesSingleChoiceAutomatically() {
+        assignment.setGradePublished(true);
         var attempt = AssignmentAttemptEntity.builder()
                 .id(UUID.randomUUID())
                 .assignment(assignment)
@@ -292,6 +294,7 @@ class AssignmentServiceTest {
 
     @Test
     void submitAttempt_GradesMultipleChoice_AllOrNothing() {
+        assignment.setGradePublished(true);
         var attempt = AssignmentAttemptEntity.builder()
                 .id(UUID.randomUUID())
                 .assignment(assignment)
@@ -344,6 +347,7 @@ class AssignmentServiceTest {
 
     @Test
     void submitAttempt_AppliesLatePenaltyPercent() {
+        assignment.setGradePublished(true);
         assignment.setDeadline(clock.instant().minusSeconds(3600)); // 1 hour ago
         assignment.setAllowLateSubmission(true);
         assignment.setLatePenaltyPercent(BigDecimal.valueOf(20.0)); // 20% penalty
@@ -552,5 +556,92 @@ class AssignmentServiceTest {
                 isNull(),
                 eq(assignment.getId())
         );
+    }
+
+    @Test
+    void overrideGradeRejectsAttemptFromAnotherClassroom() {
+        var otherClassroom = new ClassroomEntity();
+        otherClassroom.setId(UUID.randomUUID());
+        var otherAssignment = AssignmentEntity.builder().id(UUID.randomUUID()).classroom(otherClassroom).build();
+        var attempt = AssignmentAttemptEntity.builder().id(UUID.randomUUID())
+                .assignment(otherAssignment).student(student).status(AttemptStatus.GRADED).build();
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+
+        assertThatThrownBy(() -> service.overrideGrade(teacher.getId(), classroom.getId(),
+                assignment.getId(), attempt.getId(),
+                new AssignmentDtos.OverrideGradeRequest(BigDecimal.ONE, "incorrect scope")))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(attempts, never()).save(any());
+    }
+
+    @Test
+    void draftRejectsAttemptFromAnotherAssignmentBeforeSavingAnswer() {
+        allowStudent();
+        var otherAssignment = AssignmentEntity.builder().id(UUID.randomUUID()).classroom(classroom).build();
+        var attempt = AssignmentAttemptEntity.builder().id(UUID.randomUUID())
+                .assignment(otherAssignment).student(student).status(AttemptStatus.IN_PROGRESS)
+                .startedAt(clock.instant()).build();
+        when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+
+        assertThatThrownBy(() -> service.saveDraftAnswer(student.getId(), classroom.getId(),
+                assignment.getId(), attempt.getId(),
+                new AssignmentDtos.SaveDraftAnswerRequest(UUID.randomUUID(), null, "answer", null, null)))
+                .isInstanceOf(ResourceNotFoundException.class);
+        verify(answers, never()).save(any());
+    }
+
+    @Test
+    void codeAnswerRemainsUngradedWithoutJudge() {
+        allowStudent();
+        var attempt = AssignmentAttemptEntity.builder().id(UUID.randomUUID())
+                .assignment(assignment).student(student).status(AttemptStatus.IN_PROGRESS)
+                .startedAt(clock.instant()).build();
+        var question = AssignmentQuestionEntity.builder().id(UUID.randomUUID())
+                .assignment(assignment).questionType(QuestionType.CODE).points(BigDecimal.TEN).build();
+        var answer = AssignmentAnswerEntity.builder().id(UUID.randomUUID())
+                .attempt(attempt).question(question).codeSubmission("print('hello')").build();
+        when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(answer));
+        when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var view = service.submitAttempt(student.getId(), classroom.getId(), assignment.getId(), attempt.getId());
+        assertThat(view.status()).isEqualTo(AttemptStatus.SUBMITTED);
+        assertThat(attempt.getFinalScore()).isNull();
+        assertThat(answer.getScore()).isNull();
+    }
+
+    @Test
+    void unpublishedGradesAreHiddenFromStudentAttemptResponse() {
+        allowStudent();
+        assignment.setGradePublished(false);
+        var attempt = AssignmentAttemptEntity.builder().id(UUID.randomUUID())
+                .assignment(assignment).student(student).status(AttemptStatus.IN_PROGRESS)
+                .startedAt(clock.instant()).build();
+        var option = AssignmentQuestionOptionEntity.builder().id(UUID.randomUUID()).isCorrect(true).build();
+        var question = AssignmentQuestionEntity.builder().id(UUID.randomUUID())
+                .assignment(assignment).questionType(QuestionType.SINGLE_CHOICE)
+                .points(BigDecimal.TEN).build();
+        var answer = AssignmentAnswerEntity.builder().id(UUID.randomUUID())
+                .attempt(attempt).question(question)
+                .selectedOptionIds("[\"" + option.getId() + "\"]").build();
+        when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(answer));
+        when(options.findByQuestionIdOrderByDisplayOrderAsc(question.getId())).thenReturn(List.of(option));
+        when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        var view = service.submitAttempt(student.getId(), classroom.getId(), assignment.getId(), attempt.getId());
+        assertThat(attempt.getFinalScore()).isEqualByComparingTo(BigDecimal.TEN);
+        assertThat(view.finalScore()).isNull();
+        assertThat(view.autoScore()).isNull();
+        assertThat(view.answers().getFirst().score()).isNull();
+    }
+
+    private void allowStudent() {
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        var membership = new ClassroomMembershipEntity();
+        membership.setStatus(MembershipStatus.ACTIVE);
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId()))
+                .thenReturn(Optional.of(membership));
     }
 }

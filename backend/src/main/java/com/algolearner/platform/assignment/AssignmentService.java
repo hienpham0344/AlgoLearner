@@ -352,7 +352,7 @@ public class AssignmentService {
         // Check if an in-progress attempt already exists
         var existing = attempts.findFirstByAssignmentIdAndStudentIdAndStatus(assignmentId, studentId, AttemptStatus.IN_PROGRESS);
         if (existing.isPresent()) {
-            return toAttemptView(existing.get(), assignment, studentId);
+            return toAttemptView(existing.get(), assignment, false);
         }
 
         long pastAttempts = attempts.countByAssignmentIdAndStudentId(assignmentId, studentId);
@@ -373,7 +373,7 @@ public class AssignmentService {
                 .build();
 
         var savedAttempt = attempts.save(attempt);
-        return toAttemptView(savedAttempt, assignment, studentId);
+        return toAttemptView(savedAttempt, assignment, false);
     }
 
     public AssignmentDtos.AttemptView getActiveAttempt(UUID studentId, UUID classroomId, UUID assignmentId) {
@@ -386,16 +386,17 @@ public class AssignmentService {
         var attempt = attempts.findFirstByAssignmentIdAndStudentIdAndStatus(assignmentId, studentId, AttemptStatus.IN_PROGRESS)
                 .orElseThrow(() -> new ApiException(ErrorCode.NO_ACTIVE_ATTEMPT));
 
-        return toAttemptView(attempt, assignment, studentId);
+        return toAttemptView(attempt, assignment, false);
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = TimeLimitExceededException.class)
     public AssignmentDtos.AnswerView saveDraftAnswer(UUID studentId, UUID classroomId, UUID assignmentId, UUID attemptId, AssignmentDtos.SaveDraftAnswerRequest request) {
         requireClassroom(classroomId);
         requireActiveStudent(classroomId, studentId);
 
         var attempt = attempts.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        requireAttemptScope(attempt, classroomId, assignmentId);
 
         if (!attempt.getStudent().getId().equals(studentId)) {
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
@@ -410,11 +411,11 @@ public class AssignmentService {
         if (isTimeExpired(attempt, assignment)) {
             if (assignment.getTimeExpiredAction() == TimeExpiredAction.AUTO_SUBMIT) {
                 submitAttempt(studentId, classroomId, assignmentId, attemptId);
-                throw new ApiException(ErrorCode.TIME_LIMIT_EXCEEDED, "Time limit expired; draft was auto-submitted");
+                throw new TimeLimitExceededException("Time limit expired; draft was auto-submitted");
             } else {
                 attempt.setStatus(AttemptStatus.TIMED_OUT);
                 attempts.save(attempt);
-                throw new ApiException(ErrorCode.TIME_LIMIT_EXCEEDED);
+                throw new TimeLimitExceededException();
             }
         }
 
@@ -446,6 +447,7 @@ public class AssignmentService {
 
         var attempt = attempts.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        requireAttemptScope(attempt, classroomId, assignmentId);
 
         if (!attempt.getStudent().getId().equals(studentId)) {
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
@@ -486,13 +488,9 @@ public class AssignmentService {
             } else if (q.getQuestionType() == QuestionType.ESSAY) {
                 hasPendingManualGrading = true;
             } else if (q.getQuestionType() == QuestionType.CODE) {
-                // Code questions: mock judge score or default full points if not empty
-                if (ans.getCodeSubmission() != null && !ans.getCodeSubmission().isBlank()) {
-                    ans.setScore(q.getPoints());
-                    autoScore = autoScore.add(q.getPoints());
-                } else {
-                    ans.setScore(BigDecimal.ZERO);
-                }
+                // Keep code answers pending until a real judge provides a verdict.
+                ans.setScore(null);
+                hasPendingManualGrading = true;
             }
             answers.save(ans);
         }
@@ -512,7 +510,7 @@ public class AssignmentService {
         }
 
         var saved = attempts.save(attempt);
-        return toAttemptView(saved, assignment, studentId);
+        return toAttemptView(saved, assignment, false);
     }
 
     // --- Grading & Override & Rejudge (Teacher) ---
@@ -523,6 +521,13 @@ public class AssignmentService {
 
         var attempt = attempts.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        requireAttemptScope(attempt, classroomId, assignmentId);
+
+        var question = questions.findByIdAndAssignmentId(request.questionId(), assignmentId)
+                .orElseThrow(() -> new ApiException(ErrorCode.QUESTION_NOT_FOUND));
+        if (question.getQuestionType() != QuestionType.ESSAY) {
+            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
+        }
 
         var answer = answers.findByAttemptIdAndQuestionId(attemptId, request.questionId())
                 .orElseThrow(() -> new ResourceNotFoundException("Answer not found"));
@@ -541,6 +546,7 @@ public class AssignmentService {
 
         var attempt = attempts.findById(attemptId)
                 .orElseThrow(() -> new ResourceNotFoundException("Attempt not found"));
+        requireAttemptScope(attempt, classroomId, assignmentId);
 
         attempt.setOverriddenScore(request.overriddenScore());
         attempt.setOverrideReason(request.reason());
@@ -601,7 +607,7 @@ public class AssignmentService {
                 .orElseThrow(() -> new ApiException(ErrorCode.ASSIGNMENT_NOT_FOUND));
 
         var list = attempts.findByAssignmentIdOrderByCreatedAtDesc(assignmentId);
-        return list.stream().map(a -> toAttemptView(a, assignment, a.getStudent().getId())).toList();
+        return list.stream().map(a -> toAttemptView(a, assignment, true)).toList();
     }
 
     // --- Helper calculations ---
@@ -711,12 +717,14 @@ public class AssignmentService {
             long used = attempts.countByAssignmentIdAndStudentId(a.getId(), accountId);
             myRemaining = a.getMaxAttempts() > 0 ? (int) Math.max(0, a.getMaxAttempts() - used) : 999;
 
-            var myAttempts = attempts.findByAssignmentIdAndStudentIdOrderByAttemptNumberDesc(a.getId(), accountId);
-            myBest = myAttempts.stream()
-                    .map(AssignmentAttemptEntity::getFinalScore)
-                    .filter(Objects::nonNull)
-                    .max(BigDecimal::compareTo)
-                    .orElse(null);
+            if (a.isGradePublished()) {
+                var myAttempts = attempts.findByAssignmentIdAndStudentIdOrderByAttemptNumberDesc(a.getId(), accountId);
+                myBest = myAttempts.stream()
+                        .map(AssignmentAttemptEntity::getFinalScore)
+                        .filter(Objects::nonNull)
+                        .max(BigDecimal::compareTo)
+                        .orElse(null);
+            }
         }
 
         return new AssignmentDtos.AssignmentSummaryView(
@@ -733,12 +741,14 @@ public class AssignmentService {
             long used = attempts.countByAssignmentIdAndStudentId(a.getId(), accountId);
             myRemaining = a.getMaxAttempts() > 0 ? (int) Math.max(0, a.getMaxAttempts() - used) : 999;
 
-            var myAttempts = attempts.findByAssignmentIdAndStudentIdOrderByAttemptNumberDesc(a.getId(), accountId);
-            myBest = myAttempts.stream()
-                    .map(AssignmentAttemptEntity::getFinalScore)
-                    .filter(Objects::nonNull)
-                    .max(BigDecimal::compareTo)
-                    .orElse(null);
+            if (a.isGradePublished()) {
+                var myAttempts = attempts.findByAssignmentIdAndStudentIdOrderByAttemptNumberDesc(a.getId(), accountId);
+                myBest = myAttempts.stream()
+                        .map(AssignmentAttemptEntity::getFinalScore)
+                        .filter(Objects::nonNull)
+                        .max(BigDecimal::compareTo)
+                        .orElse(null);
+            }
         }
 
         boolean canSeeAnswers = isOwner || (a.getViewAnswersMode() == ViewAnswersMode.ALWAYS);
@@ -769,7 +779,7 @@ public class AssignmentService {
         );
     }
 
-    private AssignmentDtos.AttemptView toAttemptView(AssignmentAttemptEntity att, AssignmentEntity a, UUID studentId) {
+    private AssignmentDtos.AttemptView toAttemptView(AssignmentAttemptEntity att, AssignmentEntity a, boolean isOwner) {
         Long remainingSeconds = null;
         if (a.getDurationMinutes() != null && a.getDurationMinutes() > 0 && att.getStatus() == AttemptStatus.IN_PROGRESS) {
             long totalSeconds = a.getDurationMinutes() * 60L;
@@ -777,7 +787,9 @@ public class AssignmentService {
             remainingSeconds = Math.max(0, totalSeconds - elapsed);
         }
 
-        var ansViews = answers.findByAttemptId(att.getId()).stream().map(this::toAnswerView).toList();
+        boolean showGrades = isOwner || a.isGradePublished();
+        var ansViews = answers.findByAttemptId(att.getId()).stream()
+                .map(ans -> toAnswerView(ans, showGrades)).toList();
 
         String studentName = att.getStudent().getFullName() != null
                 ? att.getStudent().getFullName()
@@ -786,15 +798,39 @@ public class AssignmentService {
         return new AssignmentDtos.AttemptView(
                 att.getId(), a.getId(), att.getStudent().getId(), studentName, att.getAttemptNumber(),
                 att.getStatus(), att.getStartedAt(), att.getSubmittedAt(), att.isLate(),
-                att.getAutoScore(), att.getManualScore(), att.getOverriddenScore(), att.getFinalScore(),
-                att.getOverrideReason(), att.getTeacherFeedback(), remainingSeconds, ansViews
+                showGrades ? att.getAutoScore() : null, showGrades ? att.getManualScore() : null,
+                showGrades ? att.getOverriddenScore() : null, showGrades ? att.getFinalScore() : null,
+                showGrades ? att.getOverrideReason() : null, showGrades ? att.getTeacherFeedback() : null,
+                remainingSeconds, ansViews
         );
     }
 
     private AssignmentDtos.AnswerView toAnswerView(AssignmentAnswerEntity ans) {
+        return toAnswerView(ans, true);
+    }
+
+    private AssignmentDtos.AnswerView toAnswerView(AssignmentAnswerEntity ans, boolean showGrades) {
         return new AssignmentDtos.AnswerView(
                 ans.getId(), ans.getQuestion().getId(), ans.getSelectedOptionIds(), ans.getTextAnswer(),
-                ans.getFileUrl(), ans.getCodeSubmission(), ans.isDraft(), ans.getScore(), ans.getFeedback()
+                ans.getFileUrl(), ans.getCodeSubmission(), ans.isDraft(),
+                showGrades ? ans.getScore() : null, showGrades ? ans.getFeedback() : null
         );
+    }
+
+    private void requireAttemptScope(AssignmentAttemptEntity attempt, UUID classroomId, UUID assignmentId) {
+        var assignment = attempt.getAssignment();
+        if (!assignment.getId().equals(assignmentId) || !assignment.getClassroom().getId().equals(classroomId)) {
+            throw new ResourceNotFoundException("Attempt not found");
+        }
+    }
+
+    private static final class TimeLimitExceededException extends ApiException {
+        private TimeLimitExceededException() {
+            super(ErrorCode.TIME_LIMIT_EXCEEDED);
+        }
+
+        private TimeLimitExceededException(String message) {
+            super(ErrorCode.TIME_LIMIT_EXCEEDED, message);
+        }
     }
 }
