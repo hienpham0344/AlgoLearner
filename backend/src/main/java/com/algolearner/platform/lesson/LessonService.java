@@ -1,5 +1,6 @@
 package com.algolearner.platform.lesson;
 
+import com.algolearner.platform.assignment.AssignmentRepository;
 import com.algolearner.platform.auth.AccountEntity;
 import com.algolearner.platform.auth.AccountRepository;
 import com.algolearner.platform.classroom.ClassroomEntity;
@@ -31,6 +32,7 @@ public class LessonService {
     private final ClassroomRepository classrooms;
     private final ClassroomMembershipRepository memberships;
     private final AccountRepository accounts;
+    private final AssignmentRepository assignments;
     private final Clock clock;
 
     public List<LessonDtos.LessonSummaryView> list(UUID accountId, UUID classroomId) {
@@ -197,9 +199,19 @@ public class LessonService {
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
+        if (request.itemType() == LinkedItemType.ASSIGNMENT) {
+            assignments.findByIdAndClassroomId(request.itemId(), classroomId)
+                    .orElseThrow(() -> new ApiException(ErrorCode.ASSIGNMENT_NOT_FOUND));
+        } else if (request.itemType() != LinkedItemType.QUIZ) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Linked item type is not available yet");
+        }
+
         // BR-LES-002: Mỗi Quiz chỉ liên kết tối đa với một Lesson
         if (request.itemType() == LinkedItemType.QUIZ && linkedItems.existsByItemTypeAndItemId(LinkedItemType.QUIZ, request.itemId())) {
             throw new ApiException(ErrorCode.QUIZ_ALREADY_LINKED);
+        }
+        if (request.itemType() == LinkedItemType.QUIZ) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Quiz links require the quiz module");
         }
 
         int nextOrder = (int) linkedItems.countByLessonId(lessonId);

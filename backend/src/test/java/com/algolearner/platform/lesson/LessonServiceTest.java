@@ -4,6 +4,8 @@ import com.algolearner.platform.auth.AccountEntity;
 import com.algolearner.platform.auth.AccountRepository;
 import com.algolearner.platform.auth.AccountRole;
 import com.algolearner.platform.auth.AccountStatus;
+import com.algolearner.platform.assignment.AssignmentEntity;
+import com.algolearner.platform.assignment.AssignmentRepository;
 import com.algolearner.platform.classroom.ClassroomEntity;
 import com.algolearner.platform.classroom.ClassroomMembershipEntity;
 import com.algolearner.platform.classroom.ClassroomMembershipRepository;
@@ -36,6 +38,7 @@ class LessonServiceTest {
     private final ClassroomRepository classrooms = mock(ClassroomRepository.class);
     private final ClassroomMembershipRepository memberships = mock(ClassroomMembershipRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
+    private final AssignmentRepository assignments = mock(AssignmentRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T12:00:00Z"), ZoneOffset.UTC);
 
     private LessonService service;
@@ -47,7 +50,7 @@ class LessonServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships, accounts, clock);
+        service = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships, accounts, assignments, clock);
 
         teacher = new AccountEntity();
         teacher.setId(UUID.randomUUID());
@@ -141,6 +144,25 @@ class LessonServiceTest {
         assertThatThrownBy(() -> service.linkItem(teacher.getId(), classroom.getId(), lesson.getId(), req))
                 .isInstanceOf(ApiException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.QUIZ_ALREADY_LINKED.getCode());
+    }
+
+    @Test
+    void linkAssignmentRejectsItemFromAnotherClassroom() {
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+
+        var foreignAssignment = new AssignmentEntity();
+        var otherClassroom = new ClassroomEntity();
+        otherClassroom.setId(UUID.randomUUID());
+        foreignAssignment.setId(UUID.randomUUID());
+        foreignAssignment.setClassroom(otherClassroom);
+        when(assignments.findByIdAndClassroomId(foreignAssignment.getId(), classroom.getId()))
+                .thenReturn(Optional.empty());
+
+        var request = new LessonDtos.LinkItemRequest(LinkedItemType.ASSIGNMENT, foreignAssignment.getId());
+        assertThatThrownBy(() -> service.linkItem(teacher.getId(), classroom.getId(), lesson.getId(), request))
+                .isInstanceOf(ApiException.class);
+        verify(linkedItems, never()).save(any());
     }
 
     @Test
