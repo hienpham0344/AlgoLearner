@@ -1,12 +1,12 @@
 import type { DailyPracticeActivity, StudentDashboardData } from './types';
 
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
-const toBangkokDateKey = (timestampMs: number) =>
-  new Date(timestampMs + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (timestampMs: number) =>
+  new Date(timestampMs + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 // Chronological 12-week (84-day) daily coding history for `vite --mode auth-demo`.
 // The last 7 consecutive days (daysAgo 0..6) are active to match `currentStreak: 7`,
@@ -35,7 +35,7 @@ const buildDemoActivityHistory = (totalDays = 84): DailyPracticeActivity[] => {
 
   for (let daysAgo = totalDays - 1; daysAgo >= 0; daysAgo -= 1) {
     history.push({
-      date: toBangkokDateKey(now - daysAgo * DAY_MS),
+      date: toVietnamDateKey(now - daysAgo * DAY_MS),
       solvedCount: DEMO_SOLVED_BY_DAYS_AGO[daysAgo] ?? 0,
     });
   }

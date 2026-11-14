@@ -1,3 +1,4 @@
+import { clearSession } from '@/services/apiClient';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
@@ -29,8 +30,8 @@ import { InteractiveCourseBackground } from '../components/InteractiveCourseBack
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
-const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 const shortDateFormatter = new Intl.DateTimeFormat('en', {
   timeZone: DISPLAY_TIME_ZONE,
@@ -61,13 +62,13 @@ const todayFormatter = new Intl.DateTimeFormat('en', {
   day: 'numeric',
 });
 
-const toBangkokDateKey = (date: Date) =>
-  new Date(date.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (date: Date) =>
+  new Date(date.getTime() + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 const getDeadlineUrgency = (dueAt: string): 'Overdue' | 'Due today' | 'Upcoming' => {
   const due = new Date(dueAt);
   if (due.getTime() < Date.now()) return 'Overdue';
-  return toBangkokDateKey(due) === toBangkokDateKey(new Date()) ? 'Due today' : 'Upcoming';
+  return toVietnamDateKey(due) === toVietnamDateKey(new Date()) ? 'Due today' : 'Upcoming';
 };
 
 const formatDayNumber = (iso: string) => dayNumberFormatter.format(new Date(iso));
@@ -121,15 +122,6 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
     0,
   );
 
-  const totalSubmissionsBaseline = Math.max(
-    totalUngraded + data.recentSubmissions.totalElements,
-    totalUngraded + 8,
-  );
-  const reviewCompletionPercent =
-    totalSubmissionsBaseline > 0
-      ? Math.round(((totalSubmissionsBaseline - totalUngraded) / totalSubmissionsBaseline) * 100)
-      : 100;
-
   const sortedAssignments = [...data.openOrUpcomingAssignments.items].sort(
     (a, b) => Date.parse(a.effectiveDueAt) - Date.parse(b.effectiveDueAt),
   );
@@ -167,20 +159,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                 <p>
                   {totalActiveStudents} enrolled students · {totalUngraded} awaiting review
                 </p>
-                <div className="dashboard-progress-info">
-                  <span>Review completion</span>
-                  <strong>{reviewCompletionPercent}%</strong>
-                </div>
-                <div
-                  className="dashboard-progress-track"
-                  role="progressbar"
-                  aria-label="Review completion progress"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={reviewCompletionPercent}
-                >
-                  <span style={{ width: `${reviewCompletionPercent}%` }} />
-                </div>
+                <p>Tiến độ chấm bài sẽ hiển thị khi phân hệ bài nộp được kết nối.</p>
                 <a className="dashboard-learning-action" href="#review">
                   Review submissions <ArrowRight size={15} aria-hidden="true" />
                 </a>
@@ -235,7 +214,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
               <div className="dashboard-empty dashboard-empty-line">
                 <div>
                   <strong>No open or upcoming assignments.</strong>
-                  <p>Published assignments for your active classrooms will appear here.</p>
+                  <p>Phân hệ bài tập lớp học chưa được kết nối.</p>
                 </div>
               </div>
             )}
@@ -369,7 +348,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
               <div className="dashboard-empty dashboard-empty-line">
                 <div>
                   <strong>No student submissions yet.</strong>
-                  <p>Ungraded work and recent submissions will appear here.</p>
+                  <p>Phân hệ bài nộp và chấm điểm chưa được kết nối.</p>
                 </div>
               </div>
             )}
@@ -420,6 +399,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                     <strong>{data.pendingContributions.problemCount}</strong>
                   </div>
                 </div>
+                <p>Dữ liệu khóa học, bài luyện tập công khai và duyệt nội dung chưa được kết nối.</p>
               </div>
             </div>
           </section>
@@ -746,6 +726,7 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
                     </strong>
                   </div>
                 </div>
+                <p>Dữ liệu khóa học, bài luyện tập công khai và duyệt nội dung chưa được kết nối.</p>
               </div>
             </div>
           </section>
@@ -809,14 +790,16 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
 
   useEffect(() => {
     if (isAxiosError(query.error) && query.error.response?.status === 401) {
-      logout();
+      clearSession();
       navigate('/login', { replace: true });
     }
   }, [query.error, logout, navigate]);
 
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
+  const [signOutError, setSignOutError] = useState<string | null>(null);
+  const signOut = async () => {
+    setSignOutError(null);
+    try { await logout(); navigate('/login', { replace: true }); }
+    catch { setSignOutError('Could not sign out. Check your connection and try again.'); }
   };
 
   const rawDisplayName = user?.fullName || user?.username || role;
@@ -843,7 +826,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
           { label: 'Submissions', href: '#submissions', icon: Activity, current: false },
           { label: 'System log', href: '#activity', icon: FileCode2, current: false },
           { label: 'Security audit', href: '#audit', icon: ShieldAlert, current: false },
-          { label: 'Moderation', href: '#moderation', icon: UserRound, current: false },
+          { label: 'Moderation', href: '/admin/accounts', icon: UserRound, current: false },
         ];
 
   const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
@@ -956,6 +939,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
         </header>
 
         <main className="dashboard-content">
+          {signOutError && <p role="alert">{signOutError}</p>}
           {query.isPending ? (
             <div className="dashboard-fetch-state" role="status">
               <span className="dashboard-eyebrow">{role} WORKSPACE</span>
