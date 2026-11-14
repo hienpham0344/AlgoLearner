@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { DailyPracticeActivity, PracticeStats } from '../types';
 
-const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAYS_PER_WEEK = 7;
 
@@ -49,8 +49,8 @@ const parseBangkokDateKey = (dateKey: string): Date => {
   return new Date(Date.UTC(year, (month || 1) - 1, day || 1, 5, 0, 0));
 };
 
-const toBangkokDateKey = (timestampMs: number) =>
-  new Date(timestampMs + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (timestampMs: number) =>
+  new Date(timestampMs + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 const formatStreakNumber = (streak: number | null): string => {
   if (streak === null) return '—';
@@ -73,7 +73,7 @@ const buildChronologicalGrid = (history: DailyPracticeActivity[], weekCount: num
     byDate.set(entry.date, Math.max(0, entry.solvedCount));
   }
 
-  const latestDateKey = sorted[sorted.length - 1]?.date ?? toBangkokDateKey(Date.now());
+  const latestDateKey = sorted[sorted.length - 1]?.date ?? toVietnamDateKey(Date.now());
   const latestAnchorMs = parseBangkokDateKey(latestDateKey).getTime();
 
   const columns: ActivityCell[][] = [];
@@ -86,7 +86,7 @@ const buildChronologicalGrid = (history: DailyPracticeActivity[], weekCount: num
       const daysBeforeLatest = totalDays - 1 - flatIndex;
       const cellTimeMs = latestAnchorMs - daysBeforeLatest * DAY_MS;
       const dateObj = new Date(cellTimeMs);
-      const dateKey = toBangkokDateKey(cellTimeMs);
+      const dateKey = toVietnamDateKey(cellTimeMs);
       const solvedCount = byDate.get(dateKey) ?? 0;
 
       const cell: ActivityCell = {
@@ -244,6 +244,12 @@ export function PracticePulse({ practice, loading }: PracticePulseProps) {
         <span />
       </div>
     );
+  }
+
+  if (practice.currentStreak === null && practice.totalSolved === null && !hasActivityHistory) {
+    return <div className="dashboard-empty dashboard-empty-notifications">
+      <p>Thống kê luyện tập sẽ hiển thị khi phân hệ này được kết nối.</p>
+    </div>;
   }
 
   const streakLabel =
