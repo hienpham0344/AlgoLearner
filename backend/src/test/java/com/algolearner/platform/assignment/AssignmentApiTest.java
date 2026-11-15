@@ -162,7 +162,7 @@ public class AssignmentApiTest extends com.algolearner.platform.support.Postgres
                         .with(actor(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("GRADED"))
-                .andExpect(jsonPath("$.data.finalScore").value(10.0));
+                .andExpect(jsonPath("$.data.finalScore").value(org.hamcrest.Matchers.nullValue()));
 
         // Student cannot start another attempt because maxAttempts = 1
         mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/attempts", classId, asgId)
@@ -176,6 +176,14 @@ public class AssignmentApiTest extends com.algolearner.platform.support.Postgres
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data[0].id").value(attId))
                 .andExpect(jsonPath("$.data[0].finalScore").value(10.0));
+
+        mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/publish-grades", classId, asgId)
+                        .with(actor(teacher)))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/classrooms/{classId}/assignments/{asgId}", classId, asgId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.myBestScore").value(10.0));
     }
 
     private AccountEntity account(String username, AccountRole role) {

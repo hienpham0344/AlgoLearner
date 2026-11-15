@@ -237,7 +237,12 @@ public class ClassroomModulesCrossIntegrationTest extends com.algolearner.platfo
                         .with(actor(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUBMITTED"))
-                .andExpect(jsonPath("$.data.autoScore").value(10.0));
+                .andExpect(jsonPath("$.data.autoScore").value(org.hamcrest.Matchers.nullValue()));
+
+        mvc.perform(get("/api/v1/classrooms/{classId}/assignments/{assignmentId}/submissions", classId, assignmentId)
+                        .with(actor(teacher)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].autoScore").value(10.0));
 
         // 11. Student marks Lesson complete (Module 4.5)
         mvc.perform(post("/api/v1/classrooms/{classId}/lessons/{lessonId}/complete", classId, lessonId)
@@ -256,6 +261,14 @@ public class ClassroomModulesCrossIntegrationTest extends com.algolearner.platfo
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"overriddenScore\":20.0,\"reason\":\"Bonus for neatness\"}"))
                 .andExpect(status().isNoContent());
+
+        mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{assignmentId}/publish-grades", classId, assignmentId)
+                        .with(actor(teacher)))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/classrooms/{classId}/assignments/{assignmentId}", classId, assignmentId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.myBestScore").value(20.0));
 
         // 13. Teacher attempts hard delete on Lesson 1 -> BLOCKED because linked items/submissions/progress exist!
         mvc.perform(delete("/api/v1/classrooms/{classId}/lessons/{lessonId}", classId, lessonId)
