@@ -34,6 +34,17 @@ public enum ErrorCode {
     UNSUPPORTED_AVATAR_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Avatar must be a supported image"),
     FILE_STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Avatar could not be stored"),
     FEATURE_DATA_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Feature data is not configured"),
+    RESOURCE_NOT_AVAILABLE(HttpStatus.NOT_FOUND, "Resource is not available"),
+    JUDGE_SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Code judge is temporarily unavailable. Please try again later"),
+    PRACTICE_SCOPE_VIOLATION(HttpStatus.BAD_REQUEST, "Classroom practice is ungraded and has no deadline"),
+    CLASSROOM_READ_ONLY(HttpStatus.FORBIDDEN, "Classroom is read-only while its owner is inactive"),
+    RATE_LIMIT_EXCEEDED(HttpStatus.TOO_MANY_REQUESTS, "Too many requests. Please try again later"),
+    CLASSROOM_ARCHIVED(HttpStatus.CONFLICT, "Archived classroom is read-only"),
+    LANGUAGE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "Language is not allowed for this practice"),
+    PRACTICE_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Invalid practice status transition"),
+    PRACTICE_NOT_READY(HttpStatus.CONFLICT, "Practice has no usable testcases"),
+    PRACTICE_NOT_DELETABLE(HttpStatus.CONFLICT, "Only a draft practice without submissions can be deleted"),
+    PRACTICE_READ_ONLY(HttpStatus.CONFLICT, "Archived practice is read-only"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Request could not be completed");
 
     private final HttpStatus httpStatus;
