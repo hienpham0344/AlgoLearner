@@ -1,0 +1,505 @@
+package com.algolearner.platform.practice;
+
+import com.algolearner.platform.auth.AccountEntity;
+import com.algolearner.platform.auth.AccountRepository;
+import com.algolearner.platform.auth.AccountRole;
+import com.algolearner.platform.auth.AccountStatus;
+import com.algolearner.platform.classroom.*;
+import com.algolearner.platform.common.exception.ApiException;
+import com.algolearner.platform.common.exception.JudgeServiceUnavailableException;
+import com.algolearner.platform.common.exception.ResourceNotAvailableException;
+import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import com.algolearner.platform.practice.PracticeDtos.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+
+class PracticeServiceTest {
+    private final ClassroomRepository classrooms = mock(ClassroomRepository.class);
+    private final ClassroomMembershipRepository memberships = mock(ClassroomMembershipRepository.class);
+    private final AccountRepository accounts = mock(AccountRepository.class);
+    private final ClassroomPracticeRepository practices = mock(ClassroomPracticeRepository.class);
+    private final PracticeTestcaseRepository testcases = mock(PracticeTestcaseRepository.class);
+    private final PracticeSubmissionRepository submissions = mock(PracticeSubmissionRepository.class);
+    private final PracticeCompletionRepository completions = mock(PracticeCompletionRepository.class);
+    private final PracticeJudgePort judge = mock(PracticeJudgePort.class);
+    private final AtomicBoolean lessonArchived = new AtomicBoolean(false);
+    private final LessonStatusPort lessons = lessonId -> lessonArchived.get();
+    private final Clock clock = Clock.fixed(Instant.parse("2026-11-15T03:30:00Z"), ZoneOffset.UTC);
+    private final RunRateLimiter limiter = new RunRateLimiter(clock);
+    private PracticeService service;
+
+    private AccountEntity teacher;
+    private AccountEntity otherTeacher;
+    private AccountEntity student;
+    private AccountEntity otherStudent;
+    private ClassroomEntity classroom;
+    private ClassroomPracticeEntity practice;
+    private PracticeTestcaseEntity sample;
+    private PracticeTestcaseEntity hidden;
+
+    @BeforeEach
+    void setUp() {
+        service = new PracticeService(classrooms, memberships, accounts, practices, testcases, submissions, completions,
+                judge, lessons, limiter, clock);
+        teacher = account(AccountRole.TEACHER);
+        otherTeacher = account(AccountRole.TEACHER);
+        student = account(AccountRole.STUDENT);
+        otherStudent = account(AccountRole.STUDENT);
+        classroom = new ClassroomEntity();
+        classroom.setId(UUID.randomUUID());
+        classroom.setOwner(teacher);
+        classroom.setStatus(ClassroomStatus.ACTIVE);
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        member(student);
+
+        practice = new ClassroomPracticeEntity();
+        practice.setId(UUID.randomUUID());
+        practice.setClassroom(classroom);
+        practice.setTitle("Sum");
+        practice.setAllowedLanguages(Set.of(PracticeLanguage.JAVA));
+        practice.setStatus(PracticeStatus.PUBLISHED);
+        when(practices.findByIdAndClassroomId(practice.getId(), classroom.getId())).thenReturn(Optional.of(practice));
+        sample = testcase("1 2", "3", true, 0, 1);
+        hidden = testcase("SECRET-IN", "SECRET-OUT", false, 1, 1);
+        stubVersion(1, sample, hidden);
+        when(practices.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(testcases.countByPracticeIdAndVersionAndSample(eq(practice.getId()), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(1L);
+    }
+
+    // ================================================================ PRC-01 (student)
+
+    @Test @DisplayName("TC-PRC-01-01 RUN with sample and custom input returns feedback and persists nothing")
+    void tcPrc0101_run() {
+        when(judge.run(any())).thenReturn(new PracticeJudgePort.RunResult(
+                List.of(new PracticeJudgePort.CaseResult(0, PracticeVerdict.ACCEPTED, "3", "", 4))));
+
+        var onSamples = service.run(student.getId(), classroom.getId(), practice.getId(), run(null));
+        var onCustom = service.run(student.getId(), classroom.getId(), practice.getId(), run("9 9"));
+
+        assertThat(onSamples.cases()).singleElement().satisfies(c -> assertThat(c.expectedOutput()).isEqualTo("3"));
+        assertThat(onCustom.cases()).singleElement().satisfies(c -> {
+            assertThat(c.input()).isEqualTo("9 9");
+            assertThat(c.expectedOutput()).isNull();
+        });
+        var requests = ArgumentCaptor.forClass(PracticeJudgePort.RunRequest.class);
+        verify(judge, times(2)).run(requests.capture());
+        assertThat(requests.getAllValues().get(0).testcases()).extracting(PracticeJudgePort.JudgeCase::input).containsExactly("1 2");
+        assertThat(requests.getAllValues().get(1).testcases()).extracting(PracticeJudgePort.JudgeCase::input).containsExactly("9 9");
+        verifyNoInteractions(submissions, completions);
+        verify(testcases, never()).findByPracticeIdAndVersionOrderByOrderIndexAsc(any(), anyInt());
+    }
+
+    @Test @DisplayName("TC-PRC-01-01 custom input over 64 KB is rejected before reaching the judge")
+    void tcPrc0101_customInputIsBounded() {
+        String tooBig = "x".repeat(PracticeService.MAX_CUSTOM_INPUT_BYTES + 1);
+        assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(tooBig)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("VALIDATION_FAILED"));
+        verifyNoInteractions(judge, submissions, completions);
+    }
+
+    @Test @DisplayName("TC-PRC-01-01 RUN is limited to 5 per minute per user")
+    void tcPrc0101_rateLimit() {
+        when(judge.run(any())).thenReturn(new PracticeJudgePort.RunResult(
+                List.of(new PracticeJudgePort.CaseResult(0, PracticeVerdict.ACCEPTED, "3", "", 4))));
+        for (int i = 0; i < 5; i++) service.run(student.getId(), classroom.getId(), practice.getId(), run(null));
+
+        assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("RATE_LIMIT_EXCEEDED"));
+        verify(judge, times(5)).run(any());
+    }
+
+    @Test @DisplayName("TC-PRC-01-02 SUBMIT judges the current testcase version, stores it and completes on ACCEPTED")
+    void tcPrc0102_submit() {
+        practice.setTestcaseVersion(3);
+        var s3 = testcase("1 2", "3", true, 0, 3);
+        var h3 = testcase("H3-IN", "H3-OUT", false, 1, 3);
+        stubVersion(3, s3, h3);
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 12, 2048, "{\"ok\":true}"));
+
+        var view = service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+
+        assertThat(view.verdict()).isEqualTo(PracticeVerdict.ACCEPTED);
+        assertThat(view.testcaseVersion()).isEqualTo(3);
+        var request = ArgumentCaptor.forClass(PracticeJudgePort.SubmitRequest.class);
+        verify(judge).submit(request.capture());
+        assertThat(request.getValue().testcaseVersion()).isEqualTo(3);
+        assertThat(request.getValue().testcases()).extracting(PracticeJudgePort.JudgeCase::input).containsExactly("1 2", "H3-IN");
+        var stored = ArgumentCaptor.forClass(PracticeSubmissionEntity.class);
+        verify(submissions).save(stored.capture());
+        assertThat(stored.getValue().getTestcaseVersion()).isEqualTo(3);
+        assertThat(stored.getValue().getJudgeDetails()).isEqualTo("{\"ok\":true}");
+        var completion = ArgumentCaptor.forClass(PracticeCompletionEntity.class);
+        verify(completions).save(completion.capture());
+        assertThat(completion.getValue().getId()).isEqualTo(new PracticeCompletionId(student.getId(), practice.getId()));
+        assertThat(completion.getValue().getFirstAcceptedSubmission()).isSameAs(stored.getValue());
+        assertThat(completion.getValue().getCompletedAt()).isEqualTo(clock.instant());
+    }
+
+    @Test @DisplayName("TC-PRC-01-03 unlimited attempts: every submission is stored, none is blocked")
+    void tcPrc0103_unlimitedAttempts() {
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.WRONG_ANSWER, 5, 1024, null));
+        for (int i = 0; i < 12; i++) service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+
+        verify(submissions, times(12)).save(any());
+        verify(completions, never()).save(any());
+    }
+
+    @Test @DisplayName("TC-PRC-01-04 only ACCEPTED completes, first acceptance is kept, other students are independent")
+    void tcPrc0104_completion() {
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.TIME_LIMIT_EXCEEDED, 2000, 1024, null));
+        var tle = service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        assertThat(tle.verdict()).isEqualTo(PracticeVerdict.TIME_LIMIT_EXCEEDED);
+        verify(completions, never()).save(any());
+
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 5, 1024, null));
+        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        verify(completions, times(1)).save(any());
+
+        when(completions.existsById(new PracticeCompletionId(student.getId(), practice.getId()))).thenReturn(true);
+        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        verify(completions, times(1)).save(any());
+
+        member(otherStudent);
+        service.submit(otherStudent.getId(), classroom.getId(), practice.getId(), code());
+        var saved = ArgumentCaptor.forClass(PracticeCompletionEntity.class);
+        verify(completions, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(c -> c.getId().getStudentId()).containsExactly(student.getId(), otherStudent.getId());
+    }
+
+    @Test @DisplayName("TC-PRC-01-05 DRAFT practice or archived lesson rejects RUN/SUBMIT, history stays")
+    void tcPrc0105_unavailable() {
+        practice.setStatus(PracticeStatus.DRAFT);
+        assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null))).isInstanceOf(ResourceNotAvailableException.class);
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code())).isInstanceOf(ResourceNotAvailableException.class);
+        assertThatThrownBy(() -> service.get(student.getId(), classroom.getId(), practice.getId())).isInstanceOf(ResourceNotAvailableException.class);
+
+        practice.setStatus(PracticeStatus.PUBLISHED);
+        practice.setLessonId(UUID.randomUUID());
+        lessonArchived.set(true);
+        assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null))).isInstanceOf(ResourceNotAvailableException.class);
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code())).isInstanceOf(ResourceNotAvailableException.class);
+        verifyNoInteractions(judge, completions);
+        verify(submissions, never()).save(any());
+
+        // earlier submissions remain readable after the lesson is archived
+        var old = submissionOf(student);
+        when(submissions.findByIdAndPracticeId(old.getId(), practice.getId())).thenReturn(Optional.of(old));
+        assertThat(service.submission(student.getId(), classroom.getId(), practice.getId(), old.getId()).id()).isEqualTo(old.getId());
+    }
+
+    @Test @DisplayName("TC-PRC-01-06 suspended student or read-only class: reads work, RUN/SUBMIT are 403, data untouched")
+    void tcPrc0106_readOnly() {
+        student.setStatus(AccountStatus.SUSPENDED);
+        assertThat(service.get(student.getId(), classroom.getId(), practice.getId()).id()).isEqualTo(practice.getId());
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("FORBIDDEN_OPERATION"));
+        assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("FORBIDDEN_OPERATION"));
+
+        student.setStatus(AccountStatus.ACTIVE);
+        teacher.setStatus(AccountStatus.SUSPENDED);
+        assertThat(service.get(student.getId(), classroom.getId(), practice.getId()).id()).isEqualTo(practice.getId());
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("CLASSROOM_READ_ONLY"));
+        verifyNoInteractions(judge);
+        verify(completions, never()).save(any());
+        verify(submissions, never()).save(any());
+    }
+
+    @Test @DisplayName("TC-PRC-01-07 a student outside the class (or who left) gets 403")
+    void tcPrc0107_nonMember() {
+        assertForbidden(() -> service.get(otherStudent.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.list(otherStudent.getId(), classroom.getId(), null));
+        assertForbidden(() -> service.run(otherStudent.getId(), classroom.getId(), practice.getId(), run(null)));
+        var left = new ClassroomMembershipEntity();
+        left.setStatus(MembershipStatus.LEFT);
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), otherStudent.getId())).thenReturn(Optional.of(left));
+        assertForbidden(() -> service.submit(otherStudent.getId(), classroom.getId(), practice.getId(), code()));
+        verifyNoInteractions(judge);
+    }
+
+    @Test @DisplayName("TC-PRC-01-08 judge outage: 503, technical log, no fake verdict, nothing stored")
+    void tcPrc0108_judgeUnavailable() {
+        doThrow(new RuntimeException("connection timed out")).when(judge).submit(any());
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOf(JudgeServiceUnavailableException.class);
+
+        doThrow(new JudgeServiceUnavailableException("sandbox crashed")).when(judge).submit(any());
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOf(JudgeServiceUnavailableException.class).hasMessage("sandbox crashed");
+
+        doReturn(null).when(judge).submit(any());
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOf(JudgeServiceUnavailableException.class);
+
+        doReturn(new PracticeJudgePort.SubmitResult(null, null, null, null)).when(judge).submit(any());
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOf(JudgeServiceUnavailableException.class);
+
+        doThrow(new RuntimeException("boom")).when(judge).run(any());
+        assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null)))
+                .isInstanceOf(JudgeServiceUnavailableException.class);
+
+        verify(submissions, never()).save(any());
+        verify(completions, never()).save(any());
+    }
+
+    @Test
+    void languageOutsideAllowedSetIsRejected() {
+        var python = new CodeRequest(PracticeLanguage.PYTHON, "print(3)");
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), python))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("LANGUAGE_NOT_ALLOWED"));
+        verifyNoInteractions(judge);
+    }
+
+    @Test
+    void studentDetailLoadsOnlySampleTestcases() {
+        var detail = service.get(student.getId(), classroom.getId(), practice.getId());
+
+        assertThat(detail.sampleTestcases()).extracting(SampleTestcase::input).containsExactly("1 2");
+        assertThat(detail.toString()).doesNotContain("SECRET");
+        verify(testcases, never()).findByPracticeIdAndVersionOrderByOrderIndexAsc(any(), anyInt());
+    }
+
+    @Test
+    void studentCannotReadAnotherStudentsSubmission() {
+        member(otherStudent);
+        var other = submissionOf(otherStudent);
+        when(submissions.findByIdAndPracticeId(other.getId(), practice.getId())).thenReturn(Optional.of(other));
+
+        assertForbidden(() -> service.submission(student.getId(), classroom.getId(), practice.getId(), other.getId()));
+        assertThat(service.submission(teacher.getId(), classroom.getId(), practice.getId(), other.getId()).studentId()).isEqualTo(otherStudent.getId());
+    }
+
+    // ================================================================ PRC-10 (teacher)
+
+    @Test @DisplayName("TC-PRC-10-01 create stores defaults, starter code, sample/hidden split, starts as DRAFT")
+    void tcPrc1001_create() {
+        var input = new CreatePractice("Sum of two", "Add", null, null, Set.of(PracticeLanguage.JAVA, PracticeLanguage.PYTHON),
+                Map.of(PracticeLanguage.JAVA, "class Main {}"), null, null, null,
+                List.of(new TestcaseInput("1 2", "3", true, null), new TestcaseInput("5 5", "10", false, null)), null, null);
+
+        var detail = service.create(teacher.getId(), classroom.getId(), input);
+
+        assertThat(detail.status()).isEqualTo(PracticeStatus.DRAFT);
+        assertThat(detail.timeLimitMs()).isEqualTo(2000);
+        assertThat(detail.memoryLimitMb()).isEqualTo(256);
+        assertThat(detail.problemType()).isEqualTo(PracticeProblemType.STANDARD_IO);
+        assertThat(detail.testcaseVersion()).isEqualTo(1);
+        assertThat(detail.starterCode()).containsEntry(PracticeLanguage.JAVA, "class Main {}");
+        var saved = ArgumentCaptor.forClass(PracticeTestcaseEntity.class);
+        verify(testcases, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(PracticeTestcaseEntity::isSample).containsExactly(true, false);
+        assertThat(saved.getAllValues()).extracting(PracticeTestcaseEntity::getVersion).containsOnly(1);
+    }
+
+    @Test @DisplayName("TC-PRC-10-01 starter code for a language that is not allowed is rejected")
+    void tcPrc1001_starterCodeMustMatchLanguages() {
+        var input = new CreatePractice("T", null, PracticeProblemType.FUNCTION_METHOD, null, Set.of(PracticeLanguage.JAVA),
+                Map.of(PracticeLanguage.PYTHON, "pass"), null, null, null, null, null, null);
+        assertThatThrownBy(() -> service.create(teacher.getId(), classroom.getId(), input))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("LANGUAGE_NOT_ALLOWED"));
+    }
+
+    @Test @DisplayName("TC-PRC-10-02 lesson link: archived lesson makes the practice unavailable")
+    void tcPrc1002_lessonLink() {
+        var lessonId = UUID.randomUUID();
+        var update = new UpdatePractice(null, null, null, lessonId, null, null, null, null, null, null);
+
+        var linked = service.update(teacher.getId(), classroom.getId(), practice.getId(), update);
+        assertThat(linked.lessonId()).isEqualTo(lessonId);
+        assertThat(linked.available()).isTrue();
+
+        lessonArchived.set(true);
+        assertThat(service.get(teacher.getId(), classroom.getId(), practice.getId()).available()).isFalse();
+        assertThat(practice.getStatus()).isEqualTo(PracticeStatus.PUBLISHED);
+    }
+
+    @Test @DisplayName("TC-PRC-10-03 editing a testcase used by submissions bumps the version; old rows are untouched")
+    void tcPrc1003_versioning() {
+        when(submissions.existsByPracticeIdAndTestcaseVersion(practice.getId(), 1)).thenReturn(true);
+        when(testcases.findByIdAndPracticeIdAndVersion(hidden.getId(), practice.getId(), 1)).thenReturn(Optional.of(hidden));
+
+        var edited = service.updateTestcase(teacher.getId(), classroom.getId(), practice.getId(), hidden.getId(),
+                new TestcaseInput("NEW-IN", "NEW-OUT", false, null), true);
+
+        assertThat(practice.getTestcaseVersion()).isEqualTo(2);
+        assertThat(edited.version()).isEqualTo(2);
+        assertThat(edited.id()).isNotEqualTo(hidden.getId());
+        assertThat(hidden.getInput()).isEqualTo("SECRET-IN");
+        assertThat(hidden.getVersion()).isEqualTo(1);
+        var copies = ArgumentCaptor.forClass(PracticeTestcaseEntity.class);
+        verify(testcases, times(2)).save(copies.capture());
+        assertThat(copies.getAllValues()).extracting(PracticeTestcaseEntity::getVersion).containsOnly(2);
+        verify(submissions).markForRejudge(practice.getId(), 2, RejudgeStatus.PENDING_REJUDGE);
+    }
+
+    @Test @DisplayName("TC-PRC-10-03 without a rejudge request old submissions are not flagged; unused version edits in place")
+    void tcPrc1003_noRejudgeAndInPlace() {
+        when(testcases.findByIdAndPracticeIdAndVersion(hidden.getId(), practice.getId(), 1)).thenReturn(Optional.of(hidden));
+
+        service.updateTestcase(teacher.getId(), classroom.getId(), practice.getId(), hidden.getId(), new TestcaseInput("A", "B", false, null), false);
+
+        assertThat(practice.getTestcaseVersion()).isEqualTo(1);
+        assertThat(hidden.getInput()).isEqualTo("A");
+        verify(submissions, never()).markForRejudge(any(), anyInt(), any());
+
+        when(submissions.existsByPracticeIdAndTestcaseVersion(practice.getId(), 1)).thenReturn(true);
+        service.addTestcase(teacher.getId(), classroom.getId(), practice.getId(), new TestcaseInput("C", "D", false, null), false);
+        assertThat(practice.getTestcaseVersion()).isEqualTo(2);
+        verify(submissions, never()).markForRejudge(any(), anyInt(), any());
+    }
+
+    @Test @DisplayName("TC-PRC-10-04 a teacher who does not own the class, and students, get 403")
+    void tcPrc1004_idor() {
+        var create = new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA), null, null, null, null, null, null, null);
+        assertForbidden(() -> service.create(otherTeacher.getId(), classroom.getId(), create));
+        assertForbidden(() -> service.update(otherTeacher.getId(), classroom.getId(), practice.getId(), new UpdatePractice("x", null, null, null, null, null, null, null, null, null)));
+        assertForbidden(() -> service.changeStatus(otherTeacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED)));
+        assertForbidden(() -> service.delete(otherTeacher.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.listTestcases(otherTeacher.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.classSubmissions(otherTeacher.getId(), classroom.getId(), practice.getId(), null, null));
+        assertForbidden(() -> service.create(student.getId(), classroom.getId(), create));
+        assertForbidden(() -> service.listTestcases(student.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.run(teacher.getId(), classroom.getId(), practice.getId(), run(null)));
+        verify(practices, never()).save(any());
+    }
+
+    @Test @DisplayName("TC-PRC-10-05 deadline or maxScore > 0 is rejected as 400; maxScore 0 is fine")
+    void tcPrc1005_ungradedAndNoDeadline() {
+        var withDeadline = new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA), null, null, null, null, null, Instant.parse("2026-12-01T00:00:00Z"), null);
+        var withScore = new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA), null, null, null, null, null, null, 10);
+        for (var bad : List.of(withDeadline, withScore)) {
+            assertThatThrownBy(() -> service.create(teacher.getId(), classroom.getId(), bad))
+                    .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_SCOPE_VIOLATION"));
+        }
+        assertThatThrownBy(() -> service.update(teacher.getId(), classroom.getId(), practice.getId(),
+                new UpdatePractice(null, null, null, null, null, null, null, null, null, 5)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_SCOPE_VIOLATION"));
+        verify(practices, never()).save(any());
+
+        var zero = new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA), null, null, null, null, null, null, 0);
+        assertThat(service.create(teacher.getId(), classroom.getId(), zero).status()).isEqualTo(PracticeStatus.DRAFT);
+    }
+
+    @Test @DisplayName("TC-PRC-10-06 archiving changes status only: submissions and completions are not touched")
+    void tcPrc1006_archiveKeepsData() {
+        var detail = service.changeStatus(teacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED));
+
+        assertThat(detail.status()).isEqualTo(PracticeStatus.ARCHIVED);
+        verifyNoInteractions(submissions, completions);
+        verify(testcases, never()).deleteByPracticeId(any());
+        verify(practices, never()).delete(any());
+    }
+
+    @Test
+    void publishNeedsSampleAndHiddenTestcaseOfCurrentVersion() {
+        practice.setStatus(PracticeStatus.DRAFT);
+        when(testcases.countByPracticeIdAndVersionAndSample(practice.getId(), 1, true)).thenReturn(1L);
+        when(testcases.countByPracticeIdAndVersionAndSample(practice.getId(), 1, false)).thenReturn(0L);
+
+        assertThatThrownBy(() -> service.changeStatus(teacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.PUBLISHED)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_NOT_READY"));
+        assertThat(practice.getStatus()).isEqualTo(PracticeStatus.DRAFT);
+    }
+
+    @Test
+    void statusCanOnlyMoveForwardAndOnlyDraftsAreDeleted() {
+        practice.setStatus(PracticeStatus.ARCHIVED);
+        assertThatThrownBy(() -> service.changeStatus(teacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.PUBLISHED)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_INVALID_STATUS_TRANSITION"));
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId(), practice.getId()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_NOT_DELETABLE"));
+        practice.setStatus(PracticeStatus.DRAFT);
+        service.delete(teacher.getId(), classroom.getId(), practice.getId());
+        verify(practices).delete(practice);
+    }
+
+    @Test
+    void archivedClassroomIsReadOnly() {
+        classroom.setStatus(ClassroomStatus.ARCHIVED);
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("CLASSROOM_ARCHIVED"));
+        verifyNoInteractions(judge);
+    }
+
+    @Test
+    void unknownTestcaseIsNotFound() {
+        assertThatThrownBy(() -> service.deleteTestcase(teacher.getId(), classroom.getId(), practice.getId(), UUID.randomUUID(), false))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ---- helpers
+    private static void assertForbidden(Runnable call) {
+        assertThatThrownBy(call::run).isInstanceOfSatisfying(ApiException.class,
+                e -> assertThat(e.getErrorCode()).isEqualTo("FORBIDDEN_OPERATION"));
+    }
+
+    private static CodeRequest code() { return new CodeRequest(PracticeLanguage.JAVA, "class Main {}"); }
+    private static RunInput run(String customInput) { return new RunInput(PracticeLanguage.JAVA, "class Main {}", customInput); }
+
+    private void stubVersion(int version, PracticeTestcaseEntity... rows) {
+        when(testcases.findByPracticeIdAndVersionOrderByOrderIndexAsc(practice.getId(), version)).thenReturn(List.of(rows));
+        when(testcases.findByPracticeIdAndVersionAndSampleTrueOrderByOrderIndexAsc(practice.getId(), version))
+                .thenReturn(java.util.Arrays.stream(rows).filter(PracticeTestcaseEntity::isSample).toList());
+    }
+
+    private PracticeSubmissionEntity submissionOf(AccountEntity owner) {
+        var s = new PracticeSubmissionEntity();
+        s.setId(UUID.randomUUID());
+        s.setPractice(practice);
+        s.setStudent(owner);
+        s.setLanguage(PracticeLanguage.JAVA);
+        s.setVerdict(PracticeVerdict.WRONG_ANSWER);
+        s.setTestcaseVersion(1);
+        s.setCode("x");
+        return s;
+    }
+
+    private AccountEntity account(AccountRole role) {
+        var a = new AccountEntity();
+        a.setId(UUID.randomUUID());
+        a.setRole(role);
+        a.setStatus(AccountStatus.ACTIVE);
+        a.setUsername(role.name().toLowerCase() + a.getId());
+        when(accounts.findById(a.getId())).thenReturn(Optional.of(a));
+        return a;
+    }
+
+    private void member(AccountEntity who) {
+        var m = new ClassroomMembershipEntity();
+        m.setStatus(MembershipStatus.ACTIVE);
+        m.setStudent(who);
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), who.getId())).thenReturn(Optional.of(m));
+    }
+
+    private PracticeTestcaseEntity testcase(String in, String out, boolean isSample, int order, int version) {
+        var t = new PracticeTestcaseEntity();
+        t.setId(UUID.randomUUID());
+        t.setPractice(practice);
+        t.setVersion(version);
+        t.setInput(in);
+        t.setExpectedOutput(out);
+        t.setSample(isSample);
+        t.setOrderIndex(order);
+        return t;
+    }
+}
