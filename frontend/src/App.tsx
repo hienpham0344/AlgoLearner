@@ -7,6 +7,7 @@ import { RegisterPage } from '@/features/auth/pages/RegisterPage';
 import { VerifyOtpPage } from '@/features/auth/pages/VerifyOtpPage';
 import { ForgotPasswordPage } from '@/features/auth/pages/ForgotPasswordPage';
 import { ResetPasswordPage } from '@/features/auth/pages/ResetPasswordPage';
+import { AccountSecurityPage } from '@/features/auth/pages/AccountSecurityPage';
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage';
 import { AuthExperience } from '@/features/auth/components/AuthExperience';
 import { ClassroomSourceRoute } from '@/features/classroom/pages/ClassroomSourceRoute';
@@ -50,6 +51,7 @@ export const App: React.FC = () => {
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/u/:username" element={<PublicProfilePage />} />
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+      <Route path="/account/security" element={<ProtectedRoute><AccountSecurityPage /></ProtectedRoute>} />
       <Route path="/admin/accounts" element={<ProtectedRoute><AdminAccountsPage /></ProtectedRoute>} />
       <Route
         path="/dashboard"

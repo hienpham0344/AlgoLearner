@@ -24,6 +24,7 @@ public enum ErrorCode {
     AVATAR_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, "Avatar exceeds upload limit"),
     UNSUPPORTED_AVATAR_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Avatar must be a supported image"),
     FILE_STORAGE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Avatar could not be stored"),
+    FEATURE_DATA_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "Feature data is not configured"),
     ANNOUNCEMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "Announcement not found"),
     LESSON_NOT_FOUND(HttpStatus.NOT_FOUND, "Lesson not found"),
     CANNOT_HARD_DELETE_LESSON(HttpStatus.BAD_REQUEST, "Cannot permanently delete lesson with existing student progress or submissions; use archive instead"),

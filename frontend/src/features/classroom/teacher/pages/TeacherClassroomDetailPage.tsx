@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { ClassroomSummaryCard } from '../../components/ClassroomSummaryCard';
 import { ClassroomCodePanel } from '../../components/ClassroomCodePanel';
@@ -9,6 +9,7 @@ import { ClassroomInvitationsPanel } from '../../components/ClassroomInvitations
 import { DirectAddStudentModal } from '../../components/DirectAddStudentModal';
 import { InviteStudentModal } from '../../components/InviteStudentModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnouncementsList';
 import { useClassroomStore } from '../../mock/useClassroomStore';
 import {
   Users,
@@ -20,6 +21,8 @@ import {
   Archive,
   ShieldAlert,
   Plus,
+  Bell,
+  Pin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
@@ -41,11 +44,32 @@ export const TeacherClassroomDetailPage: React.FC = () => {
     rejectJoinRequest,
     createInvitation,
     revokeInvitation,
+    getAnnouncements,
+    createAnnouncement,
+    updateAnnouncement,
+    deleteAnnouncement,
+    togglePinAnnouncement,
   } = useClassroomStore('TEACHER');
 
   const classroom = id ? getClassroom(id) : undefined;
 
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'MEMBERS' | 'CODE' | 'SETTINGS'>('OVERVIEW');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab')?.toUpperCase();
+  const announcementIdParam = searchParams.get('announcementId');
+
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ANNOUNCEMENTS' | 'MEMBERS' | 'CODE' | 'SETTINGS'>(() => {
+    if (tabParam === 'ANNOUNCEMENTS' || announcementIdParam) return 'ANNOUNCEMENTS';
+    if (tabParam === 'MEMBERS') return 'MEMBERS';
+    if (tabParam === 'CODE') return 'CODE';
+    if (tabParam === 'SETTINGS') return 'SETTINGS';
+    return 'OVERVIEW';
+  });
+
+  React.useEffect(() => {
+    if (tabParam === 'ANNOUNCEMENTS' || announcementIdParam) {
+      setActiveTab('ANNOUNCEMENTS');
+    }
+  }, [tabParam, announcementIdParam]);
   const [membersSubTab, setMembersSubTab] = useState<'ROSTER' | 'REQUESTS' | 'INVITATIONS'>('ROSTER');
 
   // Modals
@@ -96,6 +120,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
     );
   }
 
+  const classroomAnnouncements = getAnnouncements(classroom.id);
   const isArchived = classroom.status === 'ARCHIVED';
   const pendingRequestsCount = classroom.joinRequests.filter(
     r => r.status === 'PENDING_APPROVAL',
@@ -154,12 +179,31 @@ export const TeacherClassroomDetailPage: React.FC = () => {
           type="button"
           className="classroom-subnav-link"
           data-active={activeTab === 'OVERVIEW'}
-          onClick={() => setActiveTab('OVERVIEW')}
+          onClick={() => {
+            setActiveTab('OVERVIEW');
+            setSearchParams({});
+          }}
           role="tab"
           aria-selected={activeTab === 'OVERVIEW'}
         >
           <BookOpen size={16} aria-hidden="true" />
           <span>Overview & Modules</span>
+        </button>
+
+        <button
+          type="button"
+          className="classroom-subnav-link"
+          data-active={activeTab === 'ANNOUNCEMENTS'}
+          onClick={() => {
+            setActiveTab('ANNOUNCEMENTS');
+            setSearchParams({ tab: 'announcements' });
+          }}
+          role="tab"
+          aria-selected={activeTab === 'ANNOUNCEMENTS'}
+        >
+          <Bell size={16} aria-hidden="true" />
+          <span>Announcements</span>
+          <span className="classroom-subnav-badge">{classroomAnnouncements.length}</span>
         </button>
 
         <button
@@ -206,6 +250,19 @@ export const TeacherClassroomDetailPage: React.FC = () => {
       </nav>
 
       {/* 03 / Tab Contents */}
+      {activeTab === 'ANNOUNCEMENTS' && (
+        <ClassroomAnnouncementsList
+          classroomId={classroom.id}
+          isTeacherOrAdmin={true}
+          announcements={classroomAnnouncements}
+          highlightedId={announcementIdParam}
+          onCreate={data => createAnnouncement({ classroomId: classroom.id, ...data })}
+          onUpdate={(annId, data) => updateAnnouncement(annId, data)}
+          onDelete={annId => deleteAnnouncement(annId)}
+          onTogglePin={annId => togglePinAnnouncement(annId)}
+        />
+      )}
+
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-8">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -238,7 +295,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
                 Announcements
               </div>
               <div className="text-2xl font-black text-slate-900 mt-1">
-                {classroom.stats?.announcementsCount ?? 4}
+                {classroomAnnouncements.length}
               </div>
             </div>
           </div>
@@ -317,6 +374,55 @@ export const TeacherClassroomDetailPage: React.FC = () => {
                     ? 'Students join immediately using this code.'
                     : 'Requests require your approval.'}
                 </p>
+              </div>
+
+              {/* Announcements Noticeboard Preview (FE 4.4) */}
+              <div className="classroom-glass-card p-6 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-mono tracking-widest text-slate-500 block">
+                    Announcements Noticeboard
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('ANNOUNCEMENTS');
+                      setSearchParams({ tab: 'announcements' });
+                    }}
+                    className="text-xs font-semibold text-slate-900 hover:underline"
+                  >
+                    View All ({classroomAnnouncements.length}) →
+                  </button>
+                </div>
+                {classroomAnnouncements.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    {classroomAnnouncements.slice(0, 2).map(ann => (
+                      <div
+                        key={ann.id}
+                        onClick={() => {
+                          setActiveTab('ANNOUNCEMENTS');
+                          setSearchParams({ tab: 'announcements', announcementId: ann.id });
+                        }}
+                        className="p-3 rounded-xl bg-white/60 border border-slate-200/60 hover:bg-white cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-1.5 mb-1">
+                          {ann.isPinned && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/70">
+                              <Pin size={9} className="rotate-45" /> Pinned
+                            </span>
+                          )}
+                          <span className="text-xs font-bold text-slate-900 truncate">
+                            {ann.title}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 line-clamp-1">
+                          {ann.content.slice(0, 80)}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">No announcements published yet.</p>
+                )}
               </div>
             </div>
           </div>

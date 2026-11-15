@@ -4,7 +4,7 @@ import { DeactivateAccountForm, SessionManager } from '../components/AccountSecu
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowUpRight, Camera, Check, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { profileApi, type OwnerProfile } from '../api/profileApi';
@@ -53,13 +53,15 @@ const MAX_BIO_LENGTH = 200;
 
 function ProfileFolder({ profile }: { profile: OwnerProfile }) {
   const { token } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialTab = FOLDER_TABS.find(tab => tab.id === searchParams.get('tab'))?.id ?? 'profile';
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<Map<FolderTabId, HTMLButtonElement>>(new Map());
 
   // Layered sheet transition state
-  const [activeTab, setActiveTab] = useState<FolderTabId>('profile');
-  const [displayTab, setDisplayTab] = useState<FolderTabId>('profile');
+  const [activeTab, setActiveTab] = useState<FolderTabId>(initialTab);
+  const [displayTab, setDisplayTab] = useState<FolderTabId>(initialTab);
   const [recedingTab, setRecedingTab] = useState<FolderTabId | null>(null);
   const [enteringTab, setEnteringTab] = useState<FolderTabId | null>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);

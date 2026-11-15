@@ -31,6 +31,13 @@ Spring Boot tự nó không nạp `.env`; khi chạy Maven trực tiếp cần t
 `mvn-local.ps1` hỗ trợ nạp file cho PowerShell.
 
 Flyway quản lý schema; Hibernate chỉ `validate`, không xóa/tạo lại bảng khi restart.
+Hai lịch sử xác thực đã tồn tại: Supabase hiện dùng `V202611100001__internal_registration.sql`
+và mặc định nạp `classpath:db/migration`. Database từng chạy
+`V202611100001__auth_module_schema.sql` từ `main` phải đặt
+`FLYWAY_LOCATIONS=classpath:db/main-auth` trước khi khởi động. Track này giữ nguyên
+các migration đã áp dụng, bổ sung schema cho `internal-auth`, chuyển OTP còn hạn và
+thu hồi các refresh session cũ vì hợp đồng cookie mới. Không đổi track trên một
+database đã có `flyway_schema_history`; kiểm tra cột `script` trong bảng này trước.
 Các bảng nghiệp vụ bật RLS và thu hồi quyền trực tiếp của `anon`/`authenticated`:
 frontend chỉ gọi Spring API, không truy cập bảng tài khoản qua Supabase Data API.
 Backend dùng JDBC owner role; phân quyền role/owner/student được kiểm tra trong Spring.

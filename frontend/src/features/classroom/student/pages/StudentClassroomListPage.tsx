@@ -233,7 +233,7 @@ export const StudentClassroomListPage: React.FC = () => {
         isOpen={isJoinModalOpen}
         onClose={() => setIsJoinModalOpen(false)}
         onJoin={code => {
-          const res = joinByCode(code);
+          const res = joinByCode(code, currentPersona);
           setFeedback(res);
           return res;
         }}
