@@ -154,13 +154,6 @@ public class AuthController {
         return ApiResponse.success(sessions.list(accountId(auth), sessionId(auth)));
     }
 
-    @GetMapping("/me")
-    @Operation(summary = "Read the current authenticated account")
-    @SecurityRequirement(name = "bearerAuth")
-    public ApiResponse<AuthUser> me(JwtAuthenticationToken auth) {
-        return ApiResponse.success(service.me(accountId(auth)));
-    }
-
     @DeleteMapping("/sessions/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Revoke another session belonging to this account")
     @SecurityRequirement(name = "bearerAuth")
