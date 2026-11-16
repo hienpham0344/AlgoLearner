@@ -73,6 +73,7 @@ lerna-debug.log*
 *.iml
 *.ipr
 .vscode/
+.vs/
 *.sublime-project
 *.sublime-workspace
 .DS_Store
