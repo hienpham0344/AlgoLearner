@@ -55,6 +55,14 @@ class QuizConcurrencyTest {
         assertThat(results.getFirst().id()).isEqualTo(results.getLast().id());
         assertThat(attempts.findByQuizIdAndStudentIdOrderByNumberAsc(quizId,student)).hasSize(1);
     }
+    @Test void startAfterExpiryCreatesNextAttemptWhenQuotaRemains() {
+        var first=service.start(student,classId,quizId);
+        clock.now=NOW.plusSeconds(60);
+        var second=service.start(student,classId,quizId);
+        assertThat(second.id()).isNotEqualTo(first.id());
+        assertThat(second.status()).isEqualTo("ACTIVE");
+        assertThat(attempts.findById(first.id()).orElseThrow().getStatus()).isEqualTo("SUBMITTED");
+    }
     @Test void concurrentIndependentAutosavesPreserveBothAnswers() throws Exception {
         var a=service.start(student,classId,quizId);
         parallel(()->service.autosave(student,classId,quizId,a.id(),QUESTION,new Answer(List.of(CORRECT))),
