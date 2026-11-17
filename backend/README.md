@@ -16,13 +16,20 @@ mvn spring-boot:run
 Mock mode is opt-in: set `SPRING_PROFILES_ACTIVE=mock,dev` locally (tests use `mock,test`).
 There is no default mock profile. The unsigned decoder is disabled for `prod` and `production`,
 even if mock/dev/test profiles are also enabled. Never enable mock mode on a public deployment.
-Production requires real repository adapters (not implemented here), plus `JWT_ISSUER`,
-`JWT_AUDIENCE` and `JWT_JWK_SET_URI` (see `.env.example`). Issuer and JWK URL must use HTTPS.
-`JwtAuthenticationConfiguration` verifies RS256/ES256 signatures using the provider's public
-JWKs, exact issuer, audience membership and canonical UUID subject. Tokens require `iat` and
+For 4.1 outside mock mode, set `JWT_ISSUER` (HTTPS), `JWT_AUDIENCE`,
+`JWT_SIGNING_PRIVATE_KEY_PATH` (RSA PKCS#8 PEM), PostgreSQL connection settings,
+`SMTP_HOST`/`SMTP_PORT`, and `AUTH_MAIL_FROM` (see `.env.example`).
+The server signs its own RS256 access tokens and verifies the account and session on each request.
+The `test` profile generates an ephemeral signing key only for tests.
+Set `ADMIN_EMAIL`, `ADMIN_USERNAME`, and a BCrypt `ADMIN_PASSWORD_HASH` together to create
+the fixed administrator at startup. Public registration rejects `ADMIN`.
+The 4.2/4.3 production persistence adapters remain separate work; unavailable 4.2 reads
+return HTTP 503 rather than mock data.
+`JwtAuthenticationConfiguration` verifies locally issued RS256 signatures, exact issuer,
+audience membership and canonical UUID subject. Tokens require `iat` and
 `exp`; future `iat`/`nbf` and expired tokens are rejected with no clock skew allowance.
-Unsigned mock tokens and HMAC tokens are rejected. Missing/invalid settings fail decoder startup;
-JWK retrieval/signature verification happens when decoding a token. Role still comes from the server account.
+Unsigned mock tokens and HMAC tokens are rejected. Missing/invalid settings fail startup;
+role and active session still come from the server database.
 Swagger UI: http://localhost:8080/swagger-ui/index.html. OpenAPI: http://localhost:8080/v3/api-docs.
 `.env.example` lists local settings; Spring does not load this file automatically.
 Use `./mvn-local.ps1 spring-boot:run` in PowerShell to load `backend/.env` for that invocation.

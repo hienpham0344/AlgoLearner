@@ -1,10 +1,13 @@
 package com.algolearner.platform.common.security;
 
 import java.net.URI;
+import java.security.KeyPair;
+import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -26,7 +29,16 @@ public class JwtAuthenticationConfiguration {
             @Value("${app.security.jwt.issuer:}") String issuer,
             @Value("${app.security.jwt.audience:}") String audience,
             @Value("${app.security.jwt.jwk-set-uri:}") String jwkSetUri,
-            Clock clock) {
+            Clock clock, ObjectProvider<KeyPair> authSigningKeys) {
+        KeyPair ownKeys = authSigningKeys.getIfAvailable();
+        if (ownKeys != null) {
+            requireHttps(issuer, "JWT issuer");
+            Assert.hasText(audience, "JWT audience is required");
+            NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey((RSAPublicKey) ownKeys.getPublic())
+                    .signatureAlgorithm(SignatureAlgorithm.RS256).build();
+            decoder.setJwtValidator(claimValidator(issuer, audience, clock));
+            return decoder;
+        }
         return createDecoder(issuer, audience, jwkSetUri, clock, new RestTemplate());
     }
 
@@ -42,7 +54,13 @@ public class JwtAuthenticationConfiguration {
                 algorithms.add(SignatureAlgorithm.RS256);
                 algorithms.add(SignatureAlgorithm.ES256);
             }).build();
-        decoder.setJwtValidator(jwt -> {
+        decoder.setJwtValidator(claimValidator(issuer, audience, clock));
+        return decoder;
+    }
+
+    private static org.springframework.security.oauth2.core.OAuth2TokenValidator<org.springframework.security.oauth2.jwt.Jwt>
+            claimValidator(String issuer, String audience, Clock clock) {
+        return jwt -> {
             Instant now = clock.instant();
             String subject = jwt.getSubject();
             boolean validSubject = false;
@@ -60,8 +78,7 @@ public class JwtAuthenticationConfiguration {
                         "JWT claims are invalid", null));
             }
             return OAuth2TokenValidatorResult.success();
-        });
-        return decoder;
+        };
     }
 
     private static void requireHttps(String value, String name) {

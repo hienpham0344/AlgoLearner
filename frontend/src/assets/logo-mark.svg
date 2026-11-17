@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="76" height="80" viewBox="0 0 76 80" fill="none">
+<g id="AlgoLearn_____Code_buddy" transform="translate(0 16) rotate(-7)">
+<path id="Code_buddy_____lime_silhouette" transform="translate(2 2)" d="M15 0H38C47 0 52 6 52 15V37C52 47 46 52 37 52H15C5 52 0 46 0 37V16C0 6 5 0 15 0Z" fill="#111617"/>
+<path id="Terminal_____winking_chevron" transform="translate(15 18)" d="M0 0L9 8L0 16" stroke="#EDF5F7" stroke-width="4.5"/>
+<path id="Terminal_____steady_underscore" transform="translate(31 35)" d="M0 0H9" stroke="#EDF5F7" stroke-width="4.5" stroke-linejoin="round"/>
+<circle id="Terminal_____wide-open_round_eye" opacity="0" transform="translate(12.5 19)" cx="7" cy="7" r="7" stroke="#EDF5F7" stroke-width="4.5"/>
+</g>
+</svg>

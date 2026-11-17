@@ -31,6 +31,15 @@ public class PageResponse<T> {
         @Schema(description = "List of items in the current page")
         private final List<T> items;
 
+        @Schema(description = "Pagination metadata")
+        private final Pagination pagination;
+    }
+
+    @Getter
+    @Builder
+    @Schema(description = "Pagination metadata")
+    public static class Pagination {
+
         @Schema(description = "Current page number (0-indexed)", example = "0")
         private final int page;
 
@@ -51,14 +60,17 @@ public class PageResponse<T> {
     }
 
     public static <T> PageResponse<T> fromPage(Page<T> springPage) {
-        PaginatedData<T> paginatedData = PaginatedData.<T>builder()
-                .items(springPage.getContent())
+        Pagination pagination = Pagination.builder()
                 .page(springPage.getNumber())
                 .size(springPage.getSize())
                 .totalElements(springPage.getTotalElements())
                 .totalPages(springPage.getTotalPages())
                 .isFirst(springPage.isFirst())
                 .isLast(springPage.isLast())
+                .build();
+        PaginatedData<T> paginatedData = PaginatedData.<T>builder()
+                .items(springPage.getContent())
+                .pagination(pagination)
                 .build();
 
         return PageResponse.<T>builder()

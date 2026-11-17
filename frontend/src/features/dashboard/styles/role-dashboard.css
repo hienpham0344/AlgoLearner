@@ -1,0 +1,206 @@
+/* Teacher & Admin Editorial Extensions (shared shell inherited from dashboard.css) */
+
+.role-ledger-list {
+  border-top: 1px solid var(--dash-line);
+}
+
+.role-ledger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 8px;
+  border-bottom: 1px solid var(--dash-line);
+  transition: background-color 180ms ease, padding-left 180ms ease;
+}
+
+.role-ledger-row:hover {
+  background: var(--dash-hover);
+  padding-left: 12px;
+}
+
+.role-ledger-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.role-ledger-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.role-ledger-head strong {
+  color: var(--dash-ink);
+  font-size: 13px;
+  font-weight: 680;
+  line-height: 1.35;
+}
+
+.role-ledger-head time {
+  color: #8a8e94;
+  font: 500 9.5px / 1.3 'JetBrains Mono', monospace;
+  white-space: nowrap;
+}
+
+.role-ledger-tag {
+  color: #7a7e84;
+  font: 600 9.5px / 1.3 'JetBrains Mono', monospace;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.role-ledger-tag[data-emphasis='true'] {
+  color: var(--dash-ink);
+  font-weight: 700;
+}
+
+.role-ledger-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 4px 0 0;
+  color: var(--dash-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.role-ledger-meta > * {
+  position: relative;
+}
+
+.role-ledger-meta > * + *::before {
+  content: '·';
+  position: absolute;
+  left: -9px;
+  color: #b3b6ba;
+}
+
+.role-mono-code {
+  color: #4b4f55;
+  font: 600 10px / 1.3 'JetBrains Mono', monospace;
+  letter-spacing: 0.04em;
+}
+
+/* Key-Value Studio List */
+.role-kv-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.role-kv-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  color: #60646a;
+  font-size: 11.5px;
+}
+
+.role-kv-row strong {
+  color: var(--dash-ink);
+  font: 700 12px / 1.2 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Interactive Admin Official Submissions Chart */
+.role-chart-studio {
+  padding: 14px 4px 16px;
+  border-top: 1px solid var(--dash-line);
+  border-bottom: 1px solid var(--dash-line);
+}
+
+.role-chart-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.role-chart-header span {
+  color: #777b80;
+  font: 600 9.5px / 1.3 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+}
+
+.role-chart-header strong {
+  color: var(--dash-ink);
+  font: 600 10px / 1.3 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.role-chart-bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: end;
+  gap: 6px;
+  height: 154px;
+  padding-top: 8px;
+}
+
+.role-chart-bar-btn {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transition: opacity 180ms ease;
+}
+
+.role-chart-bar-fill {
+  display: block;
+  width: 100%;
+  min-height: 4px;
+  border-radius: 2px 2px 0 0;
+  background: #494d53;
+  transition: background-color 180ms ease;
+}
+
+.role-chart-bar-btn:hover .role-chart-bar-fill,
+.role-chart-bar-btn:focus-visible .role-chart-bar-fill,
+.role-chart-bar-btn[data-active='true'] .role-chart-bar-fill {
+  background: var(--dash-ink);
+}
+
+.role-chart-bars[data-has-active='true']
+  .role-chart-bar-btn:not([data-active='true']) {
+  opacity: 0.42;
+}
+
+.role-chart-bar-btn small {
+  color: #898d93;
+  font: 600 8.5px / 1 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.role-chart-bar-btn[data-active='true'] small {
+  color: var(--dash-ink);
+  font-weight: 700;
+}
+
+.role-empty-inline {
+  margin: 0;
+  padding: 16px 0;
+  color: var(--dash-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .role-chart-header {
+    flex-direction: column;
+    gap: 4px;
+  }
+}

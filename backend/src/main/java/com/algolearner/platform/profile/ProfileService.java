@@ -26,7 +26,7 @@ public class ProfileService {
     public synchronized UserProfile update(UUID id,ProfileUpdate request) {
         requireProfileRole(id);
         if(!request.hasFullName && !request.hasShortBio) throw new ApiException(ErrorCode.INVALID_REQUEST_BODY,"At least one editable field is required");
-        String name=normalize(request.fullName,150),bio=normalize(request.shortBio,500);
+        String name=normalize(request.fullName,150),bio=normalize(request.shortBio,200);
         var old=repository.own(id);
         repository.update(id,request.hasFullName?name:old.fullName(),request.hasShortBio?bio:old.shortBio(),clock.instant());
         return ownResponse(repository.own(id));
