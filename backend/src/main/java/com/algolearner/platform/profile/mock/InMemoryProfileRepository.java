@@ -33,6 +33,15 @@ public class InMemoryProfileRepository implements ProfileRepository {
     public void avatar(UUID id,String avatar,Instant now) {
         data.profiles.compute(id,(key,p) -> { if(p==null) throw missing(); return copy(p,p.fullName(),p.shortBio(),avatar,p.isPublic()); });
     }
+    public boolean compareAndSetAvatar(UUID id,String expected,String replacement,Instant now) {
+        var updated=new java.util.concurrent.atomic.AtomicBoolean();
+        data.profiles.compute(id,(key,p)->{
+            if(p==null)throw missing();
+            if(!java.util.Objects.equals(expected,p.avatarKey()))return p;
+            updated.set(true);return copy(p,p.fullName(),p.shortBio(),replacement,p.isPublic());
+        });
+        return updated.get();
+    }
     private Profile copy(Profile p,String name,String bio,String avatar,boolean visible) {
         return new Profile(p.accountId(),name,p.username(),p.email(),avatar,bio,p.role(),p.joinedAt(),visible);
     }

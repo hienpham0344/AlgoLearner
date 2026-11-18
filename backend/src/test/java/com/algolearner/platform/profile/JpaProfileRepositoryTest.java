@@ -13,7 +13,7 @@ import static org.mockito.Mockito.*;
 
 class JpaProfileRepositoryTest {
     private final AccountRepository accounts = mock(AccountRepository.class);
-    private final JpaProfileRepository repository = new JpaProfileRepository(accounts);
+    private final JpaProfileRepository repository = new JpaProfileRepository(accounts,mock(org.springframework.jdbc.core.JdbcTemplate.class));
 
     @Test
     void partialUpdatePreservesCurrentRowValuesForOmittedFields() {

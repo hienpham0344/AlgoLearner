@@ -36,12 +36,13 @@ public class ProfileService {
         repository.privacy(id,request.isPublic(),clock.instant());
         return ownResponse(repository.own(id));
     }
-    public synchronized UserProfile avatar(UUID id,MultipartFile file) {
+    public UserProfile avatar(UUID id,MultipartFile file) {
         requireProfileRole(id);
         String oldKey=repository.own(id).avatarKey();
         String newKey=storage.store(file);
         try {
-            repository.avatar(id,newKey,clock.instant());
+            if(!repository.compareAndSetAvatar(id,oldKey,newKey,clock.instant()))
+                throw new com.algolearner.platform.profile.avatar.AvatarVersionConflictException();
         } catch (RuntimeException ex) {
             storage.delete(newKey);
             throw ex;

@@ -3,6 +3,10 @@ spring:
     default: internal-auth
   application:
     name: algolearner-platform
+  task:
+    scheduling:
+      pool:
+        size: 4
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
@@ -40,8 +44,8 @@ spring:
         max-page-size: 100
   servlet:
     multipart:
-      max-file-size: ${AVATAR_MAX_SIZE:5MB}
-      max-request-size: ${AVATAR_MAX_REQUEST_SIZE:6MB}
+      max-file-size: ${FILE_MULTIPART_MAX_SIZE:20MB}
+      max-request-size: ${FILE_MULTIPART_MAX_REQUEST_SIZE:21MB}
 app:
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:}}
@@ -58,3 +62,11 @@ app:
     max-bytes: ${AVATAR_MAX_BYTES:5242880}
     max-pixels: ${AVATAR_MAX_PIXELS:16000000}
     allowed-types: ${AVATAR_ALLOWED_TYPES:image/jpeg,image/png}
+  files:
+    supabase-url: ${SUPABASE_STORAGE_URL:}
+    service-key: ${SUPABASE_STORAGE_SERVICE_KEY:}
+    bucket: ${SUPABASE_STORAGE_BUCKET:learning-private}
+    max-bytes: ${FILE_MAX_BYTES:20971520}
+    scanner-host: ${FILE_SCANNER_HOST:}
+    scanner-port: ${FILE_SCANNER_PORT:3310}
+    scanner-timeout-ms: ${FILE_SCANNER_TIMEOUT_MS:30000}

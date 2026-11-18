@@ -12,7 +12,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class JpaProfileRepository implements ProfileRepository {
     private final AccountRepository accounts;
-    public JpaProfileRepository(AccountRepository accounts) { this.accounts = accounts; }
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    public JpaProfileRepository(AccountRepository accounts,org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this.accounts=accounts;this.jdbc=jdbc;
+    }
 
     @Override public Profile own(UUID id) { return snapshot(account(id)); }
     @Override public Profile byUsername(String username) {
@@ -33,6 +36,13 @@ public class JpaProfileRepository implements ProfileRepository {
     }
     @Override @Transactional public void avatar(UUID id, String key, Instant now) {
         accountForUpdate(id).setAvatarKey(key);
+    }
+    @Override @Transactional
+    public boolean compareAndSetAvatar(UUID id,String expectedKey,String newKey,Instant now) {
+        return jdbc.update("""
+                update tbl_account set avatar_key=?,updated_at=? where id=?
+                  and avatar_key is not distinct from ? and status='ACTIVE' and role in ('STUDENT','TEACHER')
+                """,newKey,java.sql.Timestamp.from(now),id,expectedKey)==1;
     }
     private AccountEntity account(UUID id) { return accounts.findById(id).orElseThrow(this::missing); }
     private AccountEntity accountForUpdate(UUID id) { return accounts.findForUpdateById(id).orElseThrow(this::missing); }

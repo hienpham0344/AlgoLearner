@@ -25,14 +25,14 @@ class ProfileServiceTest {
         var failure=new IllegalStateException("storage offline");
         when(storage.store(file)).thenThrow(failure);
         assertThatThrownBy(() -> service.avatar(id,file)).isSameAs(failure);
-        verify(repository,never()).avatar(any(),any(),any());
+        verify(repository,never()).compareAndSetAvatar(any(),any(),any(),any());
         verify(storage,never()).delete(any());
     }
     @Test void databaseFailureCleansNewAvatarAndPreservesOld() {
         var file=new MockMultipartFile("file",new byte[]{1});
         when(storage.store(file)).thenReturn("new.png");
         var failure=new IllegalStateException("write failed");
-        doThrow(failure).when(repository).avatar(id,"new.png",clock.instant());
+        when(repository.compareAndSetAvatar(id,"old.png","new.png",clock.instant())).thenThrow(failure);
         assertThatThrownBy(() -> service.avatar(id,file)).isSameAs(failure);
         verify(storage).delete("new.png");
         verify(storage,never()).delete("old.png");
