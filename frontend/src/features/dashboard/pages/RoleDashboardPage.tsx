@@ -2,23 +2,9 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  Activity,
-  ArrowRight,
-  Bell,
-  BookOpen,
-  ChevronRight,
-  ClipboardCheck,
-  FileCode2,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  ShieldAlert,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import logoMark from '@/assets/logo-mark.svg';
+import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import {
   dashboardApi,
   dashboardKeys,
@@ -830,7 +816,6 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [navOpen, setNavOpen] = useState(false);
 
   const teacherQuery = useQuery({
     queryKey: dashboardKeys.teacher(),
@@ -855,11 +840,6 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
     }
   }, [query.error, logout, navigate]);
 
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
   const rawDisplayName = user?.fullName || user?.username || role;
   const displayName = rawDisplayName.replace(/^Demo\s+/i, '') || role;
   const firstName = displayName.split(' ')[0] || 'Instructor';
@@ -869,170 +849,36 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
       ? teacherQuery.data.recentNotifications.items.filter(n => n.readAt === null).length
       : 0;
 
-  const navItems =
-    role === 'TEACHER'
-      ? [
-          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-          { label: 'My classes', href: '/teacher/classrooms', icon: BookOpen, current: false },
-          { label: 'Class lessons', href: '/teacher/classrooms', icon: BookOpen, current: false },
-          { label: 'Assignments', href: '/teacher/assignments', icon: FileCode2, current: false },
-          { label: 'Review queue', href: '/teacher/review-queue', icon: ClipboardCheck, current: false },
-          { label: 'Notifications', href: '#notifications', icon: Bell, current: false },
-          { label: 'My profile', href: '/profile', icon: UserRound, current: false },
-        ]
-      : [
-          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-          { label: 'Classrooms', href: '/admin/classrooms', icon: BookOpen, current: false },
-          { label: 'Submissions', href: '/admin/submissions', icon: Activity, current: false },
-          { label: 'System log', href: '/admin/system-logs', icon: FileCode2, current: false },
-          { label: 'Security audit', href: '/admin/security-audit', icon: ShieldAlert, current: false },
-          { label: 'Moderation', href: '/admin/accounts', icon: UserRound, current: false },
-        ];
-
   const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
 
   return (
-    <div className="student-dashboard">
-      <aside className="dashboard-sidebar" data-open={navOpen}>
-        <div className="dashboard-sidebar-top">
-          <Link
-            className="dashboard-brand"
-            to="/dashboard"
-            onClick={() => setNavOpen(false)}
-            aria-label="AlgoLearn dashboard"
-          >
-            <img src={logoMark} alt="" width="38" height="40" />
-            <span>AlgoLearn</span>
-          </Link>
-          <button
-            className="dashboard-menu-toggle"
-            type="button"
-            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
-            aria-expanded={navOpen}
-            onClick={() => setNavOpen(open => !open)}
-          >
-            {navOpen ? <X size={21} /> : <Menu size={21} />}
-          </button>
+    <WorkspaceLayout role={role} unreadCount={unreadCount} displayNameOverride={displayName}>
+      {role === 'TEACHER' && (teacherQuery.isPending || teacherQuery.isError || !teacherQuery.data) && <DashboardLessonLinks role="TEACHER" />}
+      {query.isPending ? (
+        <div className="dashboard-fetch-state" role="status">
+          <span className="dashboard-eyebrow">{role} WORKSPACE</span>
+          <h2>Loading {role.toLowerCase()} workspace…</h2>
         </div>
-
-        <nav className="dashboard-nav" aria-label={`${role.toLowerCase()} workspace`}>
-          <span className="dashboard-nav-label">{role} WORKSPACE</span>
-          {navItems.map(({ label, href, icon: Icon, current }) =>
-            href.startsWith('#') ? (
-              <a
-                key={label}
-                href={href}
-                className="dashboard-nav-link"
-                onClick={() => setNavOpen(false)}
-                title={label}
-              >
-                <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>{label}</span>
-              </a>
-            ) : (
-              <Link
-                key={label}
-                to={href}
-                className="dashboard-nav-link"
-                aria-current={current ? 'page' : undefined}
-                onClick={() => setNavOpen(false)}
-                title={label}
-              >
-                <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>{label}</span>
-                {current && <span className="dashboard-nav-current" aria-hidden="true" />}
-              </Link>
-            ),
+      ) : query.isError ? (
+        <div className="dashboard-fetch-state" role="alert">
+          <span className="dashboard-eyebrow">{role} WORKSPACE</span>
+          <h2>{isForbidden ? 'Access restricted.' : 'Dashboard unavailable.'}</h2>
+          <p>
+            {isForbidden
+              ? 'This account cannot access this dashboard.'
+              : 'We could not load the current workspace data.'}
+          </p>
+          {!isForbidden && (
+            <button type="button" onClick={() => query.refetch()}>
+              Try again
+            </button>
           )}
-        </nav>
-
-        <div className="dashboard-sidebar-foot">
-          <span>THINK. CODE. REPEAT.</span>
-          <p>Small steps. Real progress.</p>
         </div>
-      </aside>
-
-      <div className="dashboard-page">
-        <header className="dashboard-topbar">
-          <span className="dashboard-topbar-path">
-            Workspace <ChevronRight size={13} aria-hidden="true" />{' '}
-            {role === 'TEACHER' ? 'Teacher Dashboard' : 'Admin Dashboard'}
-          </span>
-
-          <div className="dashboard-topbar-actions">
-            {role === 'TEACHER' && (
-              <>
-                <a
-                  className="dashboard-icon-link"
-                  href="#notifications"
-                  aria-label={unreadCount ? `${unreadCount} unread updates` : 'Notifications'}
-                >
-                  <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
-                  {unreadCount > 0 && <span className="dashboard-notification-dot" />}
-                </a>
-                <Link className="dashboard-topbar-profile-link" to="/profile">
-                  <UserRound size={16} aria-hidden="true" />
-                  <span>My profile</span>
-                </Link>
-              </>
-            )}
-
-            <details className="dashboard-profile">
-              <summary aria-label="Account menu">
-                <span className="dashboard-avatar">{firstName.slice(0, 1).toUpperCase()}</span>
-                <span className="dashboard-profile-name">{displayName}</span>
-              </summary>
-              <div className="dashboard-profile-menu">
-                <strong>{displayName}</strong>
-                <span>{user?.email}</span>
-                {role === 'TEACHER' && (
-                  <Link to="/profile" className="dashboard-profile-setting">
-                    Profile settings
-                  </Link>
-                )}
-                <Link to="/account/security" className="dashboard-profile-setting">Account security</Link>
-                <button type="button" onClick={signOut}>
-                  <LogOut size={15} aria-hidden="true" /> Sign out
-                </button>
-              </div>
-            </details>
-          </div>
-        </header>
-
-        <main className="dashboard-content">
-          {role === 'TEACHER' && (teacherQuery.isPending || teacherQuery.isError || !teacherQuery.data) && <DashboardLessonLinks role="TEACHER" />}
-          {query.isPending ? (
-            <div className="dashboard-fetch-state" role="status">
-              <span className="dashboard-eyebrow">{role} WORKSPACE</span>
-              <h2>Loading {role.toLowerCase()} workspace…</h2>
-            </div>
-          ) : query.isError ? (
-            <div className="dashboard-fetch-state" role="alert">
-              <span className="dashboard-eyebrow">{role} WORKSPACE</span>
-              <h2>{isForbidden ? 'Access restricted.' : 'Dashboard unavailable.'}</h2>
-              <p>
-                {isForbidden
-                  ? 'This account cannot access this dashboard.'
-                  : 'We could not load the current workspace data.'}
-              </p>
-              {!isForbidden && (
-                <button type="button" onClick={() => query.refetch()}>
-                  Try again
-                </button>
-              )}
-            </div>
-          ) : role === 'TEACHER' && teacherQuery.data ? (
-            <TeacherWorkspace data={teacherQuery.data} firstName={firstName} />
-          ) : adminQuery.data ? (
-            <AdminWorkspace data={adminQuery.data} />
-          ) : null}
-        </main>
-
-        <footer className="dashboard-footer">
-          <span>© {new Date().getFullYear()} AlgoLearn</span>
-          <span>Think. Code. Repeat.</span>
-        </footer>
-      </div>
-    </div>
+      ) : role === 'TEACHER' && teacherQuery.data ? (
+        <TeacherWorkspace data={teacherQuery.data} firstName={firstName} />
+      ) : adminQuery.data ? (
+        <AdminWorkspace data={adminQuery.data} />
+      ) : null}
+    </WorkspaceLayout>
   );
 }

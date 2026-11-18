@@ -10,7 +10,7 @@ import { lessonsDemoPlugin } from './dev/lessonsDemoPlugin';
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   cacheDir: `node_modules/.vite-${mode}`,
-  plugins: [react(), tailwindcss(), ...(mode === 'lessons-demo' ? [lessonsDemoPlugin()] : []), ...(['auth-demo', 'backend-mock', 'lessons-demo'].includes(mode) ? [authDemoPlugin(mode === 'auth-demo' ? 'demo' : 'backend-mock')] : []), ...(['auth-demo', 'lessons-demo'].includes(mode) ? [profileDemoPlugin(), dashboardDemoPlugin()] : [])],
+  plugins: [react(), tailwindcss(), ...(['auth-demo', 'lessons-demo'].includes(mode) ? [lessonsDemoPlugin(), profileDemoPlugin(), dashboardDemoPlugin()] : []), ...(['auth-demo', 'backend-mock', 'lessons-demo'].includes(mode) ? [authDemoPlugin(mode === 'auth-demo' ? 'demo' : 'backend-mock')] : [])],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

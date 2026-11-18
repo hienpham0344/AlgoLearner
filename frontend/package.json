@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:demo": "vite --mode auth-demo",
     "dev:auth-demo": "vite --mode auth-demo",
     "dev:backend-mock": "vite --mode backend-mock",
     "dev:lessons-demo": "vite --mode lessons-demo",

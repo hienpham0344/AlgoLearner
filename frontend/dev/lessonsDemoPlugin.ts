@@ -33,8 +33,8 @@ export function lessonsDemoPlugin(): Plugin {
     { id: 'demo-assignment-arrays', type: 'ASSIGNMENT', title: 'Working with arrays', linkedLessonId: null, available: true, path: null, completed: false },
     { id: 'demo-practice-search', type: 'PRACTICE', title: 'Binary search practice', linkedLessonId: null, available: true, path: null, completed: false },
   ];
-  const seed = (id: string, title: string, status: Lesson['status']): Lesson => ({
-    id, classroomId: CLASS_ID, title, status, previousStatus: status === 'ARCHIVED' ? 'PUBLISHED' : null,
+  const seed = (id: string, title: string, status: Lesson['status'], classroomId = CLASS_ID): Lesson => ({
+    id, classroomId, title, status, previousStatus: status === 'ARCHIVED' ? 'PUBLISHED' : null,
     content: '## Start with a smaller problem\nA recursive function solves a problem by reducing it to a smaller version of itself.\n\n1. Identify a **base case**.\n2. Make progress toward it.\n3. Combine the smaller results.\n\n> Trace a small input by hand before writing the general case.',
     codeExample: { language: 'python', code: 'def factorial(n):\n    if n <= 1:\n        return 1\n    return n * factorial(n - 1)' },
     externalLinks: [{ label: 'Python tutorial: functions', url: 'https://docs.python.org/3/tutorial/controlflow.html#defining-functions' }],
@@ -42,10 +42,12 @@ export function lessonsDemoPlugin(): Plugin {
     canDelete: true, createdAt: now, updatedAt: now,
   });
   const lessons = new Map<string, Lesson>([
-    ['demo-lesson-recursion', seed('demo-lesson-recursion', 'Understanding recursion', 'PUBLISHED')],
-    ['demo-lesson-draft', seed('demo-lesson-draft', 'Planning the next lesson', 'DRAFT')],
-    ['demo-lesson-archive', seed('demo-lesson-archive', 'Last term: recursive patterns', 'ARCHIVED')],
-    ['demo-lesson-conditions', { ...seed('demo-lesson-conditions', 'Recursion: check your understanding', 'PUBLISHED'), completionMode: 'CONDITION_BASED', requiredActivityIds: ['demo-quiz-recursion'], activities: [activities[0]] }],
+    ['demo-lesson-recursion', seed('demo-lesson-recursion', 'Understanding recursion', 'PUBLISHED', 'demo-class-1')],
+    ['demo-lesson-draft', seed('demo-lesson-draft', 'Planning the next lesson', 'DRAFT', 'demo-class-1')],
+    ['demo-lesson-archive', seed('demo-lesson-archive', 'Last term: recursive patterns', 'ARCHIVED', 'demo-class-1')],
+    ['demo-lesson-conditions', { ...seed('demo-lesson-conditions', 'Recursion: check your understanding', 'PUBLISHED', 'demo-class-1'), completionMode: 'CONDITION_BASED', requiredActivityIds: ['demo-quiz-recursion'], activities: [activities[0]] }],
+    ['demo-lesson-py-lists', seed('demo-lesson-py-lists', 'Lists, tuples, and reference semantics', 'PUBLISHED', 'demo-class-2')],
+    ['demo-lesson-algo-graph', seed('demo-lesson-algo-graph', 'Graph traversal: BFS and DFS', 'PUBLISHED', 'cls-algo-2026')],
   ]);
   const progress = new Map<string, LessonProgress>();
   const files = new Map<string, Buffer>();
@@ -53,6 +55,14 @@ export function lessonsDemoPlugin(): Plugin {
     id: `demo-class-${index + 1}`, name, description: 'Lesson UI demo · sample data, reset when the dev server restarts.', status: 'ACTIVE', ownerId: TEACHER,
     classCode: `DEMO000${index + 1}`, codeExpiresAt: null, codeLocked: false, joiningOpen: true, joinMode: 'AUTO_JOIN', createdAt: now, updatedAt: now,
   }));
+  const extraClassrooms = [
+    { id: 'cls-algo-2026', name: 'Data Structures & Advanced Algorithms', description: 'Classroom workspace & lessons.', status: 'ACTIVE', ownerId: TEACHER, classCode: 'ALGO2026', codeExpiresAt: null, codeLocked: false, joiningOpen: true, joinMode: 'AUTO_JOIN', createdAt: now, updatedAt: now },
+    { id: 'cls-cp-lab', name: 'Competitive Programming Laboratory', description: 'Classroom workspace & lessons.', status: 'ACTIVE', ownerId: TEACHER, classCode: 'CPLAB26X', codeExpiresAt: null, codeLocked: false, joiningOpen: true, joinMode: 'REQUIRE_APPROVAL', createdAt: now, updatedAt: now },
+    { id: 'cls-web-eng', name: 'Full-Stack Software Engineering', description: 'Classroom workspace & lessons.', status: 'ACTIVE', ownerId: TEACHER, classCode: 'FULLSTK1', codeExpiresAt: null, codeLocked: false, joiningOpen: true, joinMode: 'AUTO_JOIN', createdAt: now, updatedAt: now },
+    { id: 'cls-locked-code', name: 'Operating Systems & Concurrency', description: 'Classroom workspace & lessons.', status: 'ACTIVE', ownerId: TEACHER, classCode: 'OSKERN99', codeExpiresAt: null, codeLocked: true, joiningOpen: true, joinMode: 'AUTO_JOIN', createdAt: now, updatedAt: now },
+    { id: 'cls-expired-code', name: 'Foundations of Computer Vision', description: 'Classroom workspace & lessons.', status: 'ACTIVE', ownerId: TEACHER, classCode: 'CVIS2025', codeExpiresAt: null, codeLocked: false, joiningOpen: true, joinMode: 'AUTO_JOIN', createdAt: now, updatedAt: now },
+    { id: 'cls-archived-py', name: 'Introduction to Python & Scripting (Spring 2025)', description: 'Archived classroom workspace.', status: 'ARCHIVED', ownerId: TEACHER, classCode: 'PYTH2025', codeExpiresAt: null, codeLocked: false, joiningOpen: false, joinMode: 'AUTO_JOIN', createdAt: now, updatedAt: now },
+  ];
   return {
     name: 'algolearner-lessons-demo', apply: 'serve',
     configureServer(server) {
@@ -72,7 +82,7 @@ export function lessonsDemoPlugin(): Plugin {
             upcomingAssignments: preview([]), upcomingQuizzes: preview([]), enrolledCourses: preview([]), publicPracticeStatistics: { solved: 0 }, streak: { currentStreak: 0, highestStreak: 0 }, recentNotifications: preview([]) });
         }
         const parts = path.replace('/api/v1/classrooms', '').split('/').filter(Boolean);
-        const classroom = classrooms.find(item => item.id === parts[0]);
+        const classroom = [...classrooms, ...extraClassrooms].find(item => item.id === parts[0]);
         const pageIndex = Math.max(0, Number(url.searchParams.get('page')) || 0);
         const method = request.method || 'GET';
         if (parts.length === 0 && method === 'GET') return respond(response, 200, page(classrooms, pageIndex));

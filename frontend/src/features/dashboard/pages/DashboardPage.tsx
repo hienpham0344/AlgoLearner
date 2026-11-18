@@ -1,23 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  Bell,
-  BookOpen,
-  ChevronRight,
-  Code2,
-  Flame,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import { profileApi } from '@/features/profile/api/profileApi';
-import logoMark from '@/assets/logo-mark.svg';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
 import type { EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
@@ -46,16 +34,6 @@ const EMPTY_DASHBOARD_DATA: StudentDashboardData = {
   },
   notifications: [],
 };
-
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-  { label: 'My classes', href: '/student/classrooms', icon: BookOpen, current: false },
-  { label: 'Class lessons', href: '/student/classrooms', icon: BookOpen, current: false },
-  { label: 'Public courses', href: '/courses', icon: Code2, current: false },
-  { label: 'Coding practice', href: '/practice', icon: Flame, current: false },
-  { label: 'Notifications', href: '#notifications', icon: Bell, current: false },
-  { label: 'My profile', href: '/profile', icon: UserRound, current: false },
-] as const;
 
 const shortDateFormatter = new Intl.DateTimeFormat('en', {
   timeZone: DISPLAY_TIME_ZONE,
@@ -139,7 +117,6 @@ const getSegmentState = (index: number, completed: number): 'completed' | 'curre
 export const DashboardPage = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [navOpen, setNavOpen] = useState(false);
 
   const isStudent = user?.role === 'STUDENT';
 
@@ -167,11 +144,6 @@ export const DashboardPage = () => {
     }
   }, [profileQuery.error, dashboardQuery.error, logout, navigate]);
 
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
   if (user?.role !== 'STUDENT') {
     return user?.role === 'TEACHER' || user?.role === 'ADMIN' ? <RoleDashboardPage role={user.role} /> : null;
   }
@@ -195,100 +167,8 @@ export const DashboardPage = () => {
   const sortedDeadlines = [...data.deadlines].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
 
   return (
-    <div className="student-dashboard">
-      <aside className="dashboard-sidebar" data-open={navOpen}>
-        <div className="dashboard-sidebar-top">
-          <Link
-            className="dashboard-brand"
-            to="/dashboard"
-            onClick={() => setNavOpen(false)}
-            aria-label="AlgoLearn dashboard"
-          >
-            <img src={logoMark} alt="" width="38" height="40" />
-            <span>AlgoLearn</span>
-          </Link>
-          <button
-            className="dashboard-menu-toggle"
-            type="button"
-            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
-            aria-expanded={navOpen}
-            onClick={() => setNavOpen(open => !open)}
-          >
-            {navOpen ? <X size={21} /> : <Menu size={21} />}
-          </button>
-        </div>
-
-        <nav className="dashboard-nav" aria-label="Student workspace">
-          <span className="dashboard-nav-label">WORKSPACE</span>
-          {NAV_ITEMS.map(({ label, href, icon: Icon, current }) => href.startsWith('#') ? (
-            <a key={label} href={href} className="dashboard-nav-link" onClick={() => setNavOpen(false)} title={label}>
-              <Icon size={18} strokeWidth={1.8} aria-hidden="true" /><span>{label}</span>
-            </a>
-          ) : (
-            <Link
-              key={label}
-              to={href}
-              className="dashboard-nav-link"
-              aria-current={current ? 'page' : undefined}
-              onClick={() => setNavOpen(false)}
-              title={label}
-            >
-              <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-              <span>{label}</span>
-              {current && <span className="dashboard-nav-current" aria-hidden="true" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="dashboard-sidebar-foot">
-          <span>THINK. CODE. REPEAT.</span>
-          <p>Small steps. Real progress.</p>
-        </div>
-      </aside>
-
-      <div className="dashboard-page">
-        <header className="dashboard-topbar">
-          <span className="dashboard-topbar-path">
-            Workspace <ChevronRight size={13} aria-hidden="true" /> Dashboard
-          </span>
-
-          <div className="dashboard-topbar-actions">
-            <a
-              className="dashboard-icon-link"
-              href="#notifications"
-              aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
-            >
-              <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
-              {unreadCount > 0 && <span className="dashboard-notification-dot" />}
-            </a>
-
-            <Link className="dashboard-topbar-profile-link" to="/profile">
-              <UserRound size={16} aria-hidden="true" />
-              <span>My profile</span>
-            </Link>
-
-            <details className="dashboard-profile">
-              <summary aria-label="Account menu">
-                <span className="dashboard-avatar">{firstName.slice(0, 1).toUpperCase()}</span>
-                <span className="dashboard-profile-name">{displayName}</span>
-              </summary>
-              <div className="dashboard-profile-menu">
-                <strong>{displayName}</strong>
-                <span>{user.email}</span>
-                <Link to="/profile" className="dashboard-profile-setting">
-                  Profile settings
-                </Link>
-                <Link to="/account/security" className="dashboard-profile-setting">Account security</Link>
-                <button type="button" onClick={signOut}>
-                  <LogOut size={15} aria-hidden="true" /> Sign out
-                </button>
-              </div>
-            </details>
-          </div>
-        </header>
-
-        <main className="dashboard-content">
-          <div className="dashboard-intro">
+    <WorkspaceLayout role="STUDENT" unreadCount={unreadCount} displayNameOverride={displayName}>
+      <div className="dashboard-intro">
             <div>
               <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
               <h1>Keep building.</h1>
@@ -378,7 +258,7 @@ export const DashboardPage = () => {
                           <span className="dashboard-learning-label">YOUR NEXT CHAPTER</span>
                           <h3>Your next chapter starts here.</h3>
                           <p>Choose a topic that interests you and start learning at your pace.</p>
-                          <Link className="dashboard-learning-action" to="/courses">
+                          <Link className="dashboard-learning-action" to="/student/courses">
                             Explore courses <ArrowRight size={16} aria-hidden="true" />
                           </Link>
                         </div>
@@ -652,13 +532,6 @@ export const DashboardPage = () => {
               </aside>
             </div>
           )}
-        </main>
-
-        <footer className="dashboard-footer">
-          <span>© {new Date().getFullYear()} AlgoLearn</span>
-          <span>Think. Code. Repeat.</span>
-        </footer>
-      </div>
-    </div>
+    </WorkspaceLayout>
   );
 };

@@ -19,7 +19,7 @@ import {
   INITIAL_MOCK_NOTIFICATIONS,
 } from './classroomMockData';
 
-const STORAGE_KEY_CLASSROOMS = 'algolearn_prototype_classrooms_v1';
+const STORAGE_KEY_CLASSROOMS = 'algolearn_prototype_classrooms_v2';
 const STORAGE_KEY_ROLE = 'algolearn_prototype_role_v1';
 const STORAGE_KEY_PERSONA = 'algolearn_prototype_persona_v1';
 const STORAGE_KEY_ANNOUNCEMENTS = 'algolearn_prototype_announcements_v1';

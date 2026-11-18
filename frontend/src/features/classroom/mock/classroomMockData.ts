@@ -77,6 +77,76 @@ export const DEMO_PERSONAS: DemoPersona[] = [
 
 export const INITIAL_MOCK_CLASSROOMS: Classroom[] = [
   {
+    id: 'demo-class-1',
+    name: 'Algorithms & Data Structures',
+    description:
+      'Comparison-based sorting, asymptotic complexity, recursion trees, and foundational problem solving.',
+    ownerId: 'teacher-1',
+    ownerName: 'Prof. Alex Rivers',
+    ownerEmail: 'alex.rivers@algolearn.edu',
+    status: 'ACTIVE',
+    classCode: 'DEMO0001',
+    codeExpiresAt: '2026-12-31T23:59:59Z',
+    codeLocked: false,
+    joiningOpen: true,
+    joinMode: 'AUTO_JOIN',
+    createdAt: '2026-09-01T08:00:00Z',
+    updatedAt: '2026-11-01T10:00:00Z',
+    stats: {
+      lessonsCount: 6,
+      assignmentsCount: 4,
+      quizzesCount: 2,
+      announcementsCount: 2,
+    },
+    members: [
+      {
+        studentId: 'student-1',
+        username: 'alex_chen',
+        fullName: 'Alex Chen',
+        email: 'alex.chen@student.algolearn.edu',
+        status: 'ACTIVE',
+        joinedAt: '2026-09-02T09:15:00Z',
+      },
+    ],
+    joinRequests: [],
+    invitations: [],
+  },
+  {
+    id: 'demo-class-2',
+    name: 'Programming Fundamentals',
+    description:
+      'Lists, tuples, reference semantics, modular functions, and structured Python coding practices.',
+    ownerId: 'teacher-1',
+    ownerName: 'Prof. Alex Rivers',
+    ownerEmail: 'alex.rivers@algolearn.edu',
+    status: 'ACTIVE',
+    classCode: 'DEMO0002',
+    codeExpiresAt: '2026-12-31T23:59:59Z',
+    codeLocked: false,
+    joiningOpen: true,
+    joinMode: 'AUTO_JOIN',
+    createdAt: '2026-09-03T08:00:00Z',
+    updatedAt: '2026-11-02T10:00:00Z',
+    stats: {
+      lessonsCount: 5,
+      assignmentsCount: 3,
+      quizzesCount: 2,
+      announcementsCount: 1,
+    },
+    members: [
+      {
+        studentId: 'student-1',
+        username: 'alex_chen',
+        fullName: 'Alex Chen',
+        email: 'alex.chen@student.algolearn.edu',
+        status: 'ACTIVE',
+        joinedAt: '2026-09-04T09:15:00Z',
+      },
+    ],
+    joinRequests: [],
+    invitations: [],
+  },
+  {
     id: 'cls-algo-2026',
     name: 'Data Structures & Advanced Algorithms',
     description:

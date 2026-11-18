@@ -30,7 +30,7 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
   const base = `/${role.toLowerCase()}/classrooms/${encodeURIComponent(id)}`;
   return <ClassroomLayout className="lesson-shell" role={role} persona={{ id: userId, username: user?.username || '', fullName: user?.fullName || user?.username || '', email: user?.email || '', role }} breadcrumbChild="Class lessons">
     <div className="lesson-workspace" id="lesson-main">
-      {import.meta.env.MODE === 'lessons-demo' && <p className="lesson-notice" role="status">Lesson demo · Sample data resets when the demo server restarts.</p>}
+      {['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE) && <p className="lesson-notice" role="status">Lesson demo · Sample data resets when the demo server restarts.</p>}
       <Link className="lesson-back" to={base}><ArrowLeft size={15} aria-hidden="true" />Back to classroom</Link>
       {classroom.isPending ? <p role="status">Loading classroom…</p> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
         : classroom.data && (role === 'TEACHER' && classroom.data.ownerId !== userId ? <LessonErrorState error={new Error('Only the classroom owner can manage these lessons.')} /> : <>
