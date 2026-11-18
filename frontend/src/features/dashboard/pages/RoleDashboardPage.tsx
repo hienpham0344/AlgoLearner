@@ -214,7 +214,7 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
               <div className="dashboard-empty dashboard-empty-line">
                 <div>
                   <strong>No open or upcoming assignments.</strong>
-                  <p>Phân hệ bài tập lớp học chưa được kết nối.</p>
+                  <p>Published assignments for your active classrooms will appear here once connected.</p>
                 </div>
               </div>
             )}
@@ -367,7 +367,7 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
               <div className="dashboard-empty dashboard-empty-line">
                 <div>
                   <strong>No student submissions yet.</strong>
-                  <p>Phân hệ bài nộp và chấm điểm chưa được kết nối.</p>
+                  <p>Ungraded work and recent submissions will appear here once connected.</p>
                 </div>
               </div>
             )}
@@ -418,7 +418,7 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
                     <strong>{data.pendingContributions.problemCount}</strong>
                   </div>
                 </div>
-                <p>Dữ liệu khóa học, bài luyện tập công khai và duyệt nội dung chưa được kết nối.</p>
+                <p>Public courses, coding practice, and content moderation data are not connected yet.</p>
               </div>
             </div>
           </section>
@@ -766,7 +766,7 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
                     </strong>
                   </div>
                 </div>
-                <p>Dữ liệu khóa học, bài luyện tập công khai và duyệt nội dung chưa được kết nối.</p>
+                <p>Public courses, coding practice, and content moderation data are not connected yet.</p>
               </div>
             </div>
           </section>

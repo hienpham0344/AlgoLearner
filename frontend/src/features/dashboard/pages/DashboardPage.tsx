@@ -339,8 +339,8 @@ export const DashboardPage = () => {
                         <div className="dashboard-learning-content">
                           <span className="dashboard-learning-label">YOUR NEXT CHAPTER</span>
                           <h3>Your next chapter starts here.</h3>
-<p>{IS_DEMO ? 'Choose a topic that interests you and start learning at your pace.'
-                            : 'Khóa học công khai sẽ hiển thị khi phân hệ này được kết nối.'}</p>
+                          <p>{IS_DEMO ? 'Choose a topic that interests you and start learning at your pace.'
+                            : 'Public courses will appear here once this module is connected.'}</p>
                           {IS_DEMO && <Link className="dashboard-learning-action" to="/student/courses">
                             Explore courses <ArrowRight size={16} aria-hidden="true" />
                           </Link>}
@@ -432,7 +432,7 @@ export const DashboardPage = () => {
                         <p>
                           {IS_DEMO
                             ? 'Assignments and quizzes from your enrolled classes will appear here in chronological order.'
-                            : 'Bài tập và quiz sẽ hiển thị khi các phân hệ tương ứng được kết nối.'}
+                            : 'Assignments and quizzes will appear here once their classroom modules are connected.'}
                         </p>
                       </div>
                     </div>
