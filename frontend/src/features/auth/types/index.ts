@@ -1,3 +1,5 @@
+export type IdentityType = 'AUTO' | 'EMAIL' | 'USERNAME';
+
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN';
 
 export type AccountLifecycleStatus =
@@ -22,6 +24,7 @@ export interface AuthUser {
 }
 
 export interface LoginRequest {
+  identityType?: IdentityType;
   usernameOrEmail: string;
   password: string;
   rememberMe?: boolean;
@@ -37,7 +40,7 @@ export interface RegisterRequest {
   privacyAccepted: boolean;
 }
 
-export type AuthIdentity = { email: string; usernameOrEmail?: never } | { usernameOrEmail: string; email?: never };
+export type AuthIdentity = ({ email: string; usernameOrEmail?: never } | { usernameOrEmail: string; email?: never }) & { identityType?: IdentityType };
 
 export type VerifyOtpRequest = AuthIdentity & {
   code: string;

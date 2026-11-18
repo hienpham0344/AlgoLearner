@@ -1,3 +1,4 @@
+import type { IdentityType } from '../types';
 import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type KeyboardEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,6 +13,8 @@ export const VerifyOtpPage = () => {
   const { verifyOtp, isLoading } = useAuth();
   const email = params.get('email') || '';
   const usernameOrEmail = params.get('usernameOrEmail') || '';
+  const requestedType = params.get('identityType');
+  const identityType: IdentityType = requestedType === 'EMAIL' || requestedType === 'USERNAME' ? requestedType : 'AUTO';
   const identity = usernameOrEmail || email;
   const purpose: OtpPurpose = params.get('purpose') === 'RESET_PASSWORD' ? 'RESET_PASSWORD' : 'REGISTER';
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -56,7 +59,7 @@ export const VerifyOtpPage = () => {
     setIsVerifying(true);
     try {
       if (purpose === 'RESET_PASSWORD') {
-        const resetIdentity = usernameOrEmail ? { usernameOrEmail } : { email };
+        const resetIdentity = usernameOrEmail ? { usernameOrEmail, identityType } : { email };
         const { resetToken } = await authApi.verifyResetOtp({ ...resetIdentity, code: otp.join(''), purpose });
         navigate('/reset-password', { replace: true, state: { ...resetIdentity, resetToken } });
       } else {
@@ -70,7 +73,7 @@ export const VerifyOtpPage = () => {
   const resend = async () => {
     if (secondsLeft > 0 || !identity || inFlight.current || isResending) return;
     inFlight.current = true; setIsResending(true); setError(null); setNotice(null);
-    try { await authApi.resendOtp(usernameOrEmail ? { usernameOrEmail, purpose } : { email, purpose }); setRetryAt(Date.now() + 60000); setNotice('A new code is on its way.'); }
+    try { await authApi.resendOtp(usernameOrEmail ? { usernameOrEmail, identityType, purpose } : { email, purpose }); setRetryAt(Date.now() + 60000); setNotice('A new code is on its way.'); }
     catch { setError('We couldn’t send a new code. Please try again.'); }
     finally { inFlight.current = false; setIsResending(false); }
   };

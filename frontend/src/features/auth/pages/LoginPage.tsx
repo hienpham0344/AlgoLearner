@@ -1,3 +1,4 @@
+import type { IdentityType } from '../types';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { isAxiosError } from 'axios';
@@ -26,6 +27,7 @@ export const LoginPage = () => {
   const [search] = useSearchParams();
   const { login, user, isLoading } = useAuth();
   const [usernameOrEmail, setUsernameOrEmail] = useState(savedIdentity);
+  const [identityType, setIdentityType] = useState<IdentityType>('AUTO');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [fieldError, setFieldError] = useState<{ identity?: string; password?: string }>({});
@@ -64,7 +66,7 @@ export const LoginPage = () => {
     inFlight.current = true;
     try {
       try { sessionStorage.setItem('algolearner_login_identity', usernameOrEmail.trim()); } catch { /* Optional convenience only. */ }
-      await login({ usernameOrEmail: usernameOrEmail.trim(), password, rememberMe });
+      await login({ identityType, usernameOrEmail: usernameOrEmail.trim(), password, rememberMe });
       setSuccess(true);
     } catch (failure: unknown) {
       setMascotCue(current => current + 1);
@@ -113,6 +115,10 @@ export const LoginPage = () => {
     {!notice && resetSuccess && <AuthFeedback title="Password updated" tone="success" description="Sign in with your new password." />}
     <form className="auth-form" onSubmit={handleSubmit} noValidate aria-busy={isLoading}>
       <AuthField id="login-username" label="Username or email" autoComplete="username" placeholder="Enter your username or email" value={usernameOrEmail} onChange={event => { setUsernameOrEmail(event.target.value); setFieldError(current => ({ ...current, identity: undefined })); setNotice(null); }} required disabled={isLoading} message={fieldError.identity} />
+      <label htmlFor="identity-type">Identify account by</label>
+      <select id="identity-type" className="auth-input" value={identityType} onChange={event => setIdentityType(event.target.value as IdentityType)} disabled={isLoading}>
+        <option value="AUTO">Username or email</option><option value="EMAIL">Email</option><option value="USERNAME">Username</option>
+      </select>
       <AuthField id="login-password" label="Password" type="password" autoComplete="current-password" placeholder="Enter your password" value={password} onChange={event => { setPassword(event.target.value); setFieldError(current => ({ ...current, password: undefined })); setNotice(current => current?.tone === 'locked' ? current : null); }} required disabled={isLoading} message={fieldError.password} labelAction={<Link className="auth-text-link" to="/forgot-password">Forgot password?</Link>} />
       <div className="auth-consents"><label htmlFor="login-remember"><input id="login-remember" type="checkbox" checked={rememberMe} onChange={event => setRememberMe(event.target.checked)} disabled={isLoading} /><span>Remember me for 30 days</span></label></div>
       <AuthSubmit loading={isLoading} locked={locked}>{locked ? 'Sign-in temporarily unavailable' : isLoading ? 'Signing in…' : 'Sign in'}</AuthSubmit>
