@@ -22,6 +22,7 @@ import { LessonContent } from '../components/LessonContent';
 import { LessonAttachments } from '../components/LessonAttachments';
 import { LessonProgress } from '../components/LessonProgress';
 import { LessonConfirm, LessonErrorState, LessonPagination } from '../components/LessonState';
+import { InteractiveCourseBackground } from '@/features/dashboard/components/InteractiveCourseBackground';
 import 'katex/dist/katex.min.css';
 import '../styles/lessons.css';
 
@@ -726,74 +727,77 @@ function LessonDetail({
 
         <aside className="lesson-rail" aria-label="Lesson reading progress and outline">
           <div className="lesson-console" data-completed={isCompleted}>
-            {/* 1. Dark Anchor Progress Head */}
+            {/* 1. Dashboard-Style Constellation Progress Head */}
             <div className="lesson-console-head">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <span className="lesson-console-eyebrow">
-                    READ · <span aria-live="polite">{displayPercent}%</span>
-                  </span>
-                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
-                    {isCompleted ? (
-                      <span className="lesson-console-badge is-done">
-                        <CheckCircle2 size={12} aria-hidden="true" />
-                        <span>Completed</span>
-                      </span>
-                    ) : lesson.completionMode === 'CONDITION_BASED' ? (
-                      <span className="lesson-console-badge is-quiz">Quiz required</span>
-                    ) : (
-                      <span className="lesson-console-badge">Self-paced</span>
-                    )}
+              <InteractiveCourseBackground />
+              <div className="lesson-console-head-inner">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="lesson-console-eyebrow">
+                      READ · <span aria-live="polite">{displayPercent}%</span>
+                    </span>
+                    <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                      {isCompleted ? (
+                        <span className="lesson-console-badge is-done">
+                          <CheckCircle2 size={12} aria-hidden="true" />
+                          <span>Completed</span>
+                        </span>
+                      ) : lesson.completionMode === 'CONDITION_BASED' ? (
+                        <span className="lesson-console-badge is-quiz">Quiz required</span>
+                      ) : (
+                        <span className="lesson-console-badge">Self-paced</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="lesson-ring" aria-hidden="true">
+                    <svg width="52" height="52" viewBox="0 0 52 52">
+                      <circle cx="26" cy="26" r="21" className="lesson-ring-track" />
+                      <circle
+                        cx="26"
+                        cy="26"
+                        r="21"
+                        className="lesson-ring-fill"
+                        strokeDasharray={131.95}
+                        strokeDashoffset={131.95 * (1 - displayPercent / 100)}
+                      />
+                    </svg>
+                    <span>{displayPercent}%</span>
                   </div>
                 </div>
 
-                <div className="lesson-ring" aria-hidden="true">
-                  <svg width="52" height="52" viewBox="0 0 52 52">
-                    <circle cx="26" cy="26" r="21" className="lesson-ring-track" />
-                    <circle
-                      cx="26"
-                      cy="26"
-                      r="21"
-                      className="lesson-ring-fill"
-                      strokeDasharray={131.95}
-                      strokeDashoffset={131.95 * (1 - displayPercent / 100)}
-                    />
-                  </svg>
-                  <span>{displayPercent}%</span>
-                </div>
-              </div>
-
-              <div
-                className="lesson-console-meter"
-                role="progressbar"
-                aria-label="Lesson reading progress"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={displayPercent}
-              >
-                <div className="lesson-console-meter-fill" style={{ width: `${displayPercent}%` }} />
-              </div>
-
-              <p className="lesson-console-meta">
-                {displayPercent >= 100
-                  ? isCompleted
-                    ? 'Reached end of lesson.'
-                    : lesson.completionMode === 'CONDITION_BASED'
-                      ? 'Finished reading · Complete linked activity below.'
-                      : 'Reached the end of this lesson.'
-                  : `~${remainingMinutes} min left · ${100 - displayPercent}% remaining`}
-              </p>
-
-              {role === 'STUDENT' && !isCompleted && lesson.completionMode === 'MANUAL' && (
-                <button
-                  type="button"
-                  className="lesson-console-cta"
-                  disabled={!writable || !canCompleteLesson(lesson) || mutation.isPending}
-                  onClick={() => void complete()}
+                <div
+                  className="lesson-console-meter"
+                  role="progressbar"
+                  aria-label="Lesson reading progress"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={displayPercent}
                 >
-                  Complete this lesson
-                </button>
-              )}
+                  <div className="lesson-console-meter-fill" style={{ width: `${displayPercent}%` }} />
+                </div>
+
+                <p className="lesson-console-meta">
+                  {displayPercent >= 100
+                    ? isCompleted
+                      ? 'Reached end of lesson.'
+                      : lesson.completionMode === 'CONDITION_BASED'
+                        ? 'Finished reading · Complete linked activity below.'
+                        : 'Reached the end of this lesson.'
+                    : `~${remainingMinutes} min left · ${100 - displayPercent}% remaining`}
+                </p>
+
+                {role === 'STUDENT' && !isCompleted && lesson.completionMode === 'MANUAL' && (
+                  <button
+                    type="button"
+                    className="lesson-console-cta"
+                    disabled={!writable || !canCompleteLesson(lesson) || mutation.isPending}
+                    onClick={() => void complete()}
+                  >
+                    Complete this lesson
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* 2. Vertical Timeline Outline */}
