@@ -7,13 +7,10 @@ export type WorkspaceNavIconKey =
   | 'practice'
   | 'assignments'
   | 'review'
-  | 'notifications'
-  | 'profile'
   | 'submissions'
   | 'logs'
   | 'audit'
-  | 'moderation'
-  | 'security';
+  | 'moderation';
 
 export interface WorkspaceNavItemConfig {
   label: string;
@@ -37,8 +34,6 @@ export function getWorkspaceNavItems(
       { label: 'My classes', href: '/teacher/classrooms', iconKey: 'classes', isCurrent: isClassroomsRoute },
       { label: 'Assignments', href: '/teacher/assignments', iconKey: 'assignments', isCurrent: pathname === '/teacher/assignments' },
       { label: 'Review queue', href: '/teacher/review-queue', iconKey: 'review', isCurrent: pathname === '/teacher/review-queue' },
-      { label: 'Notifications', href: '/notifications', iconKey: 'notifications', isCurrent: pathname === '/notifications' },
-      { label: 'My profile', href: '/profile', iconKey: 'profile', isCurrent: pathname === '/profile' || pathname === '/account/security' },
     ];
   }
 
@@ -50,7 +45,6 @@ export function getWorkspaceNavItems(
       { label: 'System log', href: '/admin/system-logs', iconKey: 'logs', isCurrent: pathname === '/admin/system-logs' },
       { label: 'Security audit', href: '/admin/security-audit', iconKey: 'audit', isCurrent: pathname === '/admin/security-audit' },
       { label: 'Moderation', href: '/admin/accounts', iconKey: 'moderation', isCurrent: pathname === '/admin/accounts' },
-      { label: 'Account security', href: '/account/security', iconKey: 'security', isCurrent: pathname === '/account/security' },
     ];
   }
 
@@ -59,7 +53,5 @@ export function getWorkspaceNavItems(
     { label: 'My classes', href: '/student/classrooms', iconKey: 'classes', isCurrent: isClassroomsRoute },
     { label: 'Public courses', href: '/student/courses', iconKey: 'courses', isCurrent: pathname === '/student/courses' },
     { label: 'Coding practice', href: '/practice', iconKey: 'practice', isCurrent: pathname === '/practice' },
-    { label: 'Notifications', href: '/notifications', iconKey: 'notifications', isCurrent: pathname === '/notifications' },
-    { label: 'My profile', href: '/profile', iconKey: 'profile', isCurrent: pathname === '/profile' || pathname === '/account/security' },
   ];
 }

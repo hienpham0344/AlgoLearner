@@ -4,7 +4,6 @@ import { isAxiosError } from 'axios';
 import { Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, ArrowUpRight, Camera, Check, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import { profileApi, type OwnerProfile } from '../api/profileApi';
 import { validateAvatar } from '../validateAvatar';
 import { profileKeys } from '@/features/dashboard/api/dashboardApi';
@@ -845,37 +844,8 @@ export function ProfilePage() {
 
   if (user.role === 'ADMIN') {
     return (
-      <WorkspaceLayout role="ADMIN" mainClassName="dashboard-content">
-        <div className="account-page">
-          <div className="account-wrap">
-            <header className="profile-topbar">
-              <Link to="/dashboard" className="profile-back-link">
-                <ArrowLeft size={15} aria-hidden="true" />
-                <span>Workspace</span>
-              </Link>
-              <span className="profile-topbar-tag">ALGOLEARN / ACCOUNT</span>
-            </header>
-            <div className="profile-admin-message">
-              <span className="folder-editorial-eyebrow">ADMINISTRATOR WORKSPACE</span>
-              <h1>Profile settings</h1>
-              <p>Personal profile editing is available for Student and Teacher accounts.</p>
-              <Link to="/dashboard" className="folder-btn-save">
-                Return to dashboard
-              </Link>
-            </div>
-          </div>
-        </div>
-      </WorkspaceLayout>
-    );
-  }
-
-  const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
-
-  return (
-    <WorkspaceLayout mainClassName="dashboard-content">
       <div className="account-page">
         <div className="account-wrap">
-          {/* Minimal top navigation */}
           <header className="profile-topbar">
             <Link to="/dashboard" className="profile-back-link">
               <ArrowLeft size={15} aria-hidden="true" />
@@ -883,30 +853,55 @@ export function ProfilePage() {
             </Link>
             <span className="profile-topbar-tag">ALGOLEARN / ACCOUNT</span>
           </header>
-
-          {query.isPending ? (
-            <div className="profile-state-pane" role="status">
-              <h2>Loading your folder…</h2>
-            </div>
-          ) : query.isError ? (
-            <div className="profile-state-pane" role="alert">
-              <h2>Folder unavailable</h2>
-              <p>
-                {isForbidden
-                  ? 'You do not have permission to view this profile.'
-                  : 'We could not load your profile folder.'}
-              </p>
-              {!isForbidden && (
-                <button type="button" className="folder-btn-save" onClick={() => query.refetch()}>
-                  Try again
-                </button>
-              )}
-            </div>
-          ) : (
-            <ProfileFolder profile={query.data} />
-          )}
+          <div className="profile-admin-message">
+            <span className="folder-editorial-eyebrow">ADMINISTRATOR WORKSPACE</span>
+            <h1>Profile settings</h1>
+            <p>Personal profile editing is available for Student and Teacher accounts.</p>
+            <Link to="/dashboard" className="folder-btn-save">
+              Return to dashboard
+            </Link>
+          </div>
         </div>
       </div>
-    </WorkspaceLayout>
+    );
+  }
+
+  const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
+
+  return (
+    <div className="account-page">
+      <div className="account-wrap">
+        {/* Minimal top navigation */}
+        <header className="profile-topbar">
+          <Link to="/dashboard" className="profile-back-link">
+            <ArrowLeft size={15} aria-hidden="true" />
+            <span>Workspace</span>
+          </Link>
+          <span className="profile-topbar-tag">ALGOLEARN / ACCOUNT</span>
+        </header>
+
+        {query.isPending ? (
+          <div className="profile-state-pane" role="status">
+            <h2>Loading your folder…</h2>
+          </div>
+        ) : query.isError ? (
+          <div className="profile-state-pane" role="alert">
+            <h2>Folder unavailable</h2>
+            <p>
+              {isForbidden
+                ? 'You do not have permission to view this profile.'
+                : 'We could not load your profile folder.'}
+            </p>
+            {!isForbidden && (
+              <button type="button" className="folder-btn-save" onClick={() => query.refetch()}>
+                Try again
+              </button>
+            )}
+          </div>
+        ) : (
+          <ProfileFolder profile={query.data} />
+        )}
+      </div>
+    </div>
   );
 }

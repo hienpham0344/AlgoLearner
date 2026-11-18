@@ -9,7 +9,6 @@ import {
   Code2,
   FileCode2,
   Flame,
-  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -31,13 +30,10 @@ const NAV_ICONS: Record<WorkspaceNavIconKey, React.ElementType> = {
   practice: Flame,
   assignments: FileCode2,
   review: ClipboardCheck,
-  notifications: Bell,
-  profile: UserRound,
   submissions: Activity,
   logs: FileCode2,
   audit: ShieldAlert,
   moderation: UserRound,
-  security: KeyRound,
 };
 
 function getDefaultBreadcrumbLabel(role: WorkspaceRole, pathname: string): string {

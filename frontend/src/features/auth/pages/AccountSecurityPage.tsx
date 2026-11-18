@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import type { ApiErrorResponse } from '@/types/api';
 import { useAuth } from '@/hooks/useAuth';
-import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import { authApi, authKeys } from '../api/authApi';
 
 const field = 'w-full rounded-lg border border-slate-300 px-3 py-2';
@@ -58,10 +57,9 @@ export function AccountSecurityPage() {
     change.mutate();
   };
 
-  return (
-    <WorkspaceLayout mainClassName="dashboard-content">
-      <div className="mx-auto max-w-2xl space-y-8">
-        <header><Link to="/dashboard" className="text-sm underline">← Back to dashboard</Link><h1 className="mt-4 text-3xl font-bold">Account security</h1><p className="mt-2 text-slate-600">{user?.email}</p></header>
+  return <main className="min-h-screen bg-slate-50 px-4 py-8 text-slate-900">
+    <div className="mx-auto max-w-2xl space-y-8">
+      <header><Link to="/dashboard" className="text-sm underline">← Back to workspace</Link><h1 className="mt-4 text-3xl font-bold">Account security</h1><p className="mt-2 text-slate-600">{user?.email}</p></header>
       {feedback && <p role="status" className="rounded-lg bg-green-50 p-3 text-green-900">{feedback}</p>}
       {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-red-900">{error}</p>}
 
@@ -97,7 +95,6 @@ export function AccountSecurityPage() {
           <button className="rounded-lg bg-red-700 px-4 py-2 font-medium text-white disabled:opacity-50" disabled={deactivate.isPending}>Deactivate account</button>
         </form>
       </section>}
-      </div>
-    </WorkspaceLayout>
-  );
+    </div>
+  </main>;
 }
