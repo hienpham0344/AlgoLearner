@@ -24,14 +24,18 @@ for (const rememberMe of [false, true]) {
 
 test('forgot password verifies a reset grant and validates the new password', async ({ page }) => {
   let resetRequests = 0;
-  await page.route('**/api/v1/auth/forgot-password', route => route.fulfill({ json: { data: { message: 'Code sent' } } }));
+  const identity = { usernameOrEmail: user.email, identityType: 'AUTO' };
+  await page.route('**/api/v1/auth/forgot-password', route => {
+    expect(route.request().postDataJSON()).toEqual(identity);
+    return route.fulfill({ json: { data: { message: 'Code sent' } } });
+  });
   await page.route('**/api/v1/auth/verify-otp', route => {
-    expect(route.request().postDataJSON().purpose).toBe('RESET_PASSWORD');
+    expect(route.request().postDataJSON()).toEqual({ ...identity, code: '123456', purpose: 'RESET_PASSWORD' });
     return route.fulfill({ json: { data: { resetToken: 'synthetic-single-use-grant' } } });
   });
   await page.route('**/api/v1/auth/reset-password', route => {
     resetRequests++;
-    expect(route.request().postDataJSON()).toEqual({ email: user.email, resetToken: 'synthetic-single-use-grant', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' });
+    expect(route.request().postDataJSON()).toEqual({ ...identity, resetToken: 'synthetic-single-use-grant', newPassword: 'NewPassword123!', confirmPassword: 'NewPassword123!' });
     return route.fulfill({ json: { data: { success: true, message: 'Password updated' } } });
   });
   await page.goto(`${base}/forgot-password`);
@@ -54,7 +58,7 @@ test('forgot password verifies a reset grant and validates the new password', as
 });
 
 test('forgot password accepts username without exposing the registered email', async ({ page }) => {
-  const identity = { usernameOrEmail: 'learner' };
+  const identity = { usernameOrEmail: 'learner', identityType: 'AUTO' };
   await page.route('**/api/v1/auth/forgot-password', route => {
     expect(route.request().postDataJSON()).toEqual(identity);
     return route.fulfill({ json: { data: { email: null, message: 'Code sent' } } });

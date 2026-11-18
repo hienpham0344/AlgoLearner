@@ -121,14 +121,22 @@ test('4.1 account security uses session and password endpoints', async ({ page }
 
 test('4.1 reset password sends the verified grant and confirmed password', async ({ page }) => {
   let resetBody: Record<string, unknown> | undefined;
-  await page.route('**/api/v1/auth/forgot-password', route => route.fulfill({ json: envelope({ message: 'Sent' }) }));
-  await page.route('**/api/v1/auth/verify-otp', route => route.fulfill({ json: envelope({ resetToken: 'one-use-grant' }) }));
+  const identity = { usernameOrEmail: user.email, identityType: 'EMAIL' };
+  await page.route('**/api/v1/auth/forgot-password', route => {
+    expect(route.request().postDataJSON()).toEqual(identity);
+    return route.fulfill({ json: envelope({ message: 'Sent' }) });
+  });
+  await page.route('**/api/v1/auth/verify-otp', route => {
+    expect(route.request().postDataJSON()).toEqual({ ...identity, code: '123456', purpose: 'RESET_PASSWORD' });
+    return route.fulfill({ json: envelope({ resetToken: 'one-use-grant' }) });
+  });
   await page.route('**/api/v1/auth/reset-password', async route => {
     resetBody = route.request().postDataJSON();
     await route.fulfill({ json: envelope({ message: 'Updated' }) });
   });
   await page.goto(`${base}/forgot-password`);
   await page.getByLabel('Username or email').fill(user.email);
+  await page.getByLabel('Identify account by').selectOption('EMAIL');
   await page.getByRole('button', { name: 'Send reset code' }).click();
   await expect(page).toHaveURL(/\/verify-otp\?/);
   for (const [index, digit] of [...'123456'].entries()) await page.getByLabel(`Digit ${index + 1}`).fill(digit);
@@ -138,7 +146,7 @@ test('4.1 reset password sends the verified grant and confirmed password', async
   await page.getByLabel('Confirm password').fill('NewPass123');
   await page.getByRole('button', { name: 'Update password' }).click();
   await expect(page).toHaveURL(/\/login\?resetSuccess=true/);
-  expect(resetBody).toEqual({ email: user.email, resetToken: 'one-use-grant', newPassword: 'NewPass123', confirmPassword: 'NewPass123' });
+  expect(resetBody).toEqual({ ...identity, resetToken: 'one-use-grant', newPassword: 'NewPass123', confirmPassword: 'NewPass123' });
 });
 
 test('4.1 sign out revokes the current backend session', async ({ page }) => {
