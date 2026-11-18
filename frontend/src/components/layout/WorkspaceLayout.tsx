@@ -118,7 +118,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
             className="dashboard-brand"
             to="/dashboard"
             onClick={() => setNavOpen(false)}
-            aria-label="AlgoLearn dashboard"
+            aria-label="AlgoLearn"
           >
             <img src={logoMark} alt="" width="38" height="40" />
             <span>AlgoLearn</span>
