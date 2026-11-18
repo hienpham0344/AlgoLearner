@@ -44,7 +44,7 @@ export const ClassroomLayout: React.FC<ClassroomLayoutProps> = ({
           {breadcrumbChild && (
             <>
               <ChevronRight size={13} aria-hidden="true" />
-              <span className="text-slate-900 font-bold max-w-xs truncate">
+              <span className="text-slate-900 font-bold min-w-0 truncate">
                 {breadcrumbChild}
               </span>
             </>

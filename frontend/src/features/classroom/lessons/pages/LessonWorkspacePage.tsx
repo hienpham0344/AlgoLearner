@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, ArrowUpRight, BookOpen, CheckCircle2, FileText, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, FileText, Plus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { classroomApi } from '../../api/classroomApi';
@@ -51,6 +51,7 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
   });
 
   const base = `/${role.toLowerCase()}/classrooms/${encodeURIComponent(id)}`;
+  const lessonsBase = `${base}/lessons`;
   const layoutPersona = demoPersona || {
     id: userId,
     username: user?.username || '',
@@ -65,9 +66,32 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
     || role !== 'STUDENT'
     || Boolean(syncClassroom?.members.some(m => m.studentId === effectiveUserId && m.status === 'ACTIVE'));
 
-  return <ClassroomLayout className="lesson-shell" role={role} persona={layoutPersona} breadcrumbChild="Class lessons">
+  const breadcrumbNode = classroom.data ? (
+    <span className="inline-flex items-center gap-1.5 min-w-0">
+      <Link to={base} className="hover:underline font-medium text-slate-600 truncate max-w-[180px]">
+        {classroom.data.name}
+      </Link>
+      <ChevronRight size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
+      {lessonId ? (
+        <>
+          <Link to={lessonsBase} className="hover:underline font-medium text-slate-600 shrink-0">
+            Class lessons
+          </Link>
+          <ChevronRight size={13} className="shrink-0 text-slate-400" aria-hidden="true" />
+          <span className="text-slate-900 font-bold truncate">
+            {lessonId === 'new' ? 'New lesson' : 'Lesson detail'}
+          </span>
+        </>
+      ) : (
+        <span className="text-slate-900 font-bold shrink-0">Class lessons</span>
+      )}
+    </span>
+  ) : (
+    'Class lessons'
+  );
+
+  return <ClassroomLayout className="lesson-shell" role={role} persona={layoutPersona} breadcrumbChild={breadcrumbNode}>
     <div className="lesson-workspace" id="lesson-main">
-      {['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE) && <p className="lesson-notice" role="status">Lesson demo · Synced with current classroom workspace.</p>}
       <Link className="lesson-back" to={base}><ArrowLeft size={15} aria-hidden="true" />Back to classroom</Link>
       {classroom.isPending ? <p role="status">Loading classroom…</p> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
         : classroom.data && (
@@ -127,6 +151,20 @@ function LessonDetail({ classId, userId, role, lessonId = '', writable, create =
   const [editing, setEditing] = useState(create);
   const [action, setAction] = useState<Action | null>(null);
   const [notice, setNotice] = useState('');
+  const listQuery = useQuery({
+    queryKey: lessonKeys.list(userId, classId, 0),
+    queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
+      ? Promise.resolve(lessonMockStore.list(classId, role, userId, 0))
+      : lessonApi.list(classId, 0, signal),
+    enabled: !create,
+    retry: false,
+    staleTime: 0,
+  });
+  const orderedLessons = visibleLessons(listQuery.data?.items || [], role);
+  const currentIdx = orderedLessons.findIndex(item => item.id === lessonId);
+  const prevLesson = currentIdx > 0 ? orderedLessons[currentIdx - 1] : null;
+  const nextLesson = currentIdx >= 0 && currentIdx + 1 < orderedLessons.length ? orderedLessons[currentIdx + 1] : null;
+
   const detail = useQuery({
     queryKey: lessonKeys.detail(userId, classId, lessonId),
     queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
@@ -228,6 +266,30 @@ function LessonDetail({ classId, userId, role, lessonId = '', writable, create =
         </section>
       </div>
       {role === 'TEACHER' && <LessonProgress userId={userId} classId={classId} lessonId={lesson.id} />}
+      {(prevLesson || nextLesson) && (
+        <nav className="mt-6 flex flex-wrap items-center justify-between gap-3 pt-5 border-t border-slate-200" aria-label="Lesson sequence">
+          {prevLesson ? (
+            <Link
+              to={`${base}/${encodeURIComponent(prevLesson.id)}`}
+              className="lesson-button secondary"
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+              <span>Previous: {prevLesson.title}</span>
+            </Link>
+          ) : (
+            <span />
+          )}
+          {nextLesson && (
+            <Link
+              to={`${base}/${encodeURIComponent(nextLesson.id)}`}
+              className="lesson-button"
+            >
+              <span>Next: {nextLesson.title}</span>
+              <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+          )}
+        </nav>
+      )}
     </>}
     {action && <LessonConfirm {...lifecycle[action]} pending={mutation.isPending} onConfirm={() => void transition()} onCancel={() => setAction(null)} />}
   </>;

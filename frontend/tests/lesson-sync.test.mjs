@@ -38,18 +38,27 @@ new Function('module', 'exports', 'require', compiled.outputFiles[0].text)(
 const {
   INITIAL_MOCK_CLASSROOMS,
   STORAGE_KEY_CLASSROOMS,
+  getClassroomLessonSummary,
   getLessonCountForClassroom,
   getSynchronizedClassroom,
   lessonMockStore,
 } = module.exports;
 
-test('lessons sync directly with current classroom store including dynamically created and archived classes', () => {
+test('lessons sync directly with current classroom store including dynamically created and archived classes', async () => {
   storage.clear();
 
   // Seeded classroom sync: student sees only PUBLISHED lessons; teacher sees all statuses
   assert.equal(getSynchronizedClassroom('cls-algo-2026')?.name, 'Data Structures & Advanced Algorithms');
   assert.equal(getLessonCountForClassroom('cls-algo-2026', 'STUDENT'), 2);
   assert.equal(getLessonCountForClassroom('cls-algo-2026', 'TEACHER'), 4);
+
+  const initialSummary = getClassroomLessonSummary('cls-algo-2026', 'STUDENT', 'student-1');
+  assert.equal(initialSummary.publishedCount, 2);
+  assert.equal(initialSummary.completedCount, 0);
+  assert.equal(initialSummary.nextLesson?.id, 'les-algo-1');
+
+  const blob = lessonMockStore.downloadAttachment('att-seed-algo-notes');
+  assert.ok((await blob.text()).includes('Recursion Trees'));
 
   // Dynamically add a brand-new classroom as Teacher and create/publish a lesson for it
   const dynamicClassroom = {
@@ -84,6 +93,7 @@ test('lessons sync directly with current classroom store including dynamically c
 
   const completed = lessonMockStore.complete('cls-dynamic-new', created.id, 'student-1');
   assert.equal(completed.progress?.completed, true);
+  assert.equal(getClassroomLessonSummary('cls-dynamic-new', 'STUDENT', 'student-1').completedCount, 1);
 
   // Archiving the classroom blocks new lesson creation or student completion immediately
   const archivedList = [...INITIAL_MOCK_CLASSROOMS, { ...dynamicClassroom, status: 'ARCHIVED' }];

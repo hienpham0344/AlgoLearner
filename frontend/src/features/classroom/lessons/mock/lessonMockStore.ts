@@ -13,9 +13,9 @@ import type {
 } from '../types';
 import type { PaginatedData } from '@/types/api';
 
-const STORAGE_KEY_LESSONS = 'algolearn_prototype_lessons_v1';
-const STORAGE_KEY_LESSON_PROGRESS = 'algolearn_prototype_lesson_progress_v1';
-const STORAGE_KEY_ATTACHMENTS = 'algolearn_prototype_lesson_files_v1';
+const STORAGE_KEY_LESSONS = 'algolearn_prototype_lessons_v2';
+const STORAGE_KEY_LESSON_PROGRESS = 'algolearn_prototype_lesson_progress_v2';
+const STORAGE_KEY_ATTACHMENTS = 'algolearn_prototype_lesson_files_v2';
 
 const DEMO_POLICY: LessonCapabilities = {
   uploadsAvailable: true,
@@ -124,6 +124,22 @@ export const INITIAL_MOCK_LESSONS: Lesson[] = [
       language: 'python',
       code: 'def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    return merge(merge_sort(arr[:mid]), merge_sort(arr[mid:]))',
     },
+    {
+      attachments: [
+        {
+          id: 'att-seed-algo-notes',
+          name: 'lecture-01-recursion-trees-notes.pdf',
+          size: 245760,
+          contentType: 'text/plain; charset=utf-8',
+        },
+        {
+          id: 'att-seed-master-theorem',
+          name: 'master-theorem-cheatsheet.png',
+          size: 118400,
+          contentType: 'text/plain; charset=utf-8',
+        },
+      ],
+    },
   ),
   makeSeedLesson(
     'les-algo-2',
@@ -211,6 +227,28 @@ export const INITIAL_MOCK_LESSONS: Lesson[] = [
 type ProgressMap = Record<string, Record<string, LessonProgress>>;
 type FileContentMap = Record<string, { name: string; contentType: string; text: string }>;
 
+const INITIAL_PROGRESS: ProgressMap = {
+  'les-algo-1': {
+    'student-2': {
+      completed: true,
+      completedAt: '2026-11-02T09:30:00Z',
+    },
+  },
+};
+
+const SEED_FILE_CONTENTS: FileContentMap = {
+  'att-seed-algo-notes': {
+    name: 'lecture-01-recursion-trees-notes.pdf',
+    contentType: 'text/plain; charset=utf-8',
+    text: 'AlgoLearn Lecture 01 - Asymptotic Complexity & Recursion Trees\n\n1. Recurrence T(n) = aT(n/b) + f(n)\n2. Master Theorem Cases 1, 2, 3\n3. Merge Sort Proof: O(n log n)\n',
+  },
+  'att-seed-master-theorem': {
+    name: 'master-theorem-cheatsheet.png',
+    contentType: 'text/plain; charset=utf-8',
+    text: 'Master Theorem Quick Reference: Compare f(n) against n^(log_b a).',
+  },
+};
+
 function getStorage(): Storage | null {
   try {
     return typeof sessionStorage !== 'undefined' ? sessionStorage : null;
@@ -243,14 +281,14 @@ function writeLessons(lessons: Lesson[]): void {
 
 function readProgress(): ProgressMap {
   const storage = getStorage();
-  if (!storage) return {};
+  if (!storage) return { ...INITIAL_PROGRESS };
   try {
     const raw = storage.getItem(STORAGE_KEY_LESSON_PROGRESS);
     if (raw) return JSON.parse(raw) as ProgressMap;
   } catch {
     // fallback
   }
-  return {};
+  return { ...INITIAL_PROGRESS };
 }
 
 function writeProgress(map: ProgressMap): void {
@@ -326,6 +364,45 @@ export function getLessonCountForClassroom(classId: string, role: LessonRole): n
     return lessons.filter(l => l.status === 'PUBLISHED').length;
   }
   return lessons.length;
+}
+
+export interface ClassroomLessonSummary {
+  totalCount: number;
+  publishedCount: number;
+  draftCount: number;
+  archivedCount: number;
+  completedCount: number;
+  nextLesson: Lesson | null;
+}
+
+export function getClassroomLessonSummary(
+  classId: string,
+  role: LessonRole,
+  userId: string,
+): ClassroomLessonSummary {
+  const progressMap = readProgress();
+  const classLessons = readLessons().filter(l => l.classroomId === classId);
+  const published = classLessons
+    .filter(l => l.status === 'PUBLISHED')
+    .map(l => enrichLesson(l, role, userId, progressMap));
+  const draftCount = classLessons.filter(l => l.status === 'DRAFT').length;
+  const archivedCount = classLessons.filter(l => l.status === 'ARCHIVED').length;
+  const completedCount =
+    role === 'STUDENT' ? published.filter(l => l.progress?.completed).length : 0;
+
+  const nextLesson =
+    role === 'STUDENT'
+      ? published.find(l => !l.progress?.completed) || published[0] || null
+      : published[0] || classLessons[0] || null;
+
+  return {
+    totalCount: role === 'STUDENT' ? published.length : classLessons.length,
+    publishedCount: published.length,
+    draftCount,
+    archivedCount,
+    completedCount,
+    nextLesson,
+  };
 }
 
 export const lessonMockStore = {
@@ -532,7 +609,7 @@ export const lessonMockStore = {
     writeLessons(all);
 
     const files = readFiles();
-    const text = await file.text().catch(() => `Demo attachment: ${file.name}`);
+    const text = await file.text().catch(() => `Attachment: ${file.name}`);
     files[attachment.id] = {
       name: file.name,
       contentType: attachment.contentType,
@@ -558,9 +635,9 @@ export const lessonMockStore = {
   },
 
   downloadAttachment(attachmentId: string): Blob {
-    const file = readFiles()[attachmentId];
+    const file = readFiles()[attachmentId] || SEED_FILE_CONTENTS[attachmentId];
     if (!file) {
-      throw new Error('Demo attachment content is unavailable.');
+      throw new Error('Attachment content is unavailable.');
     }
     return new Blob([file.text], { type: file.contentType });
   },

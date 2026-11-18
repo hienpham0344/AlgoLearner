@@ -8,14 +8,14 @@ import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import { profileApi } from '@/features/profile/api/profileApi';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
-import type { EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
+import type { CourseProgress, EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
 import { dashboardApi, dashboardKeys, profileKeys } from '../api/dashboardApi';
 import { mapStudentDashboard } from '../mapStudentDashboard';
 import { RoleDashboardPage } from './RoleDashboardPage';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { PracticePulse } from '../components/PracticePulse';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
-import { getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
+import { getClassroomLessonSummary } from '@/features/classroom/lessons/mock/lessonMockStore';
 import '../styles/dashboard.css';
 
 const IS_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
@@ -149,35 +149,79 @@ export const DashboardPage = () => {
     return user?.role === 'TEACHER' || user?.role === 'ADMIN' ? <RoleDashboardPage role={user.role} /> : null;
   }
 
-  const syncedDemoClasses: EnrolledClass[] =
-    import.meta.env.MODE === 'auth-demo'
-      ? (() => {
-          const studentPersona = readStoredPersona('STUDENT');
-          return readStoredClassrooms()
-            .filter(
-              c =>
-                c.status === 'ACTIVE'
-                && c.members.some(m => m.studentId === studentPersona.id && m.status === 'ACTIVE'),
-            )
-            .map(c => {
-              const lessonCount = getLessonCountForClassroom(c.id, 'STUDENT');
-              return {
-                id: c.id,
-                name: c.name,
-                code: c.classCode,
-                teacher: c.ownerName,
-                currentActivity: c.description,
-                nextAction: `${lessonCount} published ${lessonCount === 1 ? 'lesson' : 'lessons'} available`,
-                completedModules: Math.min(c.stats?.lessonsCount ?? lessonCount, lessonCount),
-                totalModules: Math.max(lessonCount, 1),
-                href: `/student/classrooms/${encodeURIComponent(c.id)}`,
-              };
-            });
-        })()
-      : dashboardDemoData.classes;
+  const { syncedDemoClasses, syncedDemoCourses, primaryClassroomHref } = (() => {
+    if (import.meta.env.MODE !== 'auth-demo') {
+      return {
+        syncedDemoClasses: dashboardDemoData.classes,
+        syncedDemoCourses: dashboardDemoData.courses,
+        primaryClassroomHref: null as string | null,
+      };
+    }
+    const studentPersona = readStoredPersona('STUDENT');
+    const activeClasses = readStoredClassrooms().filter(
+      c =>
+        c.status === 'ACTIVE'
+        && c.members.some(m => m.studentId === studentPersona.id && m.status === 'ACTIVE'),
+    );
+
+    const summaries = activeClasses.map(c => ({
+      classroom: c,
+      summary: getClassroomLessonSummary(c.id, 'STUDENT', studentPersona.id),
+    }));
+
+    const classes: EnrolledClass[] = summaries.map(({ classroom: c, summary }) => ({
+      id: c.id,
+      name: c.name,
+      code: c.classCode,
+      teacher: c.ownerName,
+      currentActivity: c.description,
+      nextAction:
+        summary.nextLesson && summary.completedCount < summary.publishedCount
+          ? `Up next: ${summary.nextLesson.title}`
+          : summary.publishedCount > 0
+            ? `All ${summary.publishedCount} lessons completed`
+            : 'No published lessons yet',
+      completedModules: summary.completedCount,
+      totalModules: summary.publishedCount,
+      href: `/student/classrooms/${encodeURIComponent(c.id)}`,
+    }));
+
+    const orderedForLearning = [...summaries].sort((a, b) => {
+      const aScore = a.summary.publishedCount > a.summary.completedCount ? 2 : a.summary.publishedCount > 0 ? 1 : 0;
+      const bScore = b.summary.publishedCount > b.summary.completedCount ? 2 : b.summary.publishedCount > 0 ? 1 : 0;
+      return bScore - aScore;
+    });
+
+    const courses: CourseProgress[] = orderedForLearning.map(({ classroom: c, summary }) => {
+      const pct =
+        summary.publishedCount > 0
+          ? Math.round((summary.completedCount / summary.publishedCount) * 100)
+          : 0;
+      return {
+        id: c.id,
+        title: c.name,
+        topic: c.classCode,
+        currentModule: `${summary.completedCount} / ${summary.publishedCount} lessons`,
+        currentLesson: summary.nextLesson?.title || 'View classroom materials',
+        completedUnits: summary.completedCount,
+        totalUnits: summary.publishedCount,
+        progressPercent: pct,
+        href: summary.nextLesson
+          ? `/student/classrooms/${encodeURIComponent(c.id)}/lessons/${encodeURIComponent(summary.nextLesson.id)}`
+          : `/student/classrooms/${encodeURIComponent(c.id)}`,
+      };
+    });
+
+    const primaryClass = orderedForLearning[0]?.classroom;
+    return {
+      syncedDemoClasses: classes,
+      syncedDemoCourses: courses.length > 0 ? courses : dashboardDemoData.courses,
+      primaryClassroomHref: primaryClass ? `/student/classrooms/${encodeURIComponent(primaryClass.id)}` : null,
+    };
+  })();
 
   const data: StudentDashboardData = IS_DEMO
-    ? { ...dashboardDemoData, classes: syncedDemoClasses }
+    ? { ...dashboardDemoData, classes: syncedDemoClasses, courses: syncedDemoCourses }
     : dashboardQuery.data
       ? mapStudentDashboard(dashboardQuery.data)
       : EMPTY_DASHBOARD_DATA;
@@ -271,11 +315,21 @@ export const DashboardPage = () => {
                           >
                             <span style={{ width: `${featuredCourse.progressPercent}%` }} />
                           </div>
-                          {featuredCourse.href && (
-                            <Link className="dashboard-learning-action" to={featuredCourse.href}>
-                              Continue learning <ArrowRight size={15} aria-hidden="true" />
-                            </Link>
-                          )}
+                          <div className="flex flex-wrap items-center gap-3">
+                            {featuredCourse.href && (
+                              <Link className="dashboard-learning-action" to={featuredCourse.href}>
+                                {primaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
+                              </Link>
+                            )}
+                            {primaryClassroomHref && (
+                              <Link
+                                to={primaryClassroomHref}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 hover:text-white underline underline-offset-4"
+                              >
+                                Open classroom →
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -294,7 +348,10 @@ export const DashboardPage = () => {
                   </div>
 
                   {secondaryCourse && (
-                    <div className="dashboard-secondary-course">
+                    <Link
+                      to={secondaryCourse.href || '/student/classrooms'}
+                      className="dashboard-secondary-course hover:border-slate-300 transition-colors"
+                    >
                       <span>ALSO IN PROGRESS</span>
                       <div className="dashboard-secondary-course-main">
                         <strong>{secondaryCourse.title}</strong>
@@ -312,7 +369,7 @@ export const DashboardPage = () => {
                       <span className="dashboard-secondary-course-progress">
                         {secondaryCourse.progressPercent}% complete
                       </span>
-                    </div>
+                    </Link>
                   )}
                 </section>
 
@@ -418,7 +475,7 @@ export const DashboardPage = () => {
                                 aria-label={`${classroom.name}: ${moduleCounts.completed} of ${moduleCounts.total} modules completed`}
                               >
                                 <span className="dashboard-class-segments-label">
-                                  {moduleCounts.completed} / {moduleCounts.total} modules
+                                  {moduleCounts.completed} / {moduleCounts.total} lessons
                                 </span>
                                 <div className="dashboard-class-segments-track" aria-hidden="true">
                                   {Array.from({ length: moduleCounts.total }, (_, idx) => (

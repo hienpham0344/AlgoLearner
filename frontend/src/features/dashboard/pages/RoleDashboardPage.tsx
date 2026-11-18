@@ -13,7 +13,7 @@ import {
 } from '../api/dashboardApi';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
-import { getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
+import { getClassroomLessonSummary, getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
@@ -169,9 +169,17 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                 >
                   <span style={{ width: `${reviewCompletionPercent}%` }} />
                 </div>
-                <Link className="dashboard-learning-action" to="/teacher/review-queue">
-                  Review submissions <ArrowRight size={15} aria-hidden="true" />
-                </Link>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link className="dashboard-learning-action" to="/teacher/classrooms">
+                    Manage classrooms &amp; lessons <ArrowRight size={15} aria-hidden="true" />
+                  </Link>
+                  <Link
+                    to="/teacher/review-queue"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white underline underline-offset-4"
+                  >
+                    Review queue →
+                  </Link>
+                </div>
               </div>
             </div>
           </section>
@@ -271,7 +279,12 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                         </div>
                         {stat && (
                           <span className="dashboard-class-next">
-                            {stat.publishedAssignmentCount} assignments · {stat.publishedQuizCount} quizzes
+                            {import.meta.env.MODE === 'auth-demo'
+                              ? (() => {
+                                  const lessonSummary = getClassroomLessonSummary(classroom.classroomId, 'TEACHER', '');
+                                  return `${lessonSummary.publishedCount} published · ${lessonSummary.draftCount} draft lessons · ${stat.publishedQuizCount} quizzes`;
+                                })()
+                              : `${stat.publishedAssignmentCount} assignments · ${stat.publishedQuizCount} quizzes`}
                           </span>
                         )}
                       </div>
