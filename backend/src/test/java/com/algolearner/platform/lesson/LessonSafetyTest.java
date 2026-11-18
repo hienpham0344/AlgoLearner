@@ -140,6 +140,35 @@ class LessonSafetyTest extends PostgresIntegrationTest {
                 new LessonDtos.AddMaterialRequest(file.getId(),null,null,null,0))).isInstanceOf(AppException.class);
     }
 
+    @Test
+    void switchingFromAutoItemsToManualAllowsUnlinkingWhilePreservingRuleHistory() {
+        var teacher = account(AccountRole.TEACHER);
+        var classroom = classroomService.create(teacher.getId(), new ClassroomDtos.Create("Switch mode", null, JoinMode.AUTO_JOIN, null, null));
+        var lesson = service.create(teacher.getId(), classroom.id(), new LessonDtos.CreateLessonRequest("Switch", null, null, null, CompletionMode.AUTO_ITEMS));
+        UUID quiz = UUID.randomUUID();
+        service.linkItem(teacher.getId(), classroom.id(), lesson.id(), new LessonDtos.LinkItemRequest(LinkedItemType.QUIZ, quiz));
+        SOURCE.set(new LessonProgressSource(false, false, null, null, "empty"));
+        service.configureCompletionRule(teacher.getId(), classroom.id(), lesson.id(),
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL,
+                        java.util.List.of(new LessonCompletionRule.Condition(
+                                LinkedItemType.QUIZ, quiz, LessonCompletionRule.Requirement.SUBMITTED, null))));
+
+        assertThatThrownBy(() -> service.unlinkItem(teacher.getId(), classroom.id(), lesson.id(), quiz))
+                .isInstanceOf(AppException.class);
+
+        var updated = service.update(teacher.getId(), classroom.id(), lesson.id(),
+                new LessonDtos.UpdateLessonRequest("Switch", null, null, null, CompletionMode.MANUAL));
+        assertThat(updated.completionMode()).isEqualTo(CompletionMode.MANUAL);
+
+        service.unlinkItem(teacher.getId(), classroom.id(), lesson.id(), quiz);
+
+        var afterUnlink = service.get(teacher.getId(), classroom.id(), lesson.id());
+        assertThat(afterUnlink.linkedItems()).isEmpty();
+        assertThat(afterUnlink.canDelete()).isFalse();
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.id(), lesson.id()))
+                .isInstanceOf(AppException.class);
+    }
+
     private boolean completed(UUID lesson,UUID student) { return jdbc.queryForObject("select is_completed from tbl_lesson_completion where lesson_id=? and student_id=?", Boolean.class,lesson,student); }
     private int history(UUID lesson) { return jdbc.queryForObject("select count(*) from tbl_lesson_completion_history where lesson_id=?",Integer.class,lesson); }
 

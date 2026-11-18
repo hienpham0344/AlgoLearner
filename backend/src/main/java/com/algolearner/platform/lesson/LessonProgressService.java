@@ -77,6 +77,7 @@ public class LessonProgressService {
 
     public boolean ruleReferences(UUID lessonId, LinkedItemType type, UUID itemId) {
         var lesson = lessons.findById(lessonId).orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
+        if (lesson.getCompletionMode() != CompletionMode.AUTO_ITEMS) return false;
         var stored = currentRule(lesson);
         if (stored == null) return false;
         try { return mapper.readValue(stored, LessonCompletionRule.class).conditions().stream()
