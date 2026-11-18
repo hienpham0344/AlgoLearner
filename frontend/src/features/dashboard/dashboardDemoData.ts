@@ -55,7 +55,7 @@ export const dashboardDemoData: StudentDashboardData = {
       completedUnits: 8,
       totalUnits: 13,
       progressPercent: 62,
-      href: '/courses',
+      href: '/student/courses',
     },
     {
       id: 'demo-algorithms',
@@ -66,7 +66,7 @@ export const dashboardDemoData: StudentDashboardData = {
       completedUnits: 3,
       totalUnits: 11,
       progressPercent: 28,
-      href: '/courses',
+      href: '/student/courses',
     },
   ],
   deadlines: [
@@ -124,7 +124,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Functions and reusable logic · Python foundations',
       createdAt: hoursFromNow(-2),
       read: false,
-      href: '/courses',
+      href: '/student/courses',
     },
     {
       id: 'demo-note-2',
@@ -134,7 +134,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Comparison-based sorting & complexity · Algorithms & Data Structures',
       createdAt: hoursFromNow(-19),
       read: true,
-      href: '#classes',
+      href: '/student/classrooms',
     },
     {
       id: 'demo-note-3',
@@ -144,7 +144,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Core data structures · Programming Fundamentals',
       createdAt: hoursFromNow(-42),
       read: true,
-      href: '#deadlines',
+      href: '/student/classrooms',
     },
   ],
 };

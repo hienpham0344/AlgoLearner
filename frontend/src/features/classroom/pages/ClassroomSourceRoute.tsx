@@ -21,7 +21,7 @@ const mockPages = {
 /** Choose one data source for the whole classroom workspace. Never hide API authorization errors with demo data. */
 export function ClassroomSourceRoute({ role, detail }: { role: DemoRole; detail: boolean }) {
   const { token, user, isLoading } = useAuth();
-  const forceMock = useApiSource() === 'mock';
+  const forceMock = useApiSource() === 'mock' || import.meta.env.MODE === 'lessons-demo';
   const availability = useQuery({
     queryKey: classroomKeys.list(0),
     queryFn: () => classroomApi.list(0),

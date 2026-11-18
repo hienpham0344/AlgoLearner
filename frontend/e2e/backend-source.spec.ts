@@ -50,7 +50,7 @@ test('available backend supplies account, profile, dashboard and classrooms', as
     role: 'TEACHER', lifecycleStatus: 'ACTIVE' };
   const empty = { items: [], totalElements: 0, hasMore: false };
   const classroom = { id: 'backend-classroom', name: 'Classroom from backend', description: 'Persisted classroom data',
-    status: 'ACTIVE', joinMode: 'AUTO_JOIN' };
+    status: 'ACTIVE', joinMode: 'AUTO_JOIN', ownerId: account.id };
   const calls = new Set<string>();
   let classroomListCalls = 0;
   let currentUserCalls = 0;
@@ -90,13 +90,15 @@ test('available backend supplies account, profile, dashboard and classrooms', as
     await page.getByRole('button', { name: 'Continue to your workspace' }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
     await expect(page.getByText(classroom.name, { exact: true })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Class lessons' }).getByRole('link', { name: /Classroom from backend/ })).toBeVisible();
+    expect(classroomListCalls).toBe(1);
     expect(await page.evaluate(() => localStorage.getItem('algolearner_token'))).toBe('backend-access');
     await page.goto(`${base}/profile`);
     await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Teacher from backend');
     expect(currentUserCalls).toBe(1);
     await page.goto(`${base}/teacher/classrooms`);
     await expect(page.getByRole('heading', { name: classroom.name })).toBeVisible();
-    expect(classroomListCalls).toBe(1);
+    expect(classroomListCalls).toBe(2);
     await expect(page.getByText('Backend chưa chạy', { exact: false })).toHaveCount(0);
     for (const path of ['/auth/login', '/auth/me', '/users/me/profile', '/dashboards/teacher', '/classrooms']) {
       expect(calls.has(`/api/v1${path}`)).toBe(true);

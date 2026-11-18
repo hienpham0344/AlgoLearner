@@ -6,14 +6,20 @@ import { backendFirstPlugin, offlineNotFoundPlugin } from './dev/backendFirstPlu
 import { authDemoPlugin } from './dev/authDemoPlugin';
 import { profileDemoPlugin } from './dev/profileDemoPlugin';
 import { dashboardDemoPlugin } from './dev/dashboardDemoPlugin';
+import { lessonsDemoPlugin } from './dev/lessonsDemoPlugin';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   cacheDir: `node_modules/.vite-${mode}`,
   plugins: [
-    react(), tailwindcss(),
-    backendFirstPlugin(process.env.ALGOLEARN_API_TARGET || 'http://127.0.0.1:8080'),
-    authDemoPlugin(), profileDemoPlugin(), dashboardDemoPlugin(), offlineNotFoundPlugin(),
+    react(),
+    tailwindcss(),
+    ...(mode === 'lessons-demo' ? [lessonsDemoPlugin()] : []),
+    backendFirstPlugin(process.env.ALGOLEARN_API_TARGET || (mode === 'lessons-demo' ? 'http://127.0.0.1:19999' : 'http://127.0.0.1:8080')),
+    authDemoPlugin(mode === 'auth-demo' ? 'demo' : 'backend-mock'),
+    profileDemoPlugin(),
+    dashboardDemoPlugin(),
+    offlineNotFoundPlugin(),
   ],
   resolve: {
     alias: {

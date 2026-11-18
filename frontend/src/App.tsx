@@ -1,5 +1,5 @@
 import { BackendStatusBanner } from '@/components/BackendStatusBanner';
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
@@ -16,6 +16,9 @@ import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
 import { AdminAccountsPage } from '@/features/admin/pages/AdminAccountsPage';
+import { PlaceholderPage } from '@/components/common/PlaceholderPage';
+import { NotificationsPage } from '@/features/dashboard/pages/NotificationsPage';
+const LessonWorkspacePage = lazy(() => import('@/features/classroom/lessons/pages/LessonWorkspacePage').then(module => ({ default: module.LessonWorkspacePage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -32,7 +35,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return <Suspense fallback={<p role="status" className="p-8">Loading workspace…</p>}>{children}</Suspense>;
 };
 
 export const App: React.FC = () => {
@@ -61,8 +64,22 @@ export const App: React.FC = () => {
           </ProtectedRoute>
         }
       />
+      {/* Feature Placeholders & Workspace Sections */}
+      <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+      <Route path="/student/courses" element={<ProtectedRoute><PlaceholderPage feature="public-courses" /></ProtectedRoute>} />
+      <Route path="/practice" element={<ProtectedRoute><PlaceholderPage feature="practice" /></ProtectedRoute>} />
+      <Route path="/teacher/assignments" element={<ProtectedRoute><PlaceholderPage feature="teacher-assignments" /></ProtectedRoute>} />
+      <Route path="/teacher/review-queue" element={<ProtectedRoute><PlaceholderPage feature="teacher-review-queue" /></ProtectedRoute>} />
+      <Route path="/admin/submissions" element={<ProtectedRoute><PlaceholderPage feature="admin-submissions" /></ProtectedRoute>} />
+      <Route path="/admin/system-logs" element={<ProtectedRoute><PlaceholderPage feature="admin-system-logs" /></ProtectedRoute>} />
+      <Route path="/admin/security-audit" element={<ProtectedRoute><PlaceholderPage feature="admin-security-audit" /></ProtectedRoute>} />
+      <Route path="/placeholder/:featureKey" element={<ProtectedRoute><PlaceholderPage /></ProtectedRoute>} />
 
       {/* Role-Specific Classroom Routes (FE 4.3 Refactor) */}
+      <Route path="/teacher/classrooms/:id/lessons" element={<ProtectedRoute><LessonWorkspacePage role="TEACHER" /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="TEACHER" /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/lessons" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 
