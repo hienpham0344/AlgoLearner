@@ -183,18 +183,23 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                 >
                   <span style={{ width: `${reviewCompletionPercent}%` }} />
                 </div>
-                <a className="dashboard-learning-action" href="#review">
+                <Link className="dashboard-learning-action" to="/teacher/review-queue">
                   Review submissions <ArrowRight size={15} aria-hidden="true" />
-                </a>
+                </Link>
               </div>
             </div>
           </section>
 
           {/* 02 / Open & Upcoming Assignments Timeline */}
           <section aria-labelledby="teacher-assignments-title" id="assignments" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">02 / PLANNING</span>
-              <h2 id="teacher-assignments-title">Open & upcoming assignments</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">02 / PLANNING</span>
+                <h2 id="teacher-assignments-title">Open & upcoming assignments</h2>
+              </div>
+              <Link to="/teacher/assignments" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Manage assignments →
+              </Link>
             </div>
 
             {sortedAssignments.length ? (
@@ -245,9 +250,14 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
 
           {/* 03 / My Classes */}
           <section aria-labelledby="teacher-classes-title" id="classes" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">03 / CLASSROOMS</span>
-              <h2 id="teacher-classes-title">My classes</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">03 / CLASSROOMS</span>
+                <h2 id="teacher-classes-title">My classes</h2>
+              </div>
+              <Link to="/teacher/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                View all classrooms →
+              </Link>
             </div>
 
             {data.classrooms.items.length ? (
@@ -259,7 +269,11 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                     : 0;
 
                   return (
-                    <article className="dashboard-class-row" key={classroom.classroomId} tabIndex={0}>
+                    <Link
+                      className="dashboard-class-row"
+                      key={classroom.classroomId}
+                      to={`/teacher/classrooms/${encodeURIComponent(classroom.classroomId)}`}
+                    >
                       <div className="dashboard-class-main">
                         <div className="dashboard-class-header">
                           <strong>{classroom.name}</strong>
@@ -299,7 +313,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                           </div>
                         </div>
                       )}
-                    </article>
+                    </Link>
                   );
                 })}
               </div>
@@ -315,9 +329,14 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
 
           {/* 04 / Ungraded Work & Recent Submissions */}
           <section aria-labelledby="teacher-review-title" id="review" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">04 / REVIEW QUEUE</span>
-              <h2 id="teacher-review-title">Recent submissions</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">04 / REVIEW QUEUE</span>
+                <h2 id="teacher-review-title">Recent submissions</h2>
+              </div>
+              <Link to="/teacher/review-queue" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Open review queue →
+              </Link>
             </div>
 
             {data.ungradedSubmissions.items.length || data.recentSubmissions.items.length ? (
@@ -545,9 +564,9 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
                 >
                   <span style={{ width: `${activeAccountPercent}%` }} />
                 </div>
-                <a className="dashboard-learning-action" href="#submissions">
+                <Link className="dashboard-learning-action" to="/admin/submissions">
                   Inspect activity <ArrowRight size={15} aria-hidden="true" />
-                </a>
+                </Link>
               </div>
             </div>
           </section>
@@ -559,9 +578,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
             className="dashboard-section"
             onMouseLeave={() => setActiveBarIndex(null)}
           >
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">02 / ACTIVITY OVER TIME</span>
-              <h2 id="admin-chart-title">Official submissions</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">02 / ACTIVITY OVER TIME</span>
+                <h2 id="admin-chart-title">Official submissions</h2>
+              </div>
+              <Link to="/admin/submissions" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                View all submissions →
+              </Link>
             </div>
 
             <div className="role-chart-studio">
@@ -616,9 +640,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 
           {/* 03 / Recent System Activity */}
           <section aria-labelledby="admin-activity-title" id="activity" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">03 / SYSTEM LOG</span>
-              <h2 id="admin-activity-title">Recent activity</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">03 / SYSTEM LOG</span>
+                <h2 id="admin-activity-title">Recent activity</h2>
+              </div>
+              <Link to="/admin/system-logs" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                View all logs →
+              </Link>
             </div>
 
             {data.recentActivities.items.length ? (
@@ -652,9 +681,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 
           {/* 04 / Important Audit Events */}
           <section aria-labelledby="admin-audit-title" id="audit" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">04 / SECURITY AUDIT</span>
-              <h2 id="admin-audit-title">Audit events</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">04 / SECURITY AUDIT</span>
+                <h2 id="admin-audit-title">Audit events</h2>
+              </div>
+              <Link to="/admin/security-audit" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Audit details →
+              </Link>
             </div>
 
             {data.importantAuditEvents.items.length ? (
@@ -692,9 +726,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
         {/* Right Column: Moderation, Catalog & System Configuration */}
         <aside className="dashboard-secondary">
           <section aria-labelledby="admin-moderation-title" id="moderation" className="dashboard-practice">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">05 / MODERATION</span>
-              <h2 id="admin-moderation-title">Accounts to watch</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">05 / MODERATION</span>
+                <h2 id="admin-moderation-title">Accounts to watch</h2>
+              </div>
+              <Link to="/admin/accounts" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Manage accounts →
+              </Link>
             </div>
 
             <div className="dashboard-practice-studio">
@@ -834,19 +873,20 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
     role === 'TEACHER'
       ? [
           { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-          { label: 'Class lessons', href: '#lessons', icon: BookOpen, current: false },
-          { label: 'Assignments', href: '#assignments', icon: FileCode2, current: false },
-          { label: 'My classes', href: '#classes', icon: BookOpen, current: false },
-          { label: 'Review queue', href: '#review', icon: ClipboardCheck, current: false },
+          { label: 'My classes', href: '/teacher/classrooms', icon: BookOpen, current: false },
+          { label: 'Class lessons', href: '/teacher/classrooms', icon: BookOpen, current: false },
+          { label: 'Assignments', href: '/teacher/assignments', icon: FileCode2, current: false },
+          { label: 'Review queue', href: '/teacher/review-queue', icon: ClipboardCheck, current: false },
           { label: 'Notifications', href: '#notifications', icon: Bell, current: false },
           { label: 'My profile', href: '/profile', icon: UserRound, current: false },
         ]
       : [
           { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-          { label: 'Submissions', href: '#submissions', icon: Activity, current: false },
-          { label: 'System log', href: '#activity', icon: FileCode2, current: false },
-          { label: 'Security audit', href: '#audit', icon: ShieldAlert, current: false },
-          { label: 'Moderation', href: '#moderation', icon: UserRound, current: false },
+          { label: 'Classrooms', href: '/admin/classrooms', icon: BookOpen, current: false },
+          { label: 'Submissions', href: '/admin/submissions', icon: Activity, current: false },
+          { label: 'System log', href: '/admin/system-logs', icon: FileCode2, current: false },
+          { label: 'Security audit', href: '/admin/security-audit', icon: ShieldAlert, current: false },
+          { label: 'Moderation', href: '/admin/accounts', icon: UserRound, current: false },
         ];
 
   const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;

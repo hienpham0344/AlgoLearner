@@ -29,7 +29,7 @@ import { PracticePulse } from '../components/PracticePulse';
 import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 
-const IS_DEMO = import.meta.env.MODE === 'auth-demo';
+const IS_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
 const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
 const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
 
@@ -49,10 +49,10 @@ const EMPTY_DASHBOARD_DATA: StudentDashboardData = {
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-  { label: 'Class lessons', href: '#lessons', icon: BookOpen, current: false },
-  { label: 'My classes', href: '#classes', icon: BookOpen, current: false },
+  { label: 'My classes', href: '/student/classrooms', icon: BookOpen, current: false },
+  { label: 'Class lessons', href: '/student/classrooms', icon: BookOpen, current: false },
   { label: 'Public courses', href: '/courses', icon: Code2, current: false },
-  { label: 'Coding practice', href: '#practice', icon: Flame, current: false },
+  { label: 'Coding practice', href: '/practice', icon: Flame, current: false },
   { label: 'Notifications', href: '#notifications', icon: Bell, current: false },
   { label: 'My profile', href: '/profile', icon: UserRound, current: false },
 ] as const;
@@ -438,13 +438,12 @@ export const DashboardPage = () => {
                             </div>
                             <div className="dashboard-timeline-body">
                               <div className="dashboard-timeline-head">
-                                {item.href ? (
-                                  <Link className="dashboard-timeline-title" to={item.href}>
-                                    {item.title}
-                                  </Link>
-                                ) : (
-                                  <strong className="dashboard-timeline-title">{item.title}</strong>
-                                )}
+                                <Link
+                                  className="dashboard-timeline-title"
+                                  to={item.href && !item.href.startsWith('#') ? item.href : '/student/classrooms'}
+                                >
+                                  {item.title}
+                                </Link>
                                 <span className="dashboard-timeline-urgency" data-immediate={isImmediate}>
                                   {urgency}
                                 </span>
@@ -473,9 +472,14 @@ export const DashboardPage = () => {
                 </section>
 
                 <section aria-labelledby="classes-title" id="classes" className="dashboard-section">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">03 / YOUR LEARNING</span>
-                    <h2 id="classes-title">My classes</h2>
+                  <div className="dashboard-section-heading flex items-center justify-between">
+                    <div>
+                      <span className="dashboard-eyebrow">03 / YOUR LEARNING</span>
+                      <h2 id="classes-title">My classes</h2>
+                    </div>
+                    <Link to="/student/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                      View all classrooms →
+                    </Link>
                   </div>
 
                   {data.classes.length ? (
@@ -520,14 +524,14 @@ export const DashboardPage = () => {
                           </>
                         );
 
-                        return classroom.href ? (
-                          <Link className="dashboard-class-row" key={classroom.id} to={classroom.href}>
+                        const classroomLink = classroom.href && !classroom.href.startsWith('#')
+                          ? classroom.href
+                          : `/student/classrooms/${encodeURIComponent(classroom.id)}`;
+
+                        return (
+                          <Link className="dashboard-class-row" key={classroom.id} to={classroomLink}>
                             {content}
                           </Link>
-                        ) : (
-                          <article className="dashboard-class-row" key={classroom.id} tabIndex={0}>
-                            {content}
-                          </article>
                         );
                       })}
                     </div>
@@ -546,9 +550,14 @@ export const DashboardPage = () => {
 
               <aside className="dashboard-secondary">
                 <section aria-labelledby="practice-title" id="practice" className="dashboard-practice">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">04 / KEEP THE RHYTHM</span>
-                    <h2 id="practice-title">Practice pulse</h2>
+                  <div className="dashboard-section-heading flex items-center justify-between">
+                    <div>
+                      <span className="dashboard-eyebrow">04 / KEEP THE RHYTHM</span>
+                      <h2 id="practice-title">Practice pulse</h2>
+                    </div>
+                    <Link to="/practice" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                      Open practice studio →
+                    </Link>
                   </div>
 
                   <PracticePulse practice={practice} loading={loadState === 'loading'} />

@@ -35,7 +35,7 @@ export const ClassroomLayout: React.FC<ClassroomLayoutProps> = ({
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Classrooms', href: roleBaseUrl, icon: BookOpen },
     ...(id && role !== 'ADMIN' ? [{ label: 'Class lessons', href: `${roleBaseUrl}/${encodeURIComponent(id)}/lessons`, icon: BookOpen }] : []),
-    { label: 'Practice', href: '#practice', icon: Code2 },
+    { label: 'Practice', href: '/practice', icon: Code2 },
   ];
 
   return (
@@ -44,7 +44,7 @@ export const ClassroomLayout: React.FC<ClassroomLayoutProps> = ({
         {/* Navigation Sidebar */}
         <aside className="classroom-sidebar" aria-label="Classroom Navigation">
           <div className="classroom-sidebar-top">
-            <Link to={roleBaseUrl} className="classroom-brand">
+            <Link to="/dashboard" className="classroom-brand">
               <img src={logoMark} alt="" className="w-7 h-7 invert" />
               <span>AlgoLearn</span>
             </Link>

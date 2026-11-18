@@ -134,7 +134,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Comparison-based sorting & complexity · Algorithms & Data Structures',
       createdAt: hoursFromNow(-19),
       read: true,
-      href: '#classes',
+      href: '/student/classrooms',
     },
     {
       id: 'demo-note-3',
@@ -144,7 +144,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Core data structures · Programming Fundamentals',
       createdAt: hoursFromNow(-42),
       read: true,
-      href: '#deadlines',
+      href: '/student/classrooms',
     },
   ],
 };
