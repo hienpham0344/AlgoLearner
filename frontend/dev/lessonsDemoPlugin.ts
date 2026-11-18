@@ -266,6 +266,9 @@ export function lessonsDemoPlugin(): Plugin {
 
         if (parts[1] === 'files' && parts.length === 2 && method === 'POST') {
           if (!isTeacher) return respond(response, 403, null, 'Only the teacher can upload lesson materials.');
+          if (url.searchParams.get('purpose') !== 'LESSON_MATERIAL') {
+            return respond(response, 400, null, 'Invalid file upload purpose.');
+          }
           try {
             const contentType = request.headers['content-type'];
             if (!contentType?.startsWith('multipart/form-data')) return respond(response, 400, null, 'Select a file to upload.');
@@ -275,7 +278,7 @@ export function lessonsDemoPlugin(): Plugin {
             if (!(uploaded instanceof Blob)) return respond(response, 400, null, 'Select a file to upload.');
             const fileName = uploaded instanceof File && uploaded.name ? uploaded.name : 'attachment.pdf';
             const error = validateAttachment({ name: fileName, size: uploaded.size }, FILE_POLICY);
-            if (error) return respond(response, 422, null, error);
+            if (error) return respond(response, 400, null, error);
             const contents = Buffer.from(await uploaded.arrayBuffer());
             const stored: DemoStoredFile = {
               id: crypto.randomUUID(),
@@ -314,7 +317,9 @@ export function lessonsDemoPlugin(): Plugin {
             type: activity.type,
             title: activity.title,
             linkedLessonId: activity.type === 'QUIZ'
-              ? [...lessons.values()].find(item => item.linkedItems.some(link => link.itemId === activity.id))?.id ?? null
+              ? [...lessons.values()].find(
+                  item => item.classroomId === classroom.id && item.linkedItems.some(link => link.itemId === activity.id),
+                )?.id ?? null
               : null,
             available: activity.available,
           })));
@@ -379,7 +384,8 @@ export function lessonsDemoPlugin(): Plugin {
         try {
           if ((parts.length === 2 && method === 'POST') || (parts.length === 3 && method === 'PUT')) {
             if (!isTeacher) return respond(response, 403, null, 'Only the teacher can edit lessons.');
-            if (parts.length === 3 && (!lesson || lesson.status === 'ARCHIVED')) return respond(response, 409, null, 'Restore this lesson before editing.');
+            if (parts.length === 3 && !lesson) return respond(response, 404, null, 'Lesson not found.');
+            if (parts.length === 3 && lesson && lesson.status === 'ARCHIVED') return respond(response, 403, null, 'Restore this lesson before editing.');
             const payload = JSON.parse((await body(request, 400_000)).toString()) as DemoLessonPayload;
             const validationErrors = validateLesson({
               title: payload.title || '',
@@ -390,11 +396,12 @@ export function lessonsDemoPlugin(): Plugin {
               activityIds: [],
               requiredActivityIds: [],
             }, activities);
-            if (Object.keys(validationErrors).length) return respond(response, 422, null, Object.values(validationErrors).join(' '));
+            if (Object.keys(validationErrors).length) return respond(response, 400, null, Object.values(validationErrors).join(' '));
             if (lesson && payload.completionMode === 'AUTO_ITEMS' && lesson.status === 'PUBLISHED' && lesson.ruleVersion === 0) {
-              return respond(response, 422, null, 'Configure completion conditions before enabling automatic completion.');
+              return respond(response, 400, null, 'Configure completion conditions before enabling automatic completion.');
             }
             const nextOrder = [...lessons.values()].filter(item => item.classroomId === classroom.id).length;
+            const nextCompletionMode = lesson ? (payload.completionMode ?? lesson.completionMode) : (payload.completionMode ?? 'MANUAL');
             const saved: DemoLessonRecord = lesson
               ? {
                   ...lesson,
@@ -402,7 +409,8 @@ export function lessonsDemoPlugin(): Plugin {
                   content: payload.content !== undefined ? payload.content : lesson.content,
                   codeExample: payload.codeExample !== undefined ? payload.codeExample : lesson.codeExample,
                   externalLinks: payload.externalLinks !== undefined ? payload.externalLinks : lesson.externalLinks,
-                  completionMode: payload.completionMode ?? lesson.completionMode,
+                  completionMode: nextCompletionMode,
+                  requiredItemIds: nextCompletionMode === 'AUTO_ITEMS' ? lesson.requiredItemIds : [],
                   updatedAt: timestamp(),
                 }
               : {
@@ -410,7 +418,7 @@ export function lessonsDemoPlugin(): Plugin {
                   content: payload.content ?? '',
                   codeExample: payload.codeExample ?? '',
                   externalLinks: payload.externalLinks ?? '[]',
-                  completionMode: payload.completionMode ?? 'MANUAL',
+                  completionMode: nextCompletionMode,
                 };
             lessons.set(saved.id, saved);
             return respond(response, lesson ? 200 : 201, detailView(saved));
@@ -422,7 +430,11 @@ export function lessonsDemoPlugin(): Plugin {
             return respond(
               response,
               isTeacher ? 200 : 403,
-              page([{ studentId: STUDENT, username: 'Demo Student', ...(progress.get(lesson.id) || { completed: false, completedAt: null }) }], pageIndex),
+              {
+                success: true,
+                data: page([{ studentId: STUDENT, username: 'Demo Student', ...(progress.get(lesson.id) || { completed: false, completedAt: null }) }], pageIndex),
+                timestamp: timestamp(),
+              },
             );
           }
           if (parts[3] === 'complete' && method === 'POST') {
@@ -437,7 +449,7 @@ export function lessonsDemoPlugin(): Plugin {
             if (parts.length === 4 && method === 'POST') {
               const { fileId } = JSON.parse((await body(request, 16_384)).toString()) as { fileId?: string };
               const stored = fileId ? files.get(fileId) : undefined;
-              if (!stored) return respond(response, 422, null, 'Upload lesson material before attaching it.');
+              if (!stored) return respond(response, 400, null, 'Upload lesson material before attaching it.');
               const material: DemoMaterial = {
                 id: crypto.randomUUID(),
                 fileName: stored.name,
@@ -459,12 +471,12 @@ export function lessonsDemoPlugin(): Plugin {
             if (parts.length === 4 && method === 'POST') {
               const { itemType, itemId } = JSON.parse((await body(request, 16_384)).toString()) as { itemType: LessonActivity['type']; itemId: string };
               const option = activities.find(act => act.id === itemId && act.type === itemType);
-              if (!option) return respond(response, 422, null, 'Linked item is unavailable in this classroom.');
-              if (itemType === 'QUIZ' && [...lessons.values()].some(other => other.id !== lesson.id && other.linkedItems.some(link => link.itemType === 'QUIZ' && link.itemId === itemId))) {
+              if (!option) return respond(response, 400, null, 'Linked item is unavailable in this classroom.');
+              if (itemType === 'QUIZ' && [...lessons.values()].some(other => other.classroomId === classroom.id && other.id !== lesson.id && other.linkedItems.some(link => link.itemType === 'QUIZ' && link.itemId === itemId))) {
                 return respond(response, 409, null, 'This quiz is already linked to another lesson.');
               }
               if (lesson.linkedItems.some(link => link.itemType === itemType && link.itemId === itemId)) {
-                return respond(response, 422, null, 'Item is already linked.');
+                return respond(response, 400, null, 'Item is already linked.');
               }
               const linked: DemoLinkedItem = {
                 id: crypto.randomUUID(),
@@ -479,7 +491,7 @@ export function lessonsDemoPlugin(): Plugin {
             }
             if (parts.length === 5 && method === 'DELETE') {
               if (lesson.completionMode === 'AUTO_ITEMS' && lesson.requiredItemIds.includes(parts[4])) {
-                return respond(response, 422, null, 'Update completion rule before unlinking this item.');
+                return respond(response, 400, null, 'Update completion rule before unlinking this item.');
               }
               lesson.linkedItems = lesson.linkedItems.filter(link => link.itemId !== parts[4]);
               return noContent(response);
@@ -489,7 +501,7 @@ export function lessonsDemoPlugin(): Plugin {
             if (!isTeacher || lesson.status === 'ARCHIVED') return respond(response, 403, null, 'This lesson is read-only.');
             const rule = JSON.parse((await body(request, 32_768)).toString()) as DemoCompletionRulePayload;
             if (!rule.conditions?.length || rule.conditions.some(c => c.itemType === 'PRACTICE' || !lesson.linkedItems.some(link => link.itemId === c.itemId && link.itemType === c.itemType))) {
-              return respond(response, 422, null, 'Choose at least one linked assignment or quiz as a completion requirement.');
+              return respond(response, 400, null, 'Choose at least one linked assignment or quiz as a completion requirement.');
             }
             lesson.requiredItemIds = rule.conditions.map(c => c.itemId);
             lesson.ruleVersion += 1;
@@ -500,7 +512,7 @@ export function lessonsDemoPlugin(): Plugin {
 
           if (!isTeacher) return respond(response, 403, null, 'Only the teacher can change lesson state.');
           if (parts.length === 3 && method === 'DELETE') {
-            if (!detailView(lesson).canDelete) return respond(response, 409, null, 'This lesson has learning data. Archive it instead.');
+            if (!detailView(lesson).canDelete) return respond(response, 400, null, 'This lesson has learning data. Archive it instead.');
             lessons.delete(lesson.id);
             return noContent(response);
           }
@@ -513,13 +525,13 @@ export function lessonsDemoPlugin(): Plugin {
               lesson.previousStatus = null;
             } else if (parts[3] === 'publish' && lesson.status === 'DRAFT') {
               if (lesson.completionMode === 'AUTO_ITEMS' && lesson.ruleVersion === 0) {
-                return respond(response, 422, null, 'Configure completion conditions before publishing.');
+                return respond(response, 400, null, 'Configure completion conditions before publishing.');
               }
               lesson.status = 'PUBLISHED';
             } else if (parts[3] === 'unpublish' && lesson.status === 'PUBLISHED') {
               lesson.status = 'DRAFT';
             } else {
-              return respond(response, 409, null, 'This state transition is not available.');
+              return respond(response, 400, null, 'This state transition is not available.');
             }
             lesson.updatedAt = timestamp();
             return respond(response, 200, detailView(lesson));

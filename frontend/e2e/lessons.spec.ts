@@ -97,7 +97,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
   const role = options.role || 'TEACHER';
   const user = { id: role === 'TEACHER' ? teacherId : 'student-a', username: role.toLowerCase(), fullName: `Lesson ${role.toLowerCase()}`, email: 'lesson@example.test', role, lifecycleStatus: 'ACTIVE' };
   const state = { lessons: options.lessons || [seed()], calls: [] as string[], completionFails: false, downloadFails: false, uploadFails: false,
-    denied: false, deleteFails: false, updateFails: false, unconfirmedCompletion: false, activityOptions: [activity,
+    denied: false, deleteFails: false, updateFails: false, linkItemFails: false, unconfirmedCompletion: false, activityOptions: [activity,
       { ...activity, id: 'assignment-a', type: 'ASSIGNMENT' as const, title: 'Recursion assignment' },
       { ...activity, id: 'practice-a', type: 'PRACTICE' as const, title: 'Recursion practice' },
       { ...activity, id: 'quiz-b', title: 'Already linked quiz', linkedLessonId: 'lesson-other' }] };
@@ -160,7 +160,13 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       if (!lesson.canDelete || state.deleteFails) return fail(409, 'Related data must be preserved. Archive this lesson.');
       state.lessons = state.lessons.filter(item => item.id !== lesson.id); return route.fulfill({ status: 204 });
     }
-    if (parts[1] === 'progress' && method === 'GET') return ok(pageData([{ studentId: 'student-a', username: 'Student A', completed: true, completedAt: time }]));
+    if (parts[1] === 'progress' && method === 'GET') {
+      return ok({
+        success: true,
+        data: pageData([{ studentId: 'student-a', username: 'Student A', completed: true, completedAt: time }]),
+        timestamp: time,
+      });
+    }
     if (parts[1] === 'complete' && method === 'POST') {
       if (state.completionFails) return fail(503);
       if (!state.unconfirmedCompletion) {
@@ -179,6 +185,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
     }
     if (parts[1] === 'items') {
       if (method === 'POST') {
+        if (state.linkItemFails) return fail(409, 'This quiz already belongs to another lesson.');
         const { itemId } = request.postDataJSON() as { itemType: LessonActivity['type']; itemId: string };
         const option = state.activityOptions.find(opt => opt.id === itemId);
         if (!option) return fail(404);
@@ -361,6 +368,19 @@ test('LES-10-11: rejected save keeps edited content and existing quiz links', as
   await expect(page.getByRole('alert')).toContainText('quiz already belongs');
   await expect(page.getByLabel('Lesson title')).toHaveValue('Do not lose this edit');
   expect(state.lessons[0].title).toBe('Understanding recursion');
+});
+
+test('LES-10-11: 409 conflict on POST .../items keeps edits and rolls back orphan draft', async ({ page }) => {
+  const state = await fixture(page, { lessons: [] });
+  state.linkItemFails = true;
+  await page.goto(lessonPath('teacher', 'new'));
+  await page.getByLabel('Lesson title').fill('Do not lose this draft');
+  await page.getByRole('checkbox', { name: /Recursion quiz/ }).check();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('alert')).toContainText('quiz already belongs');
+  await expect(page.getByLabel('Lesson title')).toHaveValue('Do not lose this draft');
+  await expect(page.getByRole('checkbox', { name: /Recursion quiz/ })).toBeChecked();
+  expect(state.lessons).toHaveLength(0);
 });
 
 test('completion success requires an explicit completed result from the server', async ({ page }) => {

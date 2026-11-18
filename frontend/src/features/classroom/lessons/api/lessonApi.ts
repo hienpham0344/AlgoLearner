@@ -1,6 +1,6 @@
 import { isAxiosError } from 'axios';
 import { apiClient } from '@/services/apiClient';
-import type { ApiResponse, ApiErrorResponse, PaginatedData } from '@/types/api';
+import type { ApiResponse, ApiErrorResponse, PageResponse, PaginatedData } from '@/types/api';
 import type {
   CodeExample,
   CompletionMode,
@@ -120,8 +120,23 @@ const unwrap = <T>({ data }: { data: ApiResponse<T> }): T => {
   return data.data;
 };
 
-function stripApiPrefix(url: string): string {
-  return url.startsWith('/api/v1/') ? url.slice('/api/v1'.length) : url;
+function materialCacheKey(classId: string, lessonId: string, materialId: string): string {
+  return `${classId}:${lessonId}:${materialId}`;
+}
+
+function safeMaterialDownloadPath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const stripped = url.startsWith('/api/v1/') ? url.slice('/api/v1'.length) : url;
+  if (
+    !stripped.startsWith('/files/') ||
+    stripped.startsWith('//') ||
+    stripped.startsWith('/files//') ||
+    stripped.includes('..') ||
+    /^https?:/i.test(stripped)
+  ) {
+    return null;
+  }
+  return stripped;
 }
 
 function mimeFromFileType(fileType: BackendMaterialType, fileName?: string): string {
@@ -188,9 +203,10 @@ function parseExternalLinks(raw: ExternalLink[] | string | null | undefined): Ex
   }
 }
 
-function toAttachment(material: BackendMaterialView): LessonAttachment {
-  if (material.fileUrl) {
-    materialDownloadPaths.set(material.id, stripApiPrefix(material.fileUrl));
+function toAttachment(classId: string, lessonId: string, material: BackendMaterialView): LessonAttachment {
+  const safePath = safeMaterialDownloadPath(material.fileUrl);
+  if (safePath) {
+    materialDownloadPaths.set(materialCacheKey(classId, lessonId, material.id), safePath);
   }
   return {
     id: material.id,
@@ -213,7 +229,7 @@ function toActivity(item: BackendLinkedItemView, lessonId: string): LessonActivi
 }
 
 function toLesson(raw: BackendLessonRaw): Lesson {
-  const attachments = raw.attachments ?? raw.materials?.map(toAttachment) ?? [];
+  const attachments = raw.attachments ?? raw.materials?.map(m => toAttachment(raw.classroomId, raw.id, m)) ?? [];
   const activities = raw.activities ?? raw.linkedItems?.map(item => toActivity(item, raw.id)) ?? [];
   if (activities.length > 0) {
     const cached = activityTypeCache.get(raw.classroomId) ?? new Map<string, LessonActivity['type']>();
@@ -339,48 +355,63 @@ export const lessonApi = {
     toLesson(unwrap(await apiClient.get<ApiResponse<BackendLessonRaw>>(resource(classId, lessonId), { signal }))),
   create: async (classId: string, input: LessonInput): Promise<Lesson> => {
     const needsRuleSetup = input.completionMode === 'CONDITION_BASED' && input.requiredActivityIds.length > 0;
+    const needsActivities = input.activityIds.length > 0 || needsRuleSetup;
+    const typeMap = needsActivities
+      ? await resolveActivityTypes(classId, [...input.activityIds, ...input.requiredActivityIds])
+      : new Map<string, LessonActivity['type']>();
+
+    for (const itemId of input.activityIds) {
+      if (!typeMap.has(itemId)) {
+        throw new Error(`Activity type is unavailable for item ${itemId}.`);
+      }
+    }
+    const rule = needsRuleSetup ? buildCompletionRule(input.requiredActivityIds, typeMap) : null;
+
     const created = unwrap(
       await apiClient.post<ApiResponse<BackendLessonRaw>>(base(classId), toBackendRequest(input, needsRuleSetup)),
     );
-    if (input.activityIds.length === 0 && !needsRuleSetup) {
+    if (!needsActivities) {
       return toLesson(created);
     }
-    const typeMap = await resolveActivityTypes(classId, [...input.activityIds, ...input.requiredActivityIds]);
-    for (const itemId of input.activityIds) {
-      const itemType = typeMap.get(itemId);
-      if (!itemType) throw new Error(`Activity type is unavailable for item ${itemId}.`);
-      await apiClient.post(`${resource(classId, created.id)}/items`, { itemType, itemId });
-    }
-    if (needsRuleSetup) {
-      await apiClient.put<ApiResponse<null>>(
-        `${resource(classId, created.id)}/completion-rule`,
-        buildCompletionRule(input.requiredActivityIds, typeMap),
-      );
+
+    const linkedIds: string[] = [];
+    try {
+      for (const itemId of input.activityIds) {
+        const itemType = typeMap.get(itemId)!;
+        await apiClient.post(`${resource(classId, created.id)}/items`, { itemType, itemId });
+        linkedIds.push(itemId);
+      }
+      if (rule) {
+        await apiClient.put<ApiResponse<null>>(`${resource(classId, created.id)}/completion-rule`, rule);
+      }
+    } catch (error) {
+      for (const itemId of [...linkedIds].reverse()) {
+        try {
+          await apiClient.delete(`${resource(classId, created.id)}/items/${encodeURIComponent(itemId)}`);
+        } catch {
+          // Best-effort cleanup before deleting the draft lesson.
+        }
+      }
+      try {
+        await apiClient.delete(resource(classId, created.id));
+      } catch {
+        // Preserve the original failure even if draft cleanup fails.
+      }
+      throw error;
     }
     return lessonApi.get(classId, created.id);
   },
   update: async (classId: string, lessonId: string, input: LessonInput): Promise<Lesson> => {
     const current = await lessonApi.get(classId, lessonId);
-    const needsRuleSetup = input.completionMode === 'CONDITION_BASED' && input.requiredActivityIds.length > 0;
-    const forceManualForRuleSetup =
-      needsRuleSetup && current.status === 'PUBLISHED' && current.requiredActivityIds.length === 0;
-    const updated = unwrap(
-      await apiClient.put<ApiResponse<BackendLessonRaw>>(
-        resource(classId, lessonId),
-        toBackendRequest(input, forceManualForRuleSetup),
-      ),
-    );
     const currentIds = new Set(current.activities.map(activity => activity.id));
     const nextIds = new Set(input.activityIds);
     const addedIds = input.activityIds.filter(id => !currentIds.has(id));
     const removedIds = current.activities.map(activity => activity.id).filter(id => !nextIds.has(id));
+    const needsRuleSetup = input.completionMode === 'CONDITION_BASED' && input.requiredActivityIds.length > 0;
     const ruleChanged =
       needsRuleSetup &&
       (current.completionMode !== 'CONDITION_BASED' || !sameIdSet(current.requiredActivityIds, input.requiredActivityIds));
 
-    if (addedIds.length === 0 && removedIds.length === 0 && !ruleChanged) {
-      return toLesson(updated);
-    }
     const typeMap =
       addedIds.length > 0 || ruleChanged
         ? await resolveActivityTypes(
@@ -391,15 +422,31 @@ export const lessonApi = {
         : new Map<string, LessonActivity['type']>();
 
     for (const itemId of addedIds) {
-      const itemType = typeMap.get(itemId);
-      if (!itemType) throw new Error(`Activity type is unavailable for item ${itemId}.`);
+      if (!typeMap.has(itemId)) {
+        throw new Error(`Activity type is unavailable for item ${itemId}.`);
+      }
+    }
+    const rule = ruleChanged ? buildCompletionRule(input.requiredActivityIds, typeMap) : null;
+
+    const forceManualForRuleSetup =
+      needsRuleSetup && current.status === 'PUBLISHED' && current.requiredActivityIds.length === 0;
+    const updated = unwrap(
+      await apiClient.put<ApiResponse<BackendLessonRaw>>(
+        resource(classId, lessonId),
+        toBackendRequest(input, forceManualForRuleSetup),
+      ),
+    );
+
+    if (addedIds.length === 0 && removedIds.length === 0 && !rule) {
+      return toLesson(updated);
+    }
+
+    for (const itemId of addedIds) {
+      const itemType = typeMap.get(itemId)!;
       await apiClient.post(`${resource(classId, lessonId)}/items`, { itemType, itemId });
     }
-    if (ruleChanged) {
-      await apiClient.put<ApiResponse<null>>(
-        `${resource(classId, lessonId)}/completion-rule`,
-        buildCompletionRule(input.requiredActivityIds, typeMap),
-      );
+    if (rule) {
+      await apiClient.put<ApiResponse<null>>(`${resource(classId, lessonId)}/completion-rule`, rule);
     }
     for (const itemId of removedIds) {
       await apiClient.delete(`${resource(classId, lessonId)}/items/${encodeURIComponent(itemId)}`);
@@ -450,12 +497,18 @@ export const lessonApi = {
     return normalized;
   },
   progress: async (classId: string, lessonId: string, page = 0): Promise<PaginatedData<StudentLessonProgress>> => {
-    const data = unwrap(
-      await apiClient.get<ApiResponse<PaginatedData<BackendStudentProgressRow>>>(
+    const unwrapped = unwrap(
+      await apiClient.get<ApiResponse<PageResponse<BackendStudentProgressRow> | PaginatedData<BackendStudentProgressRow>>>(
         `${resource(classId, lessonId)}/progress`,
         { params: { page, size: PAGE_SIZE } },
       ),
     );
+    const data =
+      'data' in unwrapped && unwrapped.data && 'items' in unwrapped.data
+        ? unwrapped.data
+        : 'items' in unwrapped
+          ? unwrapped
+          : unwrap({ data: unwrapped });
     return {
       items: data.items.map(row => ({
         studentId: row.studentId,
@@ -480,22 +533,23 @@ export const lessonApi = {
         fileId: uploaded.id,
       }),
     );
-    return toAttachment(material);
+    return toAttachment(classId, lessonId, material);
   },
   removeAttachment: async (classId: string, lessonId: string, attachmentId: string): Promise<void> => {
     await apiClient.delete<ApiResponse<null> | undefined>(
       `${resource(classId, lessonId)}/materials/${encodeURIComponent(attachmentId)}`,
     );
-    materialDownloadPaths.delete(attachmentId);
+    materialDownloadPaths.delete(materialCacheKey(classId, lessonId, attachmentId));
   },
   // Binary responses are intentionally outside the JSON envelope; errors retain ApiErrorResponse.
   download: async (classId: string, lessonId: string, attachmentId: string): Promise<Blob> => {
-    let path = materialDownloadPaths.get(attachmentId);
+    const key = materialCacheKey(classId, lessonId, attachmentId);
+    let path = materialDownloadPaths.get(key);
     if (!path) {
       await lessonApi.get(classId, lessonId);
-      path = materialDownloadPaths.get(attachmentId);
+      path = materialDownloadPaths.get(key);
     }
-    const target = path || `/files/${encodeURIComponent(attachmentId)}/content`;
+    const target = (path && safeMaterialDownloadPath(path)) || `/files/${encodeURIComponent(attachmentId)}/content`;
     try {
       return (await apiClient.get<Blob>(target, { responseType: 'blob' })).data;
     } catch (error) {
