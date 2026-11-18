@@ -149,6 +149,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
       />
 
       {/* 02 / Subnavigation Tabs */}
+      <Link className="inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white mb-4" to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons`}>Open class lessons →</Link>
       <nav className="classroom-subnav" role="tablist" aria-label="Classroom sections">
         <button
           type="button"

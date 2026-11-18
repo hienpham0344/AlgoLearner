@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { LoginPage } from '@/features/auth/pages/LoginPage';
@@ -14,6 +14,7 @@ import { ClassroomRouterPage } from '@/features/classroom/pages/ClassroomRouterP
 import { CoursePreviewPage } from '@/features/auth/pages/CoursePreviewPage';
 import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
+const LessonWorkspacePage = lazy(() => import('@/features/classroom/lessons/pages/LessonWorkspacePage').then(module => ({ default: module.LessonWorkspacePage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -30,7 +31,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  return <Suspense fallback={<p role="status" className="p-8">Loading workspace…</p>}>{children}</Suspense>;
 };
 
 export const App: React.FC = () => {
@@ -66,6 +67,10 @@ export const App: React.FC = () => {
       />
 
       {/* Role-Specific Classroom Routes (FE 4.3 Refactor) */}
+      <Route path="/teacher/classrooms/:id/lessons" element={<ProtectedRoute><LessonWorkspacePage role="TEACHER" /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="TEACHER" /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/lessons" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 

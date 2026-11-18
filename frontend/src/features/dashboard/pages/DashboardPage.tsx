@@ -26,6 +26,7 @@ import { mapStudentDashboard } from '../mapStudentDashboard';
 import { RoleDashboardPage } from './RoleDashboardPage';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { PracticePulse } from '../components/PracticePulse';
+import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 
 const IS_DEMO = import.meta.env.MODE === 'auth-demo';
@@ -48,6 +49,7 @@ const EMPTY_DASHBOARD_DATA: StudentDashboardData = {
 
 const NAV_ITEMS = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
+  { label: 'Class lessons', href: '#lessons', icon: BookOpen, current: false },
   { label: 'My classes', href: '#classes', icon: BookOpen, current: false },
   { label: 'Public courses', href: '/courses', icon: Code2, current: false },
   { label: 'Coding practice', href: '#practice', icon: Flame, current: false },
@@ -218,7 +220,11 @@ export const DashboardPage = () => {
 
         <nav className="dashboard-nav" aria-label="Student workspace">
           <span className="dashboard-nav-label">WORKSPACE</span>
-          {NAV_ITEMS.map(({ label, href, icon: Icon, current }) => (
+          {NAV_ITEMS.map(({ label, href, icon: Icon, current }) => href.startsWith('#') ? (
+            <a key={label} href={href} className="dashboard-nav-link" onClick={() => setNavOpen(false)} title={label}>
+              <Icon size={18} strokeWidth={1.8} aria-hidden="true" /><span>{label}</span>
+            </a>
+          ) : (
             <Link
               key={label}
               to={href}
@@ -298,6 +304,8 @@ export const DashboardPage = () => {
                 : 'Your learning activity is up to date.'}
             </p>
           )}
+
+          <DashboardLessonLinks role="STUDENT" />
 
           {!IS_DEMO && (dashboardQuery.isPending || dashboardQuery.isError) ? (
             <div className="dashboard-fetch-state" role={dashboardQuery.isError ? 'alert' : 'status'}>

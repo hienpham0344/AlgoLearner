@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   BookOpen,
   LayoutDashboard,
@@ -12,6 +12,7 @@ import { UserAvatar } from './UserAvatar';
 import '../styles/classroom.css';
 
 interface ClassroomLayoutProps {
+  className?: string;
   children: ReactNode;
   breadcrumbChild?: ReactNode;
   role: DemoRole;
@@ -19,23 +20,26 @@ interface ClassroomLayoutProps {
 }
 
 export const ClassroomLayout: React.FC<ClassroomLayoutProps> = ({
+  className = '',
   children,
   breadcrumbChild,
   role,
   persona,
 }) => {
   const location = useLocation();
+  const { id } = useParams<{ id: string }>();
 
   const roleBaseUrl = `/${role.toLowerCase()}/classrooms`;
 
   const navItems = [
     { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
     { label: 'Classrooms', href: roleBaseUrl, icon: BookOpen },
+    ...(id && role !== 'ADMIN' ? [{ label: 'Class lessons', href: `${roleBaseUrl}/${encodeURIComponent(id)}/lessons`, icon: BookOpen }] : []),
     { label: 'Practice', href: '#practice', icon: Code2 },
   ];
 
   return (
-    <div className="classroom-workspace">
+    <div className={`classroom-workspace ${className}`}>
       <div className="classroom-shell">
         {/* Navigation Sidebar */}
         <aside className="classroom-sidebar" aria-label="Classroom Navigation">
@@ -51,8 +55,10 @@ export const ClassroomLayout: React.FC<ClassroomLayoutProps> = ({
             {navItems.map(({ label, href, icon: Icon }) => {
               const isActive =
                 href === roleBaseUrl
-                  ? location.pathname.startsWith(roleBaseUrl)
-                  : location.pathname === href;
+                  ? location.pathname.startsWith(roleBaseUrl) && !location.pathname.includes('/lessons')
+                  : href.endsWith('/lessons')
+                    ? location.pathname === href || location.pathname.startsWith(`${href}/`)
+                    : location.pathname === href;
 
               return (
                 <Link

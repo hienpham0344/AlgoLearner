@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { ClassroomSummaryCard } from '../../components/ClassroomSummaryCard';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
@@ -90,6 +90,7 @@ export const StudentClassroomDetailPage: React.FC = () => {
       />
 
       {/* 03 / Workspace Navigation Tabs */}
+      {isEnrolled && <Link className="inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white mb-4" to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons`}>Open class lessons →</Link>}
       <div className="classroom-tabs mb-6" role="tablist">
         <button
           type="button"

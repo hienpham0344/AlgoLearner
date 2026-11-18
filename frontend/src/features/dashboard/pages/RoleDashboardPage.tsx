@@ -26,6 +26,7 @@ import {
   type TeacherDashboardResponse,
 } from '../api/dashboardApi';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
+import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
@@ -145,6 +146,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
         <span className="dashboard-today">{todayFormatter.format(new Date())}</span>
       </div>
 
+      <DashboardLessonLinks role="TEACHER" />
       <div className="dashboard-grid">
         <div className="dashboard-primary">
           {/* 01 / Featured Teaching Card */}
@@ -832,6 +834,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
     role === 'TEACHER'
       ? [
           { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
+          { label: 'Class lessons', href: '#lessons', icon: BookOpen, current: false },
           { label: 'Assignments', href: '#assignments', icon: FileCode2, current: false },
           { label: 'My classes', href: '#classes', icon: BookOpen, current: false },
           { label: 'Review queue', href: '#review', icon: ClipboardCheck, current: false },
@@ -957,6 +960,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
         </header>
 
         <main className="dashboard-content">
+          {role === 'TEACHER' && (teacherQuery.isPending || teacherQuery.isError || !teacherQuery.data) && <DashboardLessonLinks role="TEACHER" />}
           {query.isPending ? (
             <div className="dashboard-fetch-state" role="status">
               <span className="dashboard-eyebrow">{role} WORKSPACE</span>
