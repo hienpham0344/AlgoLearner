@@ -74,6 +74,22 @@ class ManagedFileServiceTest {
         verify(records, never()).begin(any(), any(), any(), any(), any());
     }
 
+    @Test
+    void capabilitiesExposeAvailabilityLimitAndDeterministicExtensions() {
+        when(objects.isAvailable()).thenReturn(true);
+        when(scanner.isAvailable()).thenReturn(true);
+        when(records.uploadPolicy()).thenReturn(new FilePolicyService.Policy(
+                20_971_520L, java.util.Set.of(FileKind.PDF, FileKind.IMAGE, FileKind.ZIP)));
+
+        var caps = files.capabilities();
+        assertThat(caps.uploadsAvailable()).isTrue();
+        assertThat(caps.maxFileSizeBytes()).isEqualTo(1024L);
+        assertThat(caps.allowedExtensions()).containsExactly("pdf", "zip", "png", "jpg", "jpeg");
+
+        when(scanner.isAvailable()).thenReturn(false);
+        assertThat(files.capabilities().uploadsAvailable()).isFalse();
+    }
+
     private MockMultipartFile pdf() {
         return new MockMultipartFile("file", "notes.pdf", "text/html", LearningFileFixtures.pdf());
     }

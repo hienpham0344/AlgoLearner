@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
@@ -32,6 +34,29 @@ public class ManagedFileService {
         this.scanner = scanner;
         this.validator = validator;
         this.maxBytes = maxBytes;
+    }
+
+    public record UploadCapabilities(boolean uploadsAvailable, long maxFileSizeBytes, List<String> allowedExtensions) { }
+
+    public UploadCapabilities capabilities() {
+        boolean uploadsAvailable = objects.isAvailable() && scanner.isAvailable();
+        var policy = records.uploadPolicy();
+        if (policy == null) {
+            return new UploadCapabilities(false, 0L, List.of());
+        }
+        long limit = Math.min(maxBytes, policy.maxBytes());
+        var extensions = new ArrayList<String>();
+        for (var kind : FileKind.values()) {
+            if (!policy.allowedKinds().contains(kind)) continue;
+            switch (kind) {
+                case PDF -> extensions.add("pdf");
+                case DOCX -> extensions.add("docx");
+                case PPTX -> extensions.add("pptx");
+                case ZIP -> extensions.add("zip");
+                case IMAGE -> extensions.addAll(List.of("png", "jpg", "jpeg"));
+            }
+        }
+        return new UploadCapabilities(uploadsAvailable, limit, List.copyOf(extensions));
     }
 
     public FileMetadata upload(UUID actor, UUID classroom, FilePurpose purpose, MultipartFile file) {

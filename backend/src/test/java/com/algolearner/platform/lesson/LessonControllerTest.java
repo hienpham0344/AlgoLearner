@@ -110,6 +110,22 @@ class LessonControllerTest {
         controller.unlinkItem(auth, classId, lessonId, linkReq.itemId());
         verify(service).unlinkItem(actorId, classId, lessonId, linkReq.itemId());
 
+        var materialId = UUID.randomUUID();
+        controller.removeMaterial(auth, classId, lessonId, materialId);
+        verify(service).removeMaterial(actorId, classId, lessonId, materialId);
+
+        var caps = new LessonDtos.CapabilitiesView(true, true, 1024L, List.of("pdf"));
+        when(service.capabilities(actorId, classId)).thenReturn(caps);
+        var capsRes = controller.capabilities(auth, classId);
+        assertThat(capsRes.isSuccess()).isTrue();
+        assertThat(capsRes.getData()).isEqualTo(caps);
+
+        var activity = new LessonDtos.ActivityOptionView(UUID.randomUUID(), LinkedItemType.ASSIGNMENT, "Lab 1", lessonId, true);
+        when(service.activities(actorId, classId)).thenReturn(List.of(activity));
+        var actRes = controller.activities(auth, classId);
+        assertThat(actRes.isSuccess()).isTrue();
+        assertThat(actRes.getData()).containsExactly(activity);
+
         controller.complete(auth, classId, lessonId);
         verify(service).completeLesson(actorId, classId, lessonId);
     }

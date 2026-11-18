@@ -37,6 +37,25 @@ public class FileRecordService {
         authorizeWrite(actor, classroom, purpose, false);
     }
 
+    @Transactional(readOnly = true)
+    public FilePolicyService.Policy uploadPolicy() {
+        var rows = jdbc.query(
+                "SELECT max_bytes,allowed_kinds FROM tbl_file_policy WHERE id='00000000-0000-0000-0000-000000000001'",
+                (row, index) -> new FilePolicyService.Policy(
+                        row.getLong("max_bytes"),
+                        parseAllowedKinds(row.getString("allowed_kinds"))));
+        return rows.isEmpty() ? new FilePolicyService.Policy(0L, java.util.Set.of()) : rows.getFirst();
+    }
+
+    private static java.util.Set<FileKind> parseAllowedKinds(String raw) {
+        if (raw == null || raw.isBlank()) return java.util.Set.of();
+        return java.util.Arrays.stream(raw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(FileKind::valueOf)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
     @Transactional
     public StoredFileEntity begin(UUID actor, UUID classroom, FilePurpose purpose, ValidatedFile file, String sha256) {
         authorizeWrite(actor, classroom, purpose, true);

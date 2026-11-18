@@ -1,6 +1,7 @@
 package com.algolearner.platform.lesson;
 
 import com.algolearner.platform.assignment.AssignmentRepository;
+import com.algolearner.platform.assignment.AssignmentStatus;
 import com.algolearner.platform.auth.AccountEntity;
 import com.algolearner.platform.auth.AccountRepository;
 import com.algolearner.platform.classroom.ClassroomEntity;
@@ -16,8 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Profile("!mock")
@@ -73,7 +77,7 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LessonDetailView create(UUID accountId, UUID classroomId, LessonDtos.CreateLessonRequest request) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         int nextOrder = (int) lessons.countByClassroomId(classroomId);
@@ -94,7 +98,7 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LessonDetailView update(UUID accountId, UUID classroomId, UUID lessonId, LessonDtos.UpdateLessonRequest request) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
@@ -187,7 +191,7 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.MaterialView addMaterial(UUID accountId, UUID classroomId, UUID lessonId, LessonDtos.AddMaterialRequest request) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
@@ -209,6 +213,20 @@ public class LessonService {
 
         var saved = materials.save(material);
         return new LessonDtos.MaterialView(saved.getId(), saved.getFileName(), saved.getFileUrl(), saved.getFileType(), saved.getFileSize(), saved.getCreatedAt());
+    }
+
+    @Transactional
+    public void removeMaterial(UUID accountId, UUID classroomId, UUID lessonId, UUID materialId) {
+        var classroom = classroomService.lockWritable(classroomId);
+        requireOwner(classroom, accountId);
+
+        var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
+                .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
+        if (lesson.getStatus() == LessonStatus.ARCHIVED) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
+
+        var material = materials.findByIdAndLessonId(materialId, lessonId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson material not found"));
+        materials.delete(material);
     }
 
     @Transactional
@@ -299,9 +317,43 @@ public class LessonService {
 
     @Transactional
     public void configureCompletionRule(UUID actorId, UUID classroomId, UUID lessonId, LessonCompletionRule rule) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, actorId);
         progressService.configure(classroomId, lessonId, rule);
+    }
+
+    public LessonDtos.CapabilitiesView capabilities(UUID accountId, UUID classroomId) {
+        var classroom = requireClassroom(classroomId);
+        requireOwnerForRead(classroom, accountId);
+        var upload = managedFiles != null ? managedFiles.capabilities() : null;
+        boolean activityLinkingAvailable = (progressProviders != null && !progressProviders.isEmpty()) || assignments != null;
+        return new LessonDtos.CapabilitiesView(
+                upload != null && upload.uploadsAvailable(),
+                activityLinkingAvailable,
+                upload != null ? upload.maxFileSizeBytes() : 0L,
+                upload != null ? upload.allowedExtensions() : List.of()
+        );
+    }
+
+    public List<LessonDtos.ActivityOptionView> activities(UUID accountId, UUID classroomId) {
+        var classroom = requireClassroom(classroomId);
+        requireOwnerForRead(classroom, accountId);
+        var linkedLessonByItem = linkedItems.findByLessonClassroomId(classroomId).stream()
+                .filter(item -> item.getLesson() != null)
+                .collect(Collectors.toMap(
+                        item -> new ItemKey(item.getItemType(), item.getItemId()),
+                        item -> item.getLesson().getId(),
+                        (first, second) -> first
+                ));
+        return classroomItemSummaries(classroomId).entrySet().stream()
+                .map(entry -> new LessonDtos.ActivityOptionView(
+                        entry.getKey().id(),
+                        entry.getKey().type(),
+                        entry.getValue().title(),
+                        linkedLessonByItem.get(entry.getKey()),
+                        entry.getValue().availableToStudent()
+                ))
+                .toList();
     }
 
     @Transactional
@@ -385,17 +437,69 @@ public class LessonService {
                 new LessonDtos.MaterialView(m.getId(), m.getFileName(), m.getFileUrl(), m.getFileType(), m.getFileSize(), m.getCreatedAt())
         ).toList();
 
-        var linkViews = linkedItems.findByLessonIdOrderByDisplayOrderAsc(l.getId()).stream()
-                .filter(item -> l.getClassroom().getOwner().getId().equals(accountId) || (provider(item.getItemType()) != null
+        boolean isOwner = l.getClassroom().getOwner().getId().equals(accountId);
+        var rawLinkedItems = linkedItems.findByLessonIdOrderByDisplayOrderAsc(l.getId());
+        var itemSummaries = rawLinkedItems.isEmpty()
+                ? Map.<ItemKey, LessonProgressProvider.ClassroomItemSummary>of()
+                : classroomItemSummaries(l.getClassroom().getId());
+
+        var linkViews = rawLinkedItems.stream()
+                .filter(item -> isOwner || (provider(item.getItemType()) != null
                         && provider(item.getItemType()).availableToStudent(item.getItemId(), l.getClassroom().getId(), accountId)))
-                .map(item ->
-                new LessonDtos.LinkedItemView(item.getId(), item.getItemType(), item.getItemId(), item.getDisplayOrder())
-        ).toList();
+                .map(item -> {
+                    var summary = itemSummaries.get(new ItemKey(item.getItemType(), item.getItemId()));
+                    String title = summary != null ? summary.title() : null;
+                    boolean available = isOwner ? (summary != null && summary.availableToStudent()) : true;
+                    return new LessonDtos.LinkedItemView(
+                            item.getId(), item.getItemType(), item.getItemId(), item.getDisplayOrder(), title, available);
+                })
+                .toList();
+
+        boolean canDelete = l.getRuleVersion() == 0
+                && !completions.existsByLessonId(l.getId())
+                && linkedItems.countByLessonId(l.getId()) == 0;
+
+        List<UUID> requiredItemIds = List.of();
+        if (l.getCompletionMode() == CompletionMode.AUTO_ITEMS && l.getRuleVersion() > 0 && progressService != null) {
+            var ruleView = progressService.rule(l.getId());
+            if (ruleView != null && ruleView.rule() != null && ruleView.rule().conditions() != null) {
+                requiredItemIds = ruleView.rule().conditions().stream()
+                        .map(LessonCompletionRule.Condition::itemId)
+                        .distinct()
+                        .toList();
+            }
+        }
 
         return new LessonDtos.LessonDetailView(
                 l.getId(), l.getClassroom().getId(), l.getTitle(), l.getContent(), l.getCodeExample(),
                 l.getExternalLinks(), l.getStatus(), l.getCompletionMode(), l.getDisplayOrder(),
-                matViews, linkViews, completed, completedAt, l.getCreatedAt(), l.getUpdatedAt()
+                matViews, linkViews, completed, completedAt, l.getCreatedAt(), l.getUpdatedAt(),
+                l.getArchivedFromStatus(), canDelete, requiredItemIds
         );
     }
+
+    private Map<ItemKey, LessonProgressProvider.ClassroomItemSummary> classroomItemSummaries(UUID classroomId) {
+        var summaries = new LinkedHashMap<ItemKey, LessonProgressProvider.ClassroomItemSummary>();
+        if (progressProviders != null) {
+            for (var p : progressProviders) {
+                for (var item : p.classroomItems(classroomId)) {
+                    summaries.putIfAbsent(new ItemKey(p.itemType(), item.id()), item);
+                }
+            }
+        }
+        boolean hasAssignmentProvider = progressProviders != null
+                && progressProviders.stream().anyMatch(p -> p.itemType() == LinkedItemType.ASSIGNMENT);
+        if (!hasAssignmentProvider && assignments != null) {
+            for (var assignment : assignments.findByClassroomIdOrderByCreatedAtDesc(classroomId)) {
+                summaries.putIfAbsent(new ItemKey(LinkedItemType.ASSIGNMENT, assignment.getId()),
+                        new LessonProgressProvider.ClassroomItemSummary(
+                                assignment.getId(),
+                                assignment.getTitle(),
+                                assignment.getStatus() == AssignmentStatus.PUBLISHED));
+            }
+        }
+        return summaries;
+    }
+
+    private record ItemKey(LinkedItemType type, UUID id) { }
 }

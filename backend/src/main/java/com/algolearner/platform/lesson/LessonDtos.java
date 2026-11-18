@@ -58,12 +58,33 @@ public final class LessonDtos {
             Instant createdAt
     ) { }
 
+    public record CapabilitiesView(
+            boolean uploadsAvailable,
+            boolean activityLinkingAvailable,
+            long maxFileSizeBytes,
+            List<String> allowedExtensions
+    ) { }
+
+    public record ActivityOptionView(
+            UUID id,
+            LinkedItemType type,
+            String title,
+            UUID linkedLessonId,
+            boolean available
+    ) { }
+
     public record LinkedItemView(
             UUID id,
             LinkedItemType itemType,
             UUID itemId,
-            int displayOrder
-    ) { }
+            int displayOrder,
+            String title,
+            Boolean available
+    ) {
+        public LinkedItemView(UUID id, LinkedItemType itemType, UUID itemId, int displayOrder) {
+            this(id, itemType, itemId, displayOrder, null, true);
+        }
+    }
 
     public record LessonSummaryView(
             UUID id,
@@ -93,6 +114,30 @@ public final class LessonDtos {
             Boolean isCompleted,
             Instant completedAt,
             Instant createdAt,
-            Instant updatedAt
-    ) { }
+            Instant updatedAt,
+            LessonStatus previousStatus,
+            Boolean canDelete,
+            List<UUID> requiredItemIds
+    ) {
+        public LessonDetailView(
+                UUID id,
+                UUID classroomId,
+                String title,
+                String content,
+                String codeExample,
+                String externalLinks,
+                LessonStatus status,
+                CompletionMode completionMode,
+                int displayOrder,
+                List<MaterialView> materials,
+                List<LinkedItemView> linkedItems,
+                Boolean isCompleted,
+                Instant completedAt,
+                Instant createdAt,
+                Instant updatedAt
+        ) {
+            this(id, classroomId, title, content, codeExample, externalLinks, status, completionMode, displayOrder,
+                    materials, linkedItems, isCompleted, completedAt, createdAt, updatedAt, null, true, List.of());
+        }
+    }
 }

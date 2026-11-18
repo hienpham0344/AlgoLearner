@@ -14,6 +14,12 @@ import com.algolearner.platform.classroom.ClassroomStatus;
 import com.algolearner.platform.classroom.MembershipStatus;
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ErrorCode;
+import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import com.algolearner.platform.storage.FileKind;
+import com.algolearner.platform.storage.FileMetadata;
+import com.algolearner.platform.storage.FilePurpose;
+import com.algolearner.platform.storage.FileState;
+import com.algolearner.platform.storage.ManagedFileService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,6 +51,8 @@ class LessonServiceTest {
 
     private LessonService service;
     private final com.algolearner.platform.classroom.ClassroomService classroomService = mock(com.algolearner.platform.classroom.ClassroomService.class);
+    private final LessonProgressService progressService = mock(LessonProgressService.class);
+    private final ManagedFileService managedFiles = mock(ManagedFileService.class);
 
     private AccountEntity teacher;
     private AccountEntity student;
@@ -53,7 +61,7 @@ class LessonServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships, accounts, assignments, clock, classroomService, List.of(), mock(LessonProgressService.class), mock(com.algolearner.platform.storage.ManagedFileService.class));
+        service = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships, accounts, assignments, clock, classroomService, List.of(), progressService, managedFiles);
 
         teacher = new AccountEntity();
         teacher.setId(UUID.randomUUID());
@@ -318,5 +326,158 @@ class LessonServiceTest {
         var studentDetail = service.get(student.getId(), classroom.getId(), lesson.getId());
         assertThat(studentDetail).isNotNull();
         assertThat(studentDetail.title()).isEqualTo(lesson.getTitle());
+    }
+
+    @Test
+    void classroomScopedMutationsAcquireWritableLock() {
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        when(lessons.save(any(LessonEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(materials.save(any(LessonMaterialEntity.class))).thenAnswer(i -> i.getArgument(0));
+        var fileId = UUID.randomUUID();
+        when(managedFiles.requireReady(teacher.getId(), classroom.getId(), fileId, FilePurpose.LESSON_MATERIAL))
+                .thenReturn(new FileMetadata(fileId, "notes.pdf", "application/pdf", FileKind.PDF, 128L,
+                        FilePurpose.LESSON_MATERIAL, FileState.READY, "a".repeat(64), clock.instant()));
+        var materialId = UUID.randomUUID();
+        var material = LessonMaterialEntity.builder().id(materialId).lesson(lesson).fileName("notes.pdf")
+                .fileUrl("/api/v1/files/" + fileId + "/content").fileType(MaterialFileType.PDF).fileSize(128L).build();
+        when(materials.findByIdAndLessonId(materialId, lesson.getId())).thenReturn(Optional.of(material));
+
+        service.create(teacher.getId(), classroom.getId(),
+                new LessonDtos.CreateLessonRequest("New Lesson", "Body", null, "[]", CompletionMode.MANUAL));
+        service.update(teacher.getId(), classroom.getId(), lesson.getId(),
+                new LessonDtos.UpdateLessonRequest("Updated", "Body", null, "[]", CompletionMode.MANUAL));
+        service.addMaterial(teacher.getId(), classroom.getId(), lesson.getId(),
+                new LessonDtos.AddMaterialRequest(fileId, "notes.pdf", null, MaterialFileType.PDF, 128L));
+        service.removeMaterial(teacher.getId(), classroom.getId(), lesson.getId(), materialId);
+        var rule = new LessonCompletionRule(LessonCompletionRule.Operator.ALL,
+                List.of(new LessonCompletionRule.Condition(LinkedItemType.ASSIGNMENT, UUID.randomUUID(),
+                        LessonCompletionRule.Requirement.SUBMITTED, null)));
+        service.configureCompletionRule(teacher.getId(), classroom.getId(), lesson.getId(), rule);
+
+        verify(classroomService, times(5)).lockWritable(classroom.getId());
+        verify(classroomService, never()).lockReadable(classroom.getId());
+    }
+
+    @Test
+    void removeMaterial_DeletesMaterialAndGuardsStateAndOwnership() {
+        var materialId = UUID.randomUUID();
+        var material = LessonMaterialEntity.builder()
+                .id(materialId)
+                .lesson(lesson)
+                .fileName("slides.pdf")
+                .fileUrl("/api/v1/files/" + UUID.randomUUID() + "/content")
+                .fileType(MaterialFileType.PDF)
+                .fileSize(512L)
+                .build();
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        when(materials.findByIdAndLessonId(materialId, lesson.getId())).thenReturn(Optional.of(material));
+
+        service.removeMaterial(teacher.getId(), classroom.getId(), lesson.getId(), materialId);
+        verify(materials).delete(material);
+
+        var foreignMaterialId = UUID.randomUUID();
+        when(materials.findByIdAndLessonId(foreignMaterialId, lesson.getId())).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.removeMaterial(teacher.getId(), classroom.getId(), lesson.getId(), foreignMaterialId))
+                .isInstanceOf(ResourceNotFoundException.class);
+
+        lesson.setStatus(LessonStatus.ARCHIVED);
+        assertThatThrownBy(() -> service.removeMaterial(teacher.getId(), classroom.getId(), lesson.getId(), materialId))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
+    }
+
+    @Test
+    void get_PopulatesEnrichedDetailFieldsAndLinkedItemMetadata() {
+        var linkedAssignmentId = UUID.randomUUID();
+        lesson.setStatus(LessonStatus.ARCHIVED);
+        lesson.setArchivedFromStatus(LessonStatus.PUBLISHED);
+        lesson.setCompletionMode(CompletionMode.AUTO_ITEMS);
+        lesson.setRuleVersion(2L);
+
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        when(completions.existsByLessonId(lesson.getId())).thenReturn(true);
+        when(linkedItems.countByLessonId(lesson.getId())).thenReturn(1L);
+        var linked = LessonLinkedItemEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(lesson)
+                .itemType(LinkedItemType.ASSIGNMENT)
+                .itemId(linkedAssignmentId)
+                .displayOrder(0)
+                .build();
+        when(linkedItems.findByLessonIdOrderByDisplayOrderAsc(lesson.getId())).thenReturn(List.of(linked));
+        when(progressService.rule(lesson.getId())).thenReturn(new LessonDtos.CompletionRuleView(2L,
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL, List.of(
+                        new LessonCompletionRule.Condition(LinkedItemType.ASSIGNMENT, linkedAssignmentId,
+                                LessonCompletionRule.Requirement.SUBMITTED, null),
+                        new LessonCompletionRule.Condition(LinkedItemType.ASSIGNMENT, linkedAssignmentId,
+                                LessonCompletionRule.Requirement.SCORE_AT_LEAST, java.math.BigDecimal.valueOf(70))
+                ))));
+
+        var provider = mock(LessonProgressProvider.class);
+        when(provider.itemType()).thenReturn(LinkedItemType.ASSIGNMENT);
+        when(provider.classroomItems(classroom.getId())).thenReturn(List.of(
+                new LessonProgressProvider.ClassroomItemSummary(linkedAssignmentId, "Week 1 Homework", true)
+        ));
+        var serviceWithProviders = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships,
+                accounts, assignments, clock, classroomService, List.of(provider), progressService, managedFiles);
+
+        var detail = serviceWithProviders.get(teacher.getId(), classroom.getId(), lesson.getId());
+        assertThat(detail.previousStatus()).isEqualTo(LessonStatus.PUBLISHED);
+        assertThat(detail.canDelete()).isFalse();
+        assertThat(detail.requiredItemIds()).containsExactly(linkedAssignmentId);
+        assertThat(detail.linkedItems()).hasSize(1);
+        assertThat(detail.linkedItems().getFirst().title()).isEqualTo("Week 1 Homework");
+        assertThat(detail.linkedItems().getFirst().available()).isTrue();
+    }
+
+    @Test
+    void capabilitiesAndActivities_ReturnOwnerMetadataAndRejectNonOwner() {
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(managedFiles.capabilities()).thenReturn(new ManagedFileService.UploadCapabilities(
+                true, 10_485_760L, List.of("pdf", "png")));
+
+        var assignmentId = UUID.randomUUID();
+        var quizId = UUID.randomUUID();
+        var otherLesson = LessonEntity.builder().id(UUID.randomUUID()).classroom(classroom).title("Other").build();
+        var linkedQuiz = LessonLinkedItemEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(otherLesson)
+                .itemType(LinkedItemType.QUIZ)
+                .itemId(quizId)
+                .displayOrder(0)
+                .build();
+        when(linkedItems.findByLessonClassroomId(classroom.getId())).thenReturn(List.of(linkedQuiz));
+
+        var assignmentProvider = mock(LessonProgressProvider.class);
+        when(assignmentProvider.itemType()).thenReturn(LinkedItemType.ASSIGNMENT);
+        when(assignmentProvider.classroomItems(classroom.getId())).thenReturn(List.of(
+                new LessonProgressProvider.ClassroomItemSummary(assignmentId, "Lab 1", true)));
+        var quizProvider = mock(LessonProgressProvider.class);
+        when(quizProvider.itemType()).thenReturn(LinkedItemType.QUIZ);
+        when(quizProvider.classroomItems(classroom.getId())).thenReturn(List.of(
+                new LessonProgressProvider.ClassroomItemSummary(quizId, "Quiz 1", false)));
+
+        var serviceWithProviders = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships,
+                accounts, assignments, clock, classroomService, List.of(assignmentProvider, quizProvider), progressService, managedFiles);
+
+        var caps = serviceWithProviders.capabilities(teacher.getId(), classroom.getId());
+        assertThat(caps.uploadsAvailable()).isTrue();
+        assertThat(caps.activityLinkingAvailable()).isTrue();
+        assertThat(caps.maxFileSizeBytes()).isEqualTo(10_485_760L);
+        assertThat(caps.allowedExtensions()).containsExactly("pdf", "png");
+
+        var activities = serviceWithProviders.activities(teacher.getId(), classroom.getId());
+        assertThat(activities).containsExactly(
+                new LessonDtos.ActivityOptionView(assignmentId, LinkedItemType.ASSIGNMENT, "Lab 1", null, true),
+                new LessonDtos.ActivityOptionView(quizId, LinkedItemType.QUIZ, "Quiz 1", otherLesson.getId(), false)
+        );
+
+        assertThatThrownBy(() -> serviceWithProviders.capabilities(student.getId(), classroom.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
+        assertThatThrownBy(() -> serviceWithProviders.activities(student.getId(), classroom.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
     }
 }

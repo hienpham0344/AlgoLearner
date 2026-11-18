@@ -13,5 +13,6 @@ public interface LessonLinkedItemRepository extends JpaRepository<LessonLinkedIt
     Optional<LessonLinkedItemEntity> findByLessonIdAndItemId(UUID lessonId, UUID itemId);
     boolean existsByLessonIdAndItemTypeAndItemId(UUID lessonId, LinkedItemType type, UUID itemId);
     List<LessonLinkedItemEntity> findByItemTypeAndItemId(LinkedItemType type, UUID itemId);
+    List<LessonLinkedItemEntity> findByLessonClassroomId(UUID classroomId);
     long countByLessonId(UUID lessonId);
 }

@@ -50,7 +50,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView create(UUID accountId, UUID classroomId, AnnouncementDtos.CreateRequest request) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var author = classroom.getOwner();
@@ -85,7 +85,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView update(UUID accountId, UUID classroomId, UUID announcementId, AnnouncementDtos.UpdateRequest request) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -98,7 +98,7 @@ public class AnnouncementService {
 
     @Transactional
     public void delete(UUID accountId, UUID classroomId, UUID announcementId) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -109,7 +109,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView pin(UUID accountId, UUID classroomId, UUID announcementId) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -122,7 +122,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView unpin(UUID accountId, UUID classroomId, UUID announcementId) {
-        var classroom = classroomService.lockReadable(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)

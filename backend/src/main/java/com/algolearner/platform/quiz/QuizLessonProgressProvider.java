@@ -2,6 +2,7 @@ package com.algolearner.platform.quiz;
 
 import com.algolearner.platform.lesson.*;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
@@ -19,6 +20,12 @@ public class QuizLessonProgressProvider implements LessonProgressProvider {
               join tbl_account a on a.id=m.student_id where q.id=? and q.classroom_id=? and q.status in('PUBLISHED','CLOSED')
               and m.student_id=? and m.status='ACTIVE' and a.role='STUDENT' and a.status='ACTIVE')
             """,Boolean.class,item,classroom,student)) && LinkedLessonAccess.available(jdbc,LinkedItemType.QUIZ,item);}
+    @Override public List<ClassroomItemSummary> classroomItems(UUID classroomId) {
+        return jdbc.query(
+                "SELECT id, title, (status IN ('PUBLISHED', 'CLOSED')) AS available FROM tbl_quiz WHERE classroom_id = ? ORDER BY created_at DESC, id",
+                (rs, rowNum) -> new ClassroomItemSummary(rs.getObject(1, UUID.class), rs.getString(2), rs.getBoolean(3)),
+                classroomId);
+    }
     public LessonProgressSource progress(UUID item,UUID classroom,UUID student){
         if(!existsInClassroom(item,classroom))return new LessonProgressSource(false,false,null,null,"missing");
         var rows=jdbc.query("select id,score,grade_published,version from tbl_quiz_attempt where quiz_id=? and student_id=? and status='SUBMITTED' order by id",

@@ -31,6 +31,11 @@ public class SupabaseObjectStorage implements PrivateObjectStorage {
     }
 
     @Override
+    public boolean isAvailable() {
+        return configured;
+    }
+
+    @Override
     public void upload(String key, String mediaType, byte[] bytes) {
         validateKey(key);
         requirePrivateBucket();

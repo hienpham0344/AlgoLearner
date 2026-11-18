@@ -3,6 +3,7 @@ package com.algolearner.platform.assignment;
 import com.algolearner.platform.lesson.*;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -28,6 +29,13 @@ public class AssignmentLessonProgressProvider implements LessonProgressProvider 
                 OR EXISTS(SELECT 1 FROM tbl_lesson_linked_item li JOIN tbl_lesson l ON l.id=li.lesson_id
                   WHERE li.item_type='ASSIGNMENT' AND li.item_id=a.id AND l.status='PUBLISHED')))
                 """, Boolean.class, itemId, classroomId));
+    }
+    @Override
+    public List<ClassroomItemSummary> classroomItems(UUID classroomId) {
+        return jdbc.query(
+                "SELECT id, title, (status = 'PUBLISHED') AS available FROM tbl_assignment WHERE classroom_id = ? ORDER BY created_at DESC, id",
+                (rs, rowNum) -> new ClassroomItemSummary(rs.getObject(1, UUID.class), rs.getString(2), rs.getBoolean(3)),
+                classroomId);
     }
     private record Result(UUID attempt, UUID evaluation, BigDecimal percent, java.time.Instant submitted, String policy) { }
     public LessonProgressSource progress(UUID itemId, UUID classroomId, UUID studentId) {

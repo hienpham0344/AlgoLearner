@@ -73,6 +73,12 @@ public class ClassPracticeService implements LessonProgressProvider {
     @Override public boolean availableToStudent(UUID item,UUID classroom,UUID student) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM tbl_class_practice p JOIN tbl_classroom c ON c.id=p.classroom_id JOIN tbl_classroom_membership m ON m.classroom_id=c.id JOIN tbl_account a ON a.id=m.student_id WHERE p.id=:id AND c.id=:class AND p.status='PUBLISHED' AND c.status='ACTIVE' AND m.student_id=:student AND m.status='ACTIVE' AND a.status='ACTIVE' AND a.role='STUDENT'",Map.of("id",item,"class",classroom,"student",student),Long.class)==1 && LinkedLessonAccess.available(jdbc.getJdbcTemplate(),LinkedItemType.PRACTICE,item);
     }
+    @Override public List<ClassroomItemSummary> classroomItems(UUID classroomId) {
+        return jdbc.query(
+                "SELECT id, title, (status = 'PUBLISHED') AS available FROM tbl_class_practice WHERE classroom_id = :class ORDER BY created_at DESC, id",
+                Map.of("class", classroomId),
+                (rs, rowNum) -> new ClassroomItemSummary(rs.getObject(1, UUID.class), rs.getString(2), rs.getBoolean(3)));
+    }
     @Override public LessonProgressSource progress(UUID item,UUID classroom,UUID student) {
         if(!availableToStudent(item,classroom,student))return new LessonProgressSource(false,false,null,null,"unavailable");
         var rows=jdbc.queryForList("""

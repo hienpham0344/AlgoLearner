@@ -76,7 +76,7 @@ class AnnouncementServiceTest {
         classroom.setName("Algorithms 101");
         classroom.setOwner(teacher);
         classroom.setStatus(ClassroomStatus.ACTIVE);
-        when(classroomService.lockReadable(classroom.getId())).thenReturn(classroom);
+        when(classroomService.lockWritable(classroom.getId())).thenReturn(classroom);
         when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher));
         when(accounts.findById(otherTeacher.getId())).thenReturn(Optional.of(otherTeacher));
         when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
@@ -243,5 +243,29 @@ class AnnouncementServiceTest {
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
 
         verify(announcements, never()).delete(any());
+    }
+
+    @Test
+    void classroomScopedMutationsAcquireWritableLock() {
+        var announcement = AnnouncementEntity.builder()
+                .id(UUID.randomUUID())
+                .classroom(classroom)
+                .author(teacher)
+                .title("Initial")
+                .content("Body")
+                .isPinned(false)
+                .build();
+        when(announcements.save(any(AnnouncementEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(announcements.findByIdAndClassroomId(announcement.getId(), classroom.getId())).thenReturn(Optional.of(announcement));
+        when(memberships.findByClassroomIdAndStatus(classroom.getId(), MembershipStatus.ACTIVE)).thenReturn(List.of());
+
+        service.create(teacher.getId(), classroom.getId(), new AnnouncementDtos.CreateRequest("Title", "Body"));
+        service.update(teacher.getId(), classroom.getId(), announcement.getId(), new AnnouncementDtos.UpdateRequest("Title 2", "Body 2"));
+        service.pin(teacher.getId(), classroom.getId(), announcement.getId());
+        service.unpin(teacher.getId(), classroom.getId(), announcement.getId());
+        service.delete(teacher.getId(), classroom.getId(), announcement.getId());
+
+        verify(classroomService, times(5)).lockWritable(classroom.getId());
+        verify(classroomService, never()).lockReadable(classroom.getId());
     }
 }

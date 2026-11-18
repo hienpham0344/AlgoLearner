@@ -654,6 +654,49 @@ class AssignmentServiceTest {
         assertThat(view.answers().getFirst().score()).isNull();
     }
 
+    @Test
+    void cloneAssignment_AcquiresWritableLocksInSortedOrderBeforeOwnerChecks() {
+        var classroomService = mock(com.algolearner.platform.classroom.ClassroomService.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "classroomService", classroomService);
+
+        UUID lowId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID highId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        var sourceClassroom = new ClassroomEntity();
+        sourceClassroom.setId(highId);
+        sourceClassroom.setOwner(teacher);
+        sourceClassroom.setStatus(ClassroomStatus.ACTIVE);
+        var targetClassroom = new ClassroomEntity();
+        targetClassroom.setId(lowId);
+        targetClassroom.setOwner(teacher);
+        targetClassroom.setStatus(ClassroomStatus.ACTIVE);
+
+        var src = AssignmentEntity.builder()
+                .id(UUID.randomUUID())
+                .classroom(sourceClassroom)
+                .title("Source")
+                .type(AssignmentType.GRADED)
+                .status(AssignmentStatus.DRAFT)
+                .maxAttempts(1)
+                .build();
+
+        when(classroomService.lockWritable(lowId)).thenReturn(targetClassroom);
+        when(classroomService.lockWritable(highId)).thenReturn(sourceClassroom);
+        when(classrooms.findById(highId)).thenReturn(Optional.of(sourceClassroom));
+        when(classrooms.findById(lowId)).thenReturn(Optional.of(targetClassroom));
+        when(assignments.findForUpdate(src.getId(), highId)).thenReturn(Optional.of(src));
+        when(assignments.save(any(AssignmentEntity.class))).thenAnswer(i -> i.getArgument(0));
+        when(questions.findByAssignmentIdOrderByDisplayOrderAsc(src.getId())).thenReturn(List.of());
+
+        service.cloneAssignment(teacher.getId(), highId, src.getId(), lowId);
+
+        var order = inOrder(classroomService, classrooms, assignments);
+        order.verify(classroomService).lockWritable(lowId);
+        order.verify(classroomService).lockWritable(highId);
+        order.verify(classrooms).findById(highId);
+        order.verify(classrooms).findById(lowId);
+        order.verify(assignments).findForUpdate(src.getId(), highId);
+    }
+
     private void allowStudent() {
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         var membership = new ClassroomMembershipEntity();

@@ -317,16 +317,17 @@ public class AssignmentService {
 
     @Transactional
     public AssignmentDtos.AssignmentDetailView cloneAssignment(UUID accountId, UUID classroomId, UUID assignmentId, UUID targetClassroomId) {
+        if (classroomService != null) {
+            var ordered = new ArrayList<>(new HashSet<>(List.of(classroomId, targetClassroomId)));
+            ordered.sort(UUID::compareTo);
+            for (var id : ordered) classroomService.lockWritable(id);
+        }
         var classroom = requireClassroom(classroomId);
         requireOwner(classroom, accountId);
 
         var targetClassroom = requireClassroom(targetClassroomId);
         requireOwner(targetClassroom, accountId);
 
-        if(classroomService!=null) {
-            var ordered=new ArrayList<>(new HashSet<>(List.of(classroomId,targetClassroomId)));ordered.sort(UUID::compareTo);
-            for(var id:ordered)classroomService.lockReadable(id);
-        }
         var src = lockedAssignment(assignmentId,classroomId);
 
         var copy = AssignmentEntity.builder()
@@ -1159,7 +1160,7 @@ public class AssignmentService {
         requireOwnerForRead(classroom,accountId);
     }
     private void requireWritableClassroom(ClassroomEntity classroom) {
-        if(classroomService!=null)classroomService.lockReadable(classroom.getId());
+        if(classroomService!=null)classroomService.lockWritable(classroom.getId());
         if(classroom.getStatus()!=ClassroomStatus.ACTIVE || classroom.getOwner().getStatus()!=AccountStatus.ACTIVE)
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
     }

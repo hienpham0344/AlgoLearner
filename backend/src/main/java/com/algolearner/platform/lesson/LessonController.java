@@ -33,6 +33,24 @@ public class LessonController {
         return ApiResponse.success(service.list(actor(auth), classId));
     }
 
+    @GetMapping("/capabilities")
+    @Operation(summary = "Read classroom lesson upload and activity linking capabilities (Teacher owner only)")
+    public ApiResponse<LessonDtos.CapabilitiesView> capabilities(
+            Authentication auth,
+            @PathVariable UUID classId
+    ) {
+        return ApiResponse.success(service.capabilities(actor(auth), classId));
+    }
+
+    @GetMapping("/activities")
+    @Operation(summary = "List classroom activities available to link with lessons (Teacher owner only)")
+    public ApiResponse<List<LessonDtos.ActivityOptionView>> activities(
+            Authentication auth,
+            @PathVariable UUID classId
+    ) {
+        return ApiResponse.success(service.activities(actor(auth), classId));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a lesson (Teacher owner only)")
@@ -126,6 +144,18 @@ public class LessonController {
             @Valid @RequestBody LessonDtos.AddMaterialRequest request
     ) {
         return ApiResponse.success(service.addMaterial(actor(auth), classId, lessonId, request));
+    }
+
+    @DeleteMapping("/{lessonId}/materials/{materialId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Remove an attachment material from a lesson (Teacher owner only)")
+    public void removeMaterial(
+            Authentication auth,
+            @PathVariable UUID classId,
+            @PathVariable UUID lessonId,
+            @PathVariable UUID materialId
+    ) {
+        service.removeMaterial(actor(auth), classId, lessonId, materialId);
     }
 
     @PostMapping("/{lessonId}/items")
