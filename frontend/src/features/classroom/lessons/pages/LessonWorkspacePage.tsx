@@ -725,117 +725,158 @@ function LessonDetail({
         </div>
 
         <aside className="lesson-rail" aria-label="Lesson reading progress and outline">
-          <div className="lesson-rail-card" data-completed={isCompleted}>
-            <div className="lesson-rail-head">
-              <span className="lesson-rail-eyebrow">READING PROGRESS</span>
-              <span className="lesson-rail-pct" aria-live="polite">{displayPercent}%</span>
+          <div className="lesson-console" data-completed={isCompleted}>
+            {/* 1. Dark Anchor Progress Head */}
+            <div className="lesson-console-head">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="lesson-console-eyebrow">
+                    READ · <span aria-live="polite">{displayPercent}%</span>
+                  </span>
+                  <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+                    {isCompleted ? (
+                      <span className="lesson-console-badge is-done">
+                        <CheckCircle2 size={12} aria-hidden="true" />
+                        <span>Completed</span>
+                      </span>
+                    ) : lesson.completionMode === 'CONDITION_BASED' ? (
+                      <span className="lesson-console-badge is-quiz">Quiz required</span>
+                    ) : (
+                      <span className="lesson-console-badge">Self-paced</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="lesson-ring" aria-hidden="true">
+                  <svg width="52" height="52" viewBox="0 0 52 52">
+                    <circle cx="26" cy="26" r="21" className="lesson-ring-track" />
+                    <circle
+                      cx="26"
+                      cy="26"
+                      r="21"
+                      className="lesson-ring-fill"
+                      strokeDasharray={131.95}
+                      strokeDashoffset={131.95 * (1 - displayPercent / 100)}
+                    />
+                  </svg>
+                  <span>{displayPercent}%</span>
+                </div>
+              </div>
+
+              <div
+                className="lesson-console-meter"
+                role="progressbar"
+                aria-label="Lesson reading progress"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={displayPercent}
+              >
+                <div className="lesson-console-meter-fill" style={{ width: `${displayPercent}%` }} />
+              </div>
+
+              <p className="lesson-console-meta">
+                {displayPercent >= 100
+                  ? isCompleted
+                    ? 'Reached end of lesson.'
+                    : lesson.completionMode === 'CONDITION_BASED'
+                      ? 'Finished reading · Complete linked activity below.'
+                      : 'Reached the end of this lesson.'
+                  : `~${remainingMinutes} min left · ${100 - displayPercent}% remaining`}
+              </p>
+
+              {role === 'STUDENT' && !isCompleted && lesson.completionMode === 'MANUAL' && (
+                <button
+                  type="button"
+                  className="lesson-console-cta"
+                  disabled={!writable || !canCompleteLesson(lesson) || mutation.isPending}
+                  onClick={() => void complete()}
+                >
+                  Complete this lesson
+                </button>
+              )}
             </div>
-            <div
-              className="lesson-meter-track"
-              role="progressbar"
-              aria-label="Lesson reading progress"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={displayPercent}
-            >
-              <div className="lesson-meter-fill" style={{ width: `${displayPercent}%` }} />
-            </div>
-            <p className="lesson-rail-meta">
-              {displayPercent >= 100
-                ? 'You have reached the end of this lesson.'
-                : `~${remainingMinutes} min left · ${100 - displayPercent}% remaining`}
-            </p>
-            {role === 'STUDENT' && (
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                {isCompleted ? (
-                  <p className="lesson-completed">
-                    <CheckCircle2 size={16} aria-hidden="true" />
-                    <span>Lesson completed</span>
-                  </p>
-                ) : lesson.completionMode === 'MANUAL' ? (
-                  <button
-                    type="button"
-                    className="lesson-button w-full"
-                    disabled={!writable || !canCompleteLesson(lesson) || mutation.isPending}
-                    onClick={() => void complete()}
-                  >
-                    Complete this lesson
-                  </button>
-                ) : (
-                  <p className="text-xs text-slate-500">
-                    Complete linked quiz/assignment to finish.
-                  </p>
-                )}
+
+            {/* 2. Vertical Timeline Outline */}
+            {outline.length > 0 && (
+              <div className="lesson-console-section">
+                <div className="lesson-rail-head">
+                  <span className="lesson-rail-eyebrow">ON THIS PAGE</span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {activeOutlineIndex + 1} / {outline.length}
+                  </span>
+                </div>
+                <nav aria-label="Lesson outline">
+                  <ul className="lesson-timeline-outline">
+                    {outline.map((item, idx) => {
+                      const isActive = activeSectionId === item.id || (!activeSectionId && idx === 0);
+                      const state = isActive ? 'active' : idx < activeOutlineIndex ? 'past' : 'upcoming';
+                      return (
+                        <li key={item.id}>
+                          <a
+                            href={`#${item.id}`}
+                            className="lesson-outline-node"
+                            data-level={item.level}
+                            data-active={isActive}
+                            data-state={state}
+                            onClick={event => {
+                              event.preventDefault();
+                              setActiveSectionId(item.id);
+                              document.getElementById(item.id)?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'start',
+                              });
+                            }}
+                          >
+                            {item.label}
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
+              </div>
+            )}
+
+            {/* 3. Stepper Course Lessons Switcher */}
+            {orderedLessons.length > 0 && (
+              <div className="lesson-console-section">
+                <div className="lesson-rail-head">
+                  <span className="lesson-rail-eyebrow">COURSE LESSONS</span>
+                  <span className="text-[11px] font-mono text-slate-500">
+                    {orderedLessons.length}
+                  </span>
+                </div>
+                <nav aria-label="Course lessons">
+                  <ul className="lesson-stepper-list">
+                    {orderedLessons.map((item, idx) => {
+                      const isCurrent = item.id === lesson.id;
+                      const done = role === 'STUDENT' && Boolean(item.progress?.completed);
+                      return (
+                        <li key={item.id}>
+                          <Link
+                            to={`${base}/${encodeURIComponent(item.id)}`}
+                            className="lesson-stepper-link"
+                            data-current={isCurrent}
+                            data-done={done}
+                          >
+                            <span className="lesson-stepper-badge">
+                              {done && !isCurrent ? (
+                                <CheckCircle2 size={13} aria-hidden="true" />
+                              ) : (
+                                String(idx + 1).padStart(2, '0')
+                              )}
+                            </span>
+                            <span className="lesson-mini-title">{item.title}</span>
+                            {isCurrent && <span className="lesson-stepper-tag">Active</span>}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </nav>
               </div>
             )}
           </div>
-
-          {outline.length > 0 && (
-            <div className="lesson-rail-card" data-completed={isCompleted}>
-              <div className="lesson-rail-head">
-                <span className="lesson-rail-eyebrow">ON THIS PAGE</span>
-                <span className="text-[11px] font-mono text-slate-500">
-                  {activeOutlineIndex + 1} / {outline.length}
-                </span>
-              </div>
-              <nav aria-label="Lesson outline">
-                <ul className="lesson-outline-list">
-                  {outline.map(item => (
-                    <li key={item.id}>
-                      <a
-                        href={`#${item.id}`}
-                        className="lesson-outline-link"
-                        data-level={item.level}
-                        data-active={activeSectionId === item.id || (!activeSectionId && outline[0]?.id === item.id)}
-                        onClick={event => {
-                          event.preventDefault();
-                          setActiveSectionId(item.id);
-                          document.getElementById(item.id)?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                          });
-                        }}
-                      >
-                        {item.label}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </nav>
-            </div>
-          )}
-
-          {orderedLessons.length > 0 && (
-            <div className="lesson-rail-card" data-completed={isCompleted}>
-              <div className="lesson-rail-head">
-                <span className="lesson-rail-eyebrow">COURSE LESSONS</span>
-                <span className="text-[11px] font-mono text-slate-500">
-                  {orderedLessons.length}
-                </span>
-              </div>
-              <nav aria-label="Course lessons">
-                <ul className="lesson-mini-list">
-                  {orderedLessons.map((item, idx) => {
-                    const isCurrent = item.id === lesson.id;
-                    const done = role === 'STUDENT' && Boolean(item.progress?.completed);
-                    return (
-                      <li key={item.id}>
-                        <Link
-                          to={`${base}/${encodeURIComponent(item.id)}`}
-                          className="lesson-mini-link"
-                          data-current={isCurrent}
-                        >
-                          <span className="lesson-mini-num">{String(idx + 1).padStart(2, '0')}</span>
-                          <span className="lesson-mini-title">{item.title}</span>
-                          {done && <CheckCircle2 size={13} className="text-emerald-700 shrink-0" aria-hidden="true" />}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </nav>
-            </div>
-          )}
         </aside>
       </div>
     )}
