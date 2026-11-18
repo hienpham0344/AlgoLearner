@@ -13,7 +13,7 @@ import type {
 } from '../types';
 import type { PaginatedData } from '@/types/api';
 
-const STORAGE_KEY_LESSONS = 'algolearn_prototype_lessons_v2';
+const STORAGE_KEY_LESSONS = 'algolearn_prototype_lessons_v4';
 const STORAGE_KEY_LESSON_PROGRESS = 'algolearn_prototype_lesson_progress_v2';
 const STORAGE_KEY_ATTACHMENTS = 'algolearn_prototype_lesson_files_v2';
 
@@ -119,10 +119,49 @@ export const INITIAL_MOCK_LESSONS: Lesson[] = [
     'cls-algo-2026',
     'Asymptotic Complexity & Recursion Trees',
     'PUBLISHED',
-    '## Analyzing Recursive Work\nEvery recursive algorithm splits input into smaller subproblems.\n\n1. Write the **recurrence relation** `T(n)`.\n2. Sketch the **recursion tree** level by level.\n3. Sum work across levels or apply the Master Theorem.\n\n> Always verify your base case complexity before summing.',
+    `## Analyzing Recursive Work
+Every recursive algorithm splits input into smaller subproblems and combines their answers. Before guessing the running time, isolate the **branching factor**, the **shrinking factor**, and the **non-recursive combine work** at each call.
+
+1. Write the **recurrence relation** $T(n)$.
+2. Sketch the **recursion tree** level by level.
+3. Sum work across levels or apply the Master Theorem.
+
+> Always verify your base case complexity before summing across all tree levels.
+
+## Recursion Tree Method
+Suppose Merge Sort splits an array of size $n$ into $2$ halves and takes $c \\cdot n$ steps to merge them:
+
+- **Level 0 (Root)**: 1 node of size $n$, cost $= c \\cdot n$
+- **Level 1**: 2 nodes of size $\\frac{n}{2}$, total cost $= 2 \\cdot c \\cdot \\frac{n}{2} = c \\cdot n$
+- **Level $k$**: $2^k$ nodes of size $\\frac{n}{2^k}$, total cost $= c \\cdot n$
+
+Because the subproblem size halves at every step, the tree stops at depth $h = \\log_2(n)$, giving $\\log_2(n) + 1$ levels and total cost $\\Theta(n \\log n)$.
+
+### Common Pitfalls When Summing Levels
+- Do not forget the **leaf level**: when branching factor $a > 1$, leaves can dominate the total work (e.g. $T(n) = 3T(n/2) + n$ is dominated by $n^{\\log_2 3}$).
+- Check whether subproblems shrink proportionally ($\\frac{n}{b}$) or additively ($n - 1$). Additive reduction creates a linear chain of depth $n$, not $\\log n$.
+
+## Master Theorem Summary
+For recurrences of the form:
+
+$$T(n) = aT\\!\\left(\\frac{n}{b}\\right) + f(n), \\quad a \\ge 1,\\ b > 1$$
+
+compare $f(n)$ against the watershed function $n^{\\log_b a}$:
+
+| Case | Condition | Asymptotic Bound | Example |
+| :--- | :--- | :--- | :--- |
+| Case 1 | $f(n)$ grows polynomially slower | $\\Theta(n^{\\log_b a})$ | $T(n) = 4T(n/2) + n \\implies \\Theta(n^2)$ |
+| Case 2 | $f(n)$ matches $n^{\\log_b a} \\log^k n$ | $\\Theta(n^{\\log_b a} \\log^{k+1} n)$ | Merge Sort $\\implies \\Theta(n \\log n)$ |
+| Case 3 | $f(n)$ grows polynomially faster | $\\Theta(f(n))$ | $T(n) = 2T(n/2) + n^2 \\implies \\Theta(n^2)$ |
+
+## Practical Checklist Before Submission
+Before submitting solutions to recursive graph or divide-and-conquer problems, double-check:
+- Does every recursive branch strictly make progress toward a reachable base case?
+- Is the call stack depth safe under the problem constraints (e.g. Python default recursion limit of 1,000 frames)?
+- Can repeated subproblems be memoized to prevent exponential blowup?`,
     {
       language: 'python',
-      code: 'def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    return merge(merge_sort(arr[:mid]), merge_sort(arr[mid:]))',
+      code: 'def merge_sort(arr):\n    if len(arr) <= 1:\n        return arr\n    mid = len(arr) // 2\n    left = merge_sort(arr[:mid])\n    right = merge_sort(arr[mid:])\n    return merge(left, right)',
     },
     {
       attachments: [
@@ -146,7 +185,18 @@ export const INITIAL_MOCK_LESSONS: Lesson[] = [
     'cls-algo-2026',
     'Shortest Paths: Dijkstra & Bellman-Ford',
     'PUBLISHED',
-    '## Relaxation in Weighted Graphs\nWhen all edge weights are non-negative, Dijkstra greedily finalizes the nearest unvisited vertex using a min-heap.\n\n- Use **adjacency lists** (`O(V + E)`) rather than dense matrices.\n- Watch for 64-bit integer overflow on long paths.',
+    `## Relaxation in Weighted Graphs
+Shortest-path algorithms maintain an upper-bound distance estimate \`dist[v]\` for every vertex and repeatedly improve it via **edge relaxation**: if \`dist[u] + w(u, v) < dist[v]\`, update \`dist[v]\`.
+
+## Dijkstra's Greedy Strategy
+When all edge weights are non-negative ($w \\ge 0$), Dijkstra greedily finalizes the nearest unvisited vertex using a min-heap priority queue:
+
+- Use **adjacency lists** ($\\mathcal{O}(V + E)$) rather than dense $\\mathcal{O}(V^2)$ matrices.
+- Discard stale priority queue entries when \`d > dist[u]\` instead of implementing decrease-key.
+- Watch for 64-bit integer overflow when path weights sum past $2^{31} - 1$.
+
+## Handling Negative Weights with Bellman-Ford
+If edges can carry negative weights, Dijkstra's greedy invariant breaks. Bellman-Ford relaxes **all $E$ edges** $V - 1$ times in $\\mathcal{O}(V \\cdot E)$ time. A final pass on iteration $V$ detects negative-weight cycles if any distance can still be reduced.`,
     {
       language: 'python',
       code: 'import heapq\ndef dijkstra(adj, start):\n    dist = {start: 0}\n    pq = [(0, start)]\n    while pq:\n        d, u = heapq.heappop(pq)\n        if d > dist[u]:\n            continue\n        for v, w in adj[u]:\n            if d + w < dist.get(v, float("inf")):\n                dist[v] = d + w\n                heapq.heappush(pq, (dist[v], v))\n    return dist',

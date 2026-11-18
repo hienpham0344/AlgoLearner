@@ -228,149 +228,221 @@ export const StudentClassroomDetailPage: React.FC = () => {
         />
       )}
 
-      {activeTab === 'OVERVIEW' && (
-        <div className="space-y-6">
-          {/* Instructor Announcements Noticeboard Preview (FE 4.4) */}
-          {classroomAnnouncements.length > 0 && (
-            <div className="classroom-glass-card p-6">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Bell size={15} className="text-slate-700" />
-                  <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                    Instructor Announcements
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('ANNOUNCEMENTS');
-                    setSearchParams({ tab: 'announcements' });
-                  }}
-                  className="text-xs font-bold text-slate-900 hover:underline flex items-center gap-1"
-                >
-                  View All ({classroomAnnouncements.length}) →
-                </button>
-              </div>
+      {activeTab === 'OVERVIEW' && (() => {
+        const nextLesson = publishedLessons.find(l => !l.progress?.completed) || null;
+        const progressPercent =
+          publishedLessons.length > 0
+            ? Math.round((completedLessonsCount / publishedLessons.length) * 100)
+            : 0;
 
-              <div
-                onClick={() => {
-                  setActiveTab('ANNOUNCEMENTS');
-                  setSearchParams({ tab: 'announcements', announcementId: classroomAnnouncements[0].id });
-                }}
-                className="p-4 rounded-xl border border-slate-200/80 bg-white/70 hover:bg-white cursor-pointer transition-all shadow-xs"
-              >
-                <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                  {classroomAnnouncements[0].isPinned && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80">
-                      <Pin size={10} className="rotate-45 fill-amber-500 text-amber-600" />
-                      Pinned Notice
+        return (
+          <div className="classroom-detail-grid">
+            {/* Left Primary Column: Learning Curriculum First */}
+            <div className="classroom-detail-main">
+              <div className="classroom-glass-card p-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-slate-900">Learning Modules &amp; Practice</h2>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Published curriculum lessons synced with this classroom
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-700 font-semibold px-2.5 py-1 rounded-full bg-slate-100 border border-slate-300 font-mono">
+                      {publishedLessons.length} Published · {completedLessonsCount} Completed
                     </span>
-                  )}
-                  <h3 className="text-sm font-bold text-slate-900">
-                    {classroomAnnouncements[0].title}
-                  </h3>
-                  <span className="text-[11px] text-slate-400 ml-auto">
-                    {new Date(classroomAnnouncements[0].createdAt).toLocaleDateString()}
-                  </span>
+                    {isEnrolled && (
+                      <Link
+                        to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
+                        className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
+                      >
+                        View all →
+                      </Link>
+                    )}
+                  </div>
                 </div>
-                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                  {classroomAnnouncements[0].content.slice(0, 160)}...
-                </p>
-              </div>
-            </div>
-          )}
-          {/* Synchronized Classroom Lessons Preview */}
-          <div className="classroom-glass-card p-6">
-            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Learning Modules &amp; Practice</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Published curriculum lessons synced with this classroom
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-600 font-medium px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/60 font-mono">
-                  {publishedLessons.length} Published · {completedLessonsCount} Completed
-                </span>
-                {isEnrolled && (
-                  <Link
-                    to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
-                    className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
-                  >
-                    View all →
-                  </Link>
+
+                {publishedLessons.length === 0 ? (
+                  <div className="p-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center">
+                    <p className="text-sm font-semibold text-slate-800">No published lessons yet</p>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Lessons published by {classroom.ownerName} will appear here automatically.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {publishedLessons.slice(0, 6).map((lesson, idx) => {
+                      const isDone = Boolean(lesson.progress?.completed);
+                      const subtitle = `${
+                        lesson.completionMode === 'MANUAL'
+                          ? 'Manual completion'
+                          : 'Linked activity required'
+                      } · ${lesson.attachments.length} ${lesson.attachments.length === 1 ? 'material' : 'materials'}`;
+
+                      const rowBody = (
+                        <>
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="classroom-module-number-card" aria-hidden="true">
+                              {String(idx + 1).padStart(2, '0')}
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="text-sm font-bold text-slate-900 truncate">
+                                {lesson.title}
+                              </h3>
+                              <p className="text-xs text-slate-600 truncate">{subtitle}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!isEnrolled ? (
+                              <AvailabilityBadge status="UNAVAILABLE" />
+                            ) : isDone ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-[11px] font-bold">
+                                <CheckCircle2 size={12} aria-hidden="true" />
+                                Completed
+                              </span>
+                            ) : (
+                              <AvailabilityBadge status="AVAILABLE" />
+                            )}
+                            {isEnrolled && <ArrowUpRight size={15} className="text-slate-500" aria-hidden="true" />}
+                          </div>
+                        </>
+                      );
+
+                      return isEnrolled ? (
+                        <Link
+                          key={lesson.id}
+                          to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(lesson.id)}`}
+                          className="p-4 rounded-xl border border-slate-200 bg-white/70 hover:bg-white hover:border-slate-300 flex items-center justify-between gap-3 transition-all"
+                        >
+                          {rowBody}
+                        </Link>
+                      ) : (
+                        <div
+                          key={lesson.id}
+                          className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between gap-3 opacity-80"
+                        >
+                          {rowBody}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
 
-            {publishedLessons.length === 0 ? (
-              <div className="p-5 rounded-xl border border-dashed border-slate-200 bg-white/40 text-center">
-                <p className="text-sm font-semibold text-slate-700">No published lessons yet</p>
-                <p className="text-xs text-slate-500 mt-1">
-                  Lessons published by {classroom.ownerName} will appear here automatically.
+            {/* Right Supporting Rail: Progress + Next Action + Announcements */}
+            <aside className="classroom-detail-rail">
+              <div className="classroom-glass-card p-5 space-y-4">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-slate-500">
+                    Course Progress
+                  </span>
+                  <span className="text-lg font-extrabold text-slate-900 font-mono">
+                    {progressPercent}%
+                  </span>
+                </div>
+                <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden" aria-hidden="true">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${progressPercent}%`,
+                      backgroundColor: progressPercent >= 100 && publishedLessons.length > 0 ? '#059669' : '#18181b',
+                    }}
+                  />
+                </div>
+                <p className="text-xs text-slate-600">
+                  {completedLessonsCount} of {publishedLessons.length} published lessons completed
                 </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {publishedLessons.slice(0, 4).map((lesson, idx) => {
-                  const isDone = Boolean(lesson.progress?.completed);
-                  const subtitle = `${
-                    lesson.completionMode === 'MANUAL'
-                      ? 'Manual completion'
-                      : 'Linked activity required'
-                  } · ${lesson.attachments.length} ${lesson.attachments.length === 1 ? 'material' : 'materials'}`;
 
-                  const rowBody = (
-                    <>
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <div className="classroom-module-number-card" aria-hidden="true">
-                          {String(idx + 1).padStart(2, '0')}
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-sm font-bold text-slate-900 truncate">
-                            {lesson.title}
-                          </h3>
-                          <p className="text-xs text-slate-500 truncate">{subtitle}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {!isEnrolled ? (
-                          <AvailabilityBadge status="UNAVAILABLE" />
-                        ) : isDone ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-                            <CheckCircle2 size={12} aria-hidden="true" />
-                            Completed
-                          </span>
-                        ) : (
-                          <AvailabilityBadge status="AVAILABLE" />
-                        )}
-                        {isEnrolled && <ArrowUpRight size={15} className="text-slate-400" aria-hidden="true" />}
-                      </div>
-                    </>
-                  );
-
-                  return isEnrolled ? (
+                {isEnrolled && nextLesson && (
+                  <div className="pt-3 border-t border-slate-200 space-y-2.5">
+                    <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                      Up next
+                    </span>
+                    <p className="text-xs font-bold text-slate-900 line-clamp-2">
+                      {nextLesson.title}
+                    </p>
                     <Link
-                      key={lesson.id}
-                      to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(lesson.id)}`}
-                      className="p-4 rounded-xl border border-white/70 bg-white/60 hover:bg-white hover:border-slate-300 flex items-center justify-between gap-3 transition-all"
+                      to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(nextLesson.id)}`}
+                      className="inline-flex items-center justify-center gap-1.5 w-full px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
                     >
-                      {rowBody}
+                      <span>Continue next lesson</span>
+                      <ArrowUpRight size={14} aria-hidden="true" />
                     </Link>
-                  ) : (
-                    <div
-                      key={lesson.id}
-                      className="p-4 rounded-xl border border-white/70 bg-white/40 flex items-center justify-between gap-3 opacity-80"
-                    >
-                      {rowBody}
-                    </div>
-                  );
-                })}
+                  </div>
+                )}
               </div>
-            )}
+
+              {classroomAnnouncements.length > 0 && (
+                <div className="classroom-glass-card p-5 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Bell size={14} className="text-slate-700" aria-hidden="true" />
+                      <h2 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                        Instructor Announcements
+                      </h2>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('ANNOUNCEMENTS');
+                        setSearchParams({ tab: 'announcements' });
+                      }}
+                      className="text-xs font-bold text-slate-900 hover:underline flex items-center gap-1"
+                    >
+                      View All ({classroomAnnouncements.length}) →
+                    </button>
+                  </div>
+
+                  <div
+                    onClick={() => {
+                      setActiveTab('ANNOUNCEMENTS');
+                      setSearchParams({ tab: 'announcements', announcementId: classroomAnnouncements[0].id });
+                    }}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-white cursor-pointer transition-all"
+                  >
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      {classroomAnnouncements[0].isPinned && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                          <Pin size={10} className="rotate-45 fill-amber-500 text-amber-600" />
+                          Pinned Notice
+                        </span>
+                      )}
+                      <h3 className="text-xs font-bold text-slate-900">
+                        {classroomAnnouncements[0].title}
+                      </h3>
+                      <span className="text-[11px] text-slate-500 ml-auto">
+                        {new Date(classroomAnnouncements[0].createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                      {classroomAnnouncements[0].content.slice(0, 140)}...
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="classroom-glass-card p-5 flex items-center justify-between gap-3">
+                <div>
+                  <span className="text-[10.5px] font-mono font-bold uppercase tracking-wider text-slate-500 block">
+                    Cohort
+                  </span>
+                  <span className="text-sm font-bold text-slate-900">
+                    {activeMembers.length} active classmates
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('CLASSMATES')}
+                  className="text-xs font-bold text-indigo-700 hover:underline"
+                >
+                  View roster →
+                </button>
+              </div>
+            </aside>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {activeTab === 'CLASSMATES' && (
         <div className="classroom-glass-card p-6">

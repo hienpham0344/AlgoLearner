@@ -866,7 +866,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
 
   const syncedTeacherData: TeacherDashboardResponse | undefined =
     role === 'TEACHER' && teacherQuery.data
-      ? import.meta.env.MODE === 'auth-demo'
+      ? ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE)
         ? (() => {
             const teacherPersona = readStoredPersona('TEACHER');
             const owned = readStoredClassrooms().filter(

@@ -5,7 +5,7 @@ import { lessonMockStore } from '../mock/lessonMockStore';
 import { lessonDate } from '../lessonRules';
 import { LessonPagination } from './LessonState';
 
-const IS_PROTOTYPE_DEMO = import.meta.env.MODE === 'auth-demo';
+const IS_PROTOTYPE_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
 
 export function LessonProgress({ userId, classId, lessonId }: { userId: string; classId: string; lessonId: string }) {
   const [page, setPage] = useState(0);

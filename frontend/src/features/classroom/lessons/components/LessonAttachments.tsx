@@ -5,7 +5,7 @@ import { lessonMockStore } from '../mock/lessonMockStore';
 import { SUPPORTED_EXTENSIONS, formatBytes, validateAttachment } from '../lessonRules';
 import type { Lesson, LessonCapabilities } from '../types';
 
-const IS_PROTOTYPE_DEMO = import.meta.env.MODE === 'auth-demo';
+const IS_PROTOTYPE_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
 
 interface Props { lesson: Lesson; editable: boolean; policy: LessonCapabilities | null; onChanged: () => Promise<void> }
 export function LessonAttachments({ lesson, editable, policy, onChanged }: Props) {

@@ -12,6 +12,7 @@ globalThis.document = dom.window.document;
 globalThis.localStorage = { getItem: () => null };
 const compiled = await build({
   stdin: { contents: `export * from './src/features/classroom/lessons/lessonRules.ts';
+    export * from './src/features/classroom/lessons/lessonReading.ts';
     export * from './src/features/classroom/lessons/api/lessonApi.ts';
     export { apiClient } from './src/services/apiClient.ts';
     export { LessonContent, renderLessonMarkdown } from './src/features/classroom/lessons/components/LessonContent.tsx';`,
@@ -22,6 +23,7 @@ const compiled = await build({
 const module = { exports: {} };
 new Function('module', 'exports', 'require', compiled.outputFiles[0].text)(module, module.exports, createRequire(import.meta.url));
 const { validateLesson, validateAttachment, safeExternalUrl, visibleLessons, canCompleteLesson,
+  extractLessonOutline, estimateReadingMinutes,
   activitySelectable, activityPath, lessonDate, lessonKeys, lessonApi, apiClient, LessonContent, renderLessonMarkdown } = module.exports;
 const input = { title: 'Recursion', content: '# Recursion', codeExample: null, externalLinks: [],
   completionMode: 'MANUAL', requiredActivityIds: [], activityIds: [] };
@@ -115,4 +117,52 @@ test('activity navigation cannot escape the current role/class and dates use UTC
     assert.equal(activityPath(path, 'class-a', 'STUDENT'), null);
   }
   assert.match(lessonDate('2026-11-11T00:00:00Z'), /07:00/);
+});
+
+test('lesson reading helpers extract outline IDs matching rendered headings and estimate duration', () => {
+  const sample = {
+    content: '## Intro to Trees\nFirst paragraph.\n\n### Base Case\nDetails.\n\n## Intro to Trees\nSecond section.',
+    codeExample: { language: 'python', code: 'def f(n):\n    return n' },
+    externalLinks: [{ label: 'Docs', url: 'https://example.test' }],
+  };
+  const outline = extractLessonOutline(sample, true);
+  assert.deepEqual(
+    outline.map(item => item.id),
+    ['intro-to-trees', 'base-case', 'intro-to-trees-2', 'lesson-code-example', 'lesson-further-reading', 'lesson-materials-completion'],
+  );
+  const rendered = JSDOM.fragment(renderLessonMarkdown(sample.content));
+  assert.equal(rendered.querySelectorAll('h2, h3')[0]?.id, 'intro-to-trees');
+  assert.equal(rendered.querySelectorAll('h2, h3')[1]?.id, 'base-case');
+  assert.equal(rendered.querySelectorAll('h2, h3')[2]?.id, 'intro-to-trees-2');
+  assert.ok(estimateReadingMinutes(sample) >= 1);
+});
+
+test('lesson math renderer formats inline and display LaTeX safely while ignoring code and prices', () => {
+  const md = [
+    '## Complexity $O(n \\log n)$',
+    'At level $k$, there are $2^k$ nodes of cost $\\frac{n}{2^k}$.',
+    '',
+    '$$T(n) = aT\\!\\left(\\frac{n}{b}\\right) + f(n)$$',
+    '',
+    'Keep currency literal: $10 and $20.',
+    'Keep code literal: `$not_math$` and:',
+    '```bash',
+    'echo "$PATH"',
+    '```',
+    'Reject XSS inside math: $<img src=x onerror=alert(1)> \\text{<script>alert(2)</script>}$',
+  ].join('\n');
+
+  const html = renderLessonMarkdown(md);
+  const fragment = JSDOM.fragment(html);
+  assert.ok(fragment.querySelector('.lesson-math-inline .katex'));
+  assert.ok(fragment.querySelector('.lesson-math-block .katex-display'));
+  assert.match(fragment.textContent, /\$10 and \$20/);
+  assert.match(fragment.querySelector('code')?.textContent || '', /\$not_math\$/);
+  assert.match(fragment.querySelector('pre code')?.textContent || '', /\$PATH/);
+  assert.equal(fragment.querySelector('script, img, iframe'), null);
+  assert.equal(fragment.querySelector('[onerror]'), null);
+
+  const outline = extractLessonOutline({ content: md, codeExample: null, externalLinks: [] }, false);
+  const heading = fragment.querySelector('h2');
+  assert.equal(heading?.id, outline[0]?.id);
 });

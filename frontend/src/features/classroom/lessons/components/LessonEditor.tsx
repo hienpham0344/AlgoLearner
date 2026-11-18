@@ -54,7 +54,7 @@ export function LessonEditor({ lesson, activities, activityLinkingAvailable, pen
         <label htmlFor="lesson-title">Lesson title <span aria-hidden="true">*</span></label>
         <input id="lesson-title" required maxLength={200} value={input.title} aria-invalid={Boolean(errors.title)} onChange={event => change({ title: event.target.value })} placeholder="e.g. Understanding recursion" />
         <label htmlFor="lesson-theory">Theory & notes <span className="lesson-muted">Markdown</span></label>
-        <p id="lesson-theory-help" className="lesson-muted">Use headings, lists, links and fenced code blocks. Embedded scripts and media are removed.</p>
+        <p id="lesson-theory-help" className="lesson-muted">Use headings, lists, links, fenced code blocks, and LaTeX math ($...$ inline or $$...$$ block). Embedded scripts and media are removed.</p>
         <textarea id="lesson-theory" aria-describedby="lesson-theory-help" rows={12} maxLength={100_000} value={input.content} onChange={event => change({ content: event.target.value })} placeholder="Start with the idea. Build up to an example." />
         <div className="lesson-section-head"><h3>Code example</h3><label className="lesson-inline" htmlFor="lesson-language">Language
           <select id="lesson-language" value={input.codeExample?.language || 'java'} onChange={event => change({ codeExample: { code: input.codeExample?.code || '', language: event.target.value as 'java' | 'python' | 'text' } })}>

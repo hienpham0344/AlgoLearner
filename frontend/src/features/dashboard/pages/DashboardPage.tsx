@@ -150,7 +150,7 @@ export const DashboardPage = () => {
   }
 
   const { syncedDemoClasses, syncedDemoCourses, primaryClassroomHref } = (() => {
-    if (import.meta.env.MODE !== 'auth-demo') {
+    if (!IS_DEMO) {
       return {
         syncedDemoClasses: dashboardDemoData.classes,
         syncedDemoCourses: dashboardDemoData.courses,

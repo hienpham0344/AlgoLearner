@@ -281,6 +281,22 @@ export function useClassroomStore(roleOverride?: DemoRole) {
     );
   }, []);
 
+  const restoreClassroom = useCallback((id: string): void => {
+    setClassrooms(prev =>
+      prev.map(c =>
+        c.id === id
+          ? {
+              ...c,
+              status: 'ACTIVE',
+              joiningOpen: true,
+              codeLocked: false,
+              updatedAt: new Date().toISOString(),
+            }
+          : c,
+      ),
+    );
+  }, []);
+
   const deleteClassroom = useCallback((id: string): void => {
     setClassrooms(prev => {
       const target = prev.find(c => c.id === id);
@@ -917,6 +933,7 @@ export function useClassroomStore(roleOverride?: DemoRole) {
     createClassroom,
     updateClassroom,
     archiveClassroom,
+    restoreClassroom,
     deleteClassroom,
     regenerateCode,
     updateJoinConfig,

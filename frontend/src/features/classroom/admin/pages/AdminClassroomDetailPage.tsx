@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   Users,
   Archive,
+  RotateCcw,
   Trash2,
   Share2,
   Calendar,
@@ -33,6 +34,7 @@ export const AdminClassroomDetailPage: React.FC = () => {
     teachers,
     getClassroom,
     archiveClassroom,
+    restoreClassroom,
     deleteClassroom,
     transferOwnership,
     getAnnouncements,
@@ -60,6 +62,7 @@ export const AdminClassroomDetailPage: React.FC = () => {
   }, [tabParam, announcementIdParam]);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -93,6 +96,11 @@ export const AdminClassroomDetailPage: React.FC = () => {
   const handleConfirmArchive = () => {
     archiveClassroom(classroom.id);
     setIsArchiveModalOpen(false);
+  };
+
+  const handleConfirmRestore = () => {
+    restoreClassroom(classroom.id);
+    setIsRestoreModalOpen(false);
   };
 
   const handleConfirmDelete = () => {
@@ -152,7 +160,7 @@ export const AdminClassroomDetailPage: React.FC = () => {
               Transfer Owner
             </Button>
 
-            {classroom.status === 'ACTIVE' && (
+            {classroom.status === 'ACTIVE' ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -161,6 +169,16 @@ export const AdminClassroomDetailPage: React.FC = () => {
               >
                 <Archive size={14} className="mr-1.5 shrink-0" />
                 Archive
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsRestoreModalOpen(true)}
+                className="text-xs font-semibold rounded-xl text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              >
+                <RotateCcw size={14} className="mr-1.5 shrink-0" />
+                Restore
               </Button>
             )}
 
@@ -416,6 +434,17 @@ export const AdminClassroomDetailPage: React.FC = () => {
         variant="warning"
         onConfirm={handleConfirmArchive}
         onCancel={() => setIsArchiveModalOpen(false)}
+      />
+
+      {/* Restore Modal */}
+      <ConfirmationModal
+        isOpen={isRestoreModalOpen}
+        title="Restore Classroom"
+        message={`Are you sure you want to restore "${classroom.name}" back to active status?`}
+        confirmLabel="Restore Classroom"
+        variant="default"
+        onConfirm={handleConfirmRestore}
+        onCancel={() => setIsRestoreModalOpen(false)}
       />
 
       {/* Hard Delete Modal */}

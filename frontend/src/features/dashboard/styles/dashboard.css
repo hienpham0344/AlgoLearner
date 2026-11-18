@@ -177,7 +177,9 @@
 .dashboard-topbar-path {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
+  min-width: 0;
   color: #777b80;
   font-size: 11px;
 }
@@ -1602,8 +1604,21 @@ a.dashboard-notification-row:hover {
   }
 
   .dashboard-topbar {
+    flex-wrap: wrap;
     min-height: 57px;
-    padding-inline: 20px;
+    padding: 10px 16px;
+    gap: 10px;
+  }
+
+  .dashboard-topbar-path {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .dashboard-topbar-actions {
+    gap: 12px;
+    margin-left: auto;
   }
 
   .dashboard-content {
