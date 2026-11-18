@@ -57,4 +57,15 @@ class AdminBootstrapTest {
                 .isInstanceOf(IllegalStateException.class);
         verify(accounts, never()).saveAndFlush(any());
     }
+    @Test
+    void rejectsCrossNamespaceConflictWithoutChangingExistingAccount() {
+        var legacy = new AccountEntity(); legacy.setId(UUID.randomUUID());
+        when(accounts.findByUsernameIgnoreCase("admin@example.test")).thenReturn(Optional.of(legacy));
+        assertThatThrownBy(() -> new AdminBootstrap(accounts, passwords,
+                "admin@example.test", "sysadmin", "AdminTestPassword123!").run(null))
+                .isInstanceOf(IllegalStateException.class);
+        verify(accounts, never()).saveAndFlush(any());
+        verifyNoInteractions(passwords);
+    }
+
 }

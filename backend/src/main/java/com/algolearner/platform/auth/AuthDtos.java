@@ -20,21 +20,40 @@ public final class AuthDtos {
             AccountRole role,
             @NotNull Boolean termsAccepted,
             @NotNull Boolean privacyAccepted) { }
-    public record EmailRequest(@Email String email, String usernameOrEmail, @NotBlank String purpose) {
+    private static IdentityType namespace(String usernameOrEmail, IdentityType identityType) {
+        return usernameOrEmail == null || usernameOrEmail.isBlank() ? IdentityType.EMAIL
+                : identityType == null ? IdentityType.AUTO : identityType;
+    }
+    public record EmailRequest(@Email String email, String usernameOrEmail, @NotBlank String purpose,
+            IdentityType identityType) {
+        public EmailRequest(String email, String usernameOrEmail, String purpose) { this(email, usernameOrEmail, purpose, null); }
         public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
     }
     public record VerifyOtpRequest(@Email String email, String usernameOrEmail,
-            @NotBlank String code, @NotBlank String purpose) {
+            @NotBlank String code, @NotBlank String purpose, IdentityType identityType) {
+        public VerifyOtpRequest(String email, String usernameOrEmail, String code, String purpose) { this(email, usernameOrEmail, code, purpose, null); }
         public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
     }
-    public record LoginRequest(@NotBlank String usernameOrEmail, @NotBlank String password, boolean rememberMe) { }
-    public record ForgotPasswordRequest(@Email String email, String usernameOrEmail) {
-        public ForgotPasswordRequest(String email) { this(email, null); }
+    public record LoginRequest(@NotBlank String usernameOrEmail, @NotBlank String password, boolean rememberMe,
+            IdentityType identityType) {
+        public LoginRequest(String usernameOrEmail, String password, boolean rememberMe) { this(usernameOrEmail, password, rememberMe, null); }
+    }
+    public record ForgotPasswordRequest(@Email String email, String usernameOrEmail, IdentityType identityType) {
+        public ForgotPasswordRequest(String email) { this(email, null, null); }
+        public ForgotPasswordRequest(String email, String usernameOrEmail) { this(email, usernameOrEmail, null); }
         public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
     }
     public record ResetPasswordRequest(@Email String email, String usernameOrEmail, @NotBlank String resetToken,
-            @NotBlank @Size(min = 8, max = 72) String newPassword, @NotBlank String confirmPassword) {
+            @NotBlank @Size(min = 8, max = 72) String newPassword, @NotBlank String confirmPassword,
+            IdentityType identityType) {
+        public ResetPasswordRequest(String email, String usernameOrEmail, String resetToken, String newPassword, String confirmPassword) {
+            this(email, usernameOrEmail, resetToken, newPassword, confirmPassword, null);
+        }
         public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
     }
     public record ChangePasswordRequest(@NotBlank String currentPassword,
             @NotBlank @Size(min = 8, max = 72) String newPassword, @NotBlank String confirmPassword) { }

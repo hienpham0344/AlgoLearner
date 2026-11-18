@@ -1,6 +1,7 @@
 package com.algolearner.platform.admin;
 
 import com.algolearner.platform.auth.AccountEntity;
+import com.algolearner.platform.auth.AccountIdentityRegistration;
 import com.algolearner.platform.auth.AccountRepository;
 import com.algolearner.platform.auth.AccountRole;
 import com.algolearner.platform.auth.AccountStatus;
@@ -43,13 +44,20 @@ public class AdminBootstrap implements ApplicationRunner {
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
         String normalizedUsername = username.trim();
         if (normalizedEmail.isBlank() || normalizedUsername.isBlank() || password.isBlank()
-                || !normalizedEmail.contains("@") || normalizedUsername.length() < 3 || normalizedUsername.length() > 50
+                || !normalizedEmail.contains("@") || username.codePoints().anyMatch(Character::isISOControl)
+                || normalizedUsername.length() < 3 || normalizedUsername.length() > 50
                 || password.length() < 12 || password.getBytes(StandardCharsets.UTF_8).length > 72
                 || !password.matches("(?s)(?=.*[A-Za-z])(?=.*[0-9]).*")) {
             throw new IllegalStateException("Admin bootstrap configuration is incomplete or invalid.");
         }
+        AccountIdentityRegistration.lock(accounts, normalizedEmail, normalizedUsername);
         var byEmail = accounts.findByEmailIgnoreCase(normalizedEmail);
         var byUsername = accounts.findByUsernameIgnoreCase(normalizedUsername);
+        var emailAsUsername = accounts.findByUsernameIgnoreCase(normalizedEmail);
+        var usernameAsEmail = accounts.findByEmailIgnoreCase(normalizedUsername);
+        if (java.util.stream.Stream.of(emailAsUsername, usernameAsEmail).flatMap(java.util.Optional::stream)
+                .anyMatch(account -> byEmail.isEmpty() || !account.getId().equals(byEmail.get().getId())))
+            throw new IllegalStateException("Admin bootstrap identity conflicts with an existing account.");
         if (byEmail.isPresent() || byUsername.isPresent()) {
             if (byEmail.isEmpty() || byUsername.isEmpty()
                     || !byEmail.get().getId().equals(byUsername.get().getId())
@@ -59,6 +67,7 @@ public class AdminBootstrap implements ApplicationRunner {
             }
             return;
         }
+        AccountIdentityRegistration.validateUsername(username);
         var admin = new AccountEntity();
         admin.setId(UUID.randomUUID());
         admin.setEmail(normalizedEmail);

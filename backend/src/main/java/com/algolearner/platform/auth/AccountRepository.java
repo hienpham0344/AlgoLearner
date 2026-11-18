@@ -23,5 +23,10 @@ public interface AccountRepository extends JpaRepository<AccountEntity, UUID> {
     @Query("select a from AccountEntity a where lower(a.username) = lower(:identity)")
     Optional<AccountEntity> findForLoginByUsername(@Param("identity") String identity);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from AccountEntity a where lower(a.email) = lower(:identity) or lower(a.username) = lower(:identity) order by a.id")
+    List<AccountEntity> findForIdentityResolution(@Param("identity") String identity);
+    @Query(value = "select 1 from pg_advisory_xact_lock(hashtextextended(:identity, 0))", nativeQuery = true)
+    void lockIdentity(@Param("identity") String identity);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<AccountEntity> findByStatusAndSuspensionEndsAtLessThanEqual(AccountStatus status, Instant time);
 }

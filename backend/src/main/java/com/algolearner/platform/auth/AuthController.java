@@ -84,10 +84,11 @@ public class AuthController {
         return ApiResponse.success(result);
     }
 
-    @Operation(summary = "Sign in with email or username")
+    @Operation(summary = "Sign in with email or username", description = "Optional identityType selects EMAIL or USERNAME for legacy collisions; AUTO is the default and rejects ambiguity before counting password failures.")
     @io.swagger.v3.oas.annotations.responses.ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "JWT issued"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid credentials or inactive account"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Ambiguous identity; choose EMAIL or USERNAME"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Correct password for a suspended account; suspension reason returned")
     })
     @PostMapping("/login")

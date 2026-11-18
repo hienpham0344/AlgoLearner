@@ -28,6 +28,7 @@ public class AuthService {
     private static final Duration RESEND_WAIT = Duration.ofSeconds(60);
     private static final Duration LOGIN_LOCK = Duration.ofMinutes(15);
     private final AccountRepository accounts;
+    private final AccountIdentityResolver identities;
     private final RegistrationOtpRepository otps;
     private final RegistrationMailer mailer;
     private final PasswordEncoder passwords;
@@ -41,6 +42,7 @@ public class AuthService {
             PasswordEncoder passwords, OtpCodeHasher otpHasher, AuthSessionService sessions,
             AccountAdministrationService administration, Clock clock) {
         this.accounts = accounts;
+        this.identities = new AccountIdentityResolver(accounts);
         this.otps = otps;
         this.mailer = mailer;
         this.passwords = passwords;
@@ -58,10 +60,12 @@ public class AuthService {
         if (request.role() == AccountRole.ADMIN || !Boolean.TRUE.equals(request.termsAccepted())
                 || !Boolean.TRUE.equals(request.privacyAccepted()) || !request.password().equals(request.confirmPassword()))
             throw new ApiException(ErrorCode.VALIDATION_FAILED);
+        AccountIdentityRegistration.validateUsername(request.username());
         validatePassword(request.password(), request.confirmPassword());
         RegistrationTiming.record("validation", stageStarted);
         stageStarted = RegistrationTiming.begin();
-        if (accounts.existsByEmailIgnoreCase(email) || accounts.existsByUsernameIgnoreCase(username))
+        AccountIdentityRegistration.lock(accounts, email, username);
+        if (AccountIdentityRegistration.conflicts(accounts, email, username))
             throw new ApiException(ErrorCode.ACCOUNT_ALREADY_EXISTS);
         RegistrationTiming.record("duplicate_lookup", stageStarted);
 
@@ -88,12 +92,12 @@ public class AuthService {
     @Transactional
     public ResendResult resend(EmailRequest request) {
         if ("RESET_PASSWORD".equals(request.purpose())) {
-            forgotPassword(new ForgotPasswordRequest(request.email(), request.usernameOrEmail()));
+            forgotPassword(new ForgotPasswordRequest(request.email(), request.usernameOrEmail(), request.identityType()));
             return new ResendResult(true, RESET_REQUEST_MESSAGE);
         }
         if (!"REGISTER".equals(request.purpose())) throw new ApiException(ErrorCode.INVALID_REQUEST);
         if (request.email() == null || request.email().isBlank()) throw new ApiException(ErrorCode.VALIDATION_FAILED);
-        var account = accounts.findForLoginByEmail(request.email().trim())
+        var account = identities.resolve(request.email(), IdentityType.EMAIL)
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
         if (account.getStatus() != AccountStatus.PENDING_VERIFICATION) throw new ApiException(ErrorCode.INVALID_OTP);
         sendCode(account, "REGISTER");
@@ -103,7 +107,7 @@ public class AuthService {
     @Transactional
     public Message forgotPassword(ForgotPasswordRequest request) {
         String lookup = identity(request.identity());
-        findByIdentity(lookup).filter(a -> a.getStatus() == AccountStatus.ACTIVE)
+        identities.resolve(lookup, request.namespace()).filter(a -> a.getStatus() == AccountStatus.ACTIVE)
                 .ifPresent(account -> sendCode(account, "RESET_PASSWORD"));
         return resetRequestMessage(request);
     }
@@ -138,7 +142,7 @@ public class AuthService {
     @Transactional
     public ResendResult resetPassword(ResetPasswordRequest request) {
         validatePassword(request.newPassword(), request.confirmPassword());
-        var account = findByIdentity(identity(request.identity()))
+        var account = identities.resolve(identity(request.identity()), request.namespace())
                 .filter(a -> a.getStatus() == AccountStatus.ACTIVE)
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
         var grant = otps.findByAccountIdAndResetTokenHash(account.getId(), SecretTokens.hash(request.resetToken()))
@@ -171,7 +175,7 @@ public class AuthService {
     private RegistrationOtpEntity verifyCode(VerifyOtpRequest request, String purpose, AccountStatus status) {
         if (!purpose.equals(request.purpose()) || !request.code().matches("[0-9]{6}"))
             throw new ApiException(ErrorCode.INVALID_OTP);
-        var account = findByIdentity(identity(request.identity()))
+        var account = identities.resolve(identity(request.identity()), request.namespace())
                 .filter(a -> a.getStatus() == status).orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
         var otp = otps.findFirstByAccountIdAndPurposeOrderBySentAtDesc(account.getId(), purpose)
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
@@ -195,10 +199,6 @@ public class AuthService {
         return value.trim();
     }
 
-    private java.util.Optional<AccountEntity> findByIdentity(String value) {
-        return accounts.findForLoginByEmail(value).or(() -> accounts.findForLoginByUsername(value));
-    }
-
     private void validatePassword(String password, String confirm) {
         if (!password.equals(confirm)) throw new ApiException(ErrorCode.VALIDATION_FAILED, "Passwords do not match.");
         if (password.length() < 8 || !password.matches("(?s)(?=.*[A-Za-z])(?=.*[0-9]).*"))
@@ -215,8 +215,7 @@ public class AuthService {
     @Transactional(noRollbackFor = ApiException.class)
     public AuthResult login(LoginRequest request, String userAgent) {
         String identity = request.usernameOrEmail().trim();
-        AccountEntity account = accounts.findForLoginByEmail(identity)
-                .or(() -> accounts.findForLoginByUsername(identity))
+        AccountEntity account = identities.resolve(identity, request.identityType())
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS));
         Instant now = clock.instant();
         if (account.getLoginLockedUntil() != null && account.getLoginLockedUntil().isAfter(now))
