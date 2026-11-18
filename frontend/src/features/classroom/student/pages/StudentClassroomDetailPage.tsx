@@ -7,8 +7,8 @@ import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnounceme
 import { UserAvatar } from '../../components/UserAvatar';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
 import { useClassroomStore } from '../../mock/useClassroomStore';
-import { getLessonCountForClassroom } from '../../lessons/mock/lessonMockStore';
-import { ArrowLeft, Users, LogOut, Calendar, BookOpen, BookOpenText, Bell, Pin } from 'lucide-react';
+import { getLessonCountForClassroom, lessonMockStore } from '../../lessons/mock/lessonMockStore';
+import { ArrowLeft, Users, LogOut, Calendar, BookOpen, BookOpenText, Bell, Pin, CheckCircle2, ArrowUpRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 
@@ -72,6 +72,8 @@ export const StudentClassroomDetailPage: React.FC = () => {
 
   const activeMembers = classroom.members.filter(m => m.status === 'ACTIVE');
   const classroomAnnouncements = getAnnouncements(classroom.id);
+  const publishedLessons = lessonMockStore.list(classroom.id, 'STUDENT', currentPersona.id, 0).items;
+  const completedLessonsCount = publishedLessons.filter(l => l.progress?.completed).length;
   const studentNotifs = getStudentNotifications(currentPersona.id);
   const unreadAnnouncementNotif = studentNotifs.find(
     n => n.classroomId === classroom.id && !n.isRead,
@@ -277,83 +279,95 @@ export const StudentClassroomDetailPage: React.FC = () => {
               </div>
             </div>
           )}
-          {/* Planned Modules Preview */}
+          {/* Synchronized Classroom Lessons Preview */}
           <div className="classroom-glass-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-slate-900">Learning Modules & Practice</h2>
-              <span className="text-xs text-slate-600 font-medium px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/60 font-mono">
-                2 Available · 1 Scheduled · 1 Locked
-              </span>
-            </div>
-            <div className="space-y-3">
-              <div className="p-4 rounded-xl border border-white/70 bg-white/50 flex items-center justify-between">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="classroom-module-number-card" aria-hidden="true">
-                    01
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900 truncate">
-                      Foundations of Asymptotic Analysis
-                    </h3>
-                    <p className="text-xs text-slate-500 truncate">
-                      Big-O notation, space complexity, recursion tree analysis
-                    </p>
-                  </div>
-                </div>
-                <AvailabilityBadge status="AVAILABLE" />
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Learning Modules &amp; Practice</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Published curriculum lessons synced with this classroom
+                </p>
               </div>
-
-              <div className="p-4 rounded-xl border border-white/70 bg-white/50 flex items-center justify-between">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="classroom-module-number-card" aria-hidden="true">
-                    02
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900 truncate">
-                      Two Pointers & Sliding Window
-                    </h3>
-                    <p className="text-xs text-slate-500 truncate">
-                      Array manipulation, string matching, test runner verification
-                    </p>
-                  </div>
-                </div>
-                <AvailabilityBadge status="AVAILABLE" />
-              </div>
-
-              <div className="p-4 rounded-xl border border-white/70 bg-white/50 flex items-center justify-between">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="classroom-module-number-card" aria-hidden="true">
-                    03
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900 truncate">
-                      Dynamic Programming on Trees & DAGs
-                    </h3>
-                    <p className="text-xs text-slate-500 truncate">
-                      Memoization vs Tabulation, automated judge test cases
-                    </p>
-                  </div>
-                </div>
-                <AvailabilityBadge status="SCHEDULED" />
-              </div>
-
-              <div className="p-4 rounded-xl border border-white/70 bg-white/50 flex items-center justify-between opacity-85">
-                <div className="flex items-center gap-3.5 min-w-0">
-                  <div className="classroom-module-number-card" aria-hidden="true">
-                    04
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-bold text-slate-900 truncate">
-                      Advanced Graph Theory & Network Flow
-                    </h3>
-                    <p className="text-xs text-slate-500 truncate">
-                      Push-relabel, bipartite matching, min-cut (Requires prerequisite completion)
-                    </p>
-                  </div>
-                </div>
-                <AvailabilityBadge status="UNAVAILABLE" />
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-600 font-medium px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200/60 font-mono">
+                  {publishedLessons.length} Published · {completedLessonsCount} Completed
+                </span>
+                {isEnrolled && (
+                  <Link
+                    to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
+                    className="text-xs font-bold text-slate-900 hover:underline inline-flex items-center gap-1"
+                  >
+                    View all →
+                  </Link>
+                )}
               </div>
             </div>
+
+            {publishedLessons.length === 0 ? (
+              <div className="p-5 rounded-xl border border-dashed border-slate-200 bg-white/40 text-center">
+                <p className="text-sm font-semibold text-slate-700">No published lessons yet</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Lessons published by {classroom.ownerName} will appear here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {publishedLessons.slice(0, 4).map((lesson, idx) => {
+                  const isDone = Boolean(lesson.progress?.completed);
+                  const subtitle = `${
+                    lesson.completionMode === 'MANUAL'
+                      ? 'Manual completion'
+                      : 'Linked activity required'
+                  } · ${lesson.attachments.length} ${lesson.attachments.length === 1 ? 'material' : 'materials'}`;
+
+                  const rowBody = (
+                    <>
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <div className="classroom-module-number-card" aria-hidden="true">
+                          {String(idx + 1).padStart(2, '0')}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-bold text-slate-900 truncate">
+                            {lesson.title}
+                          </h3>
+                          <p className="text-xs text-slate-500 truncate">{subtitle}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {!isEnrolled ? (
+                          <AvailabilityBadge status="UNAVAILABLE" />
+                        ) : isDone ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+                            <CheckCircle2 size={12} aria-hidden="true" />
+                            Completed
+                          </span>
+                        ) : (
+                          <AvailabilityBadge status="AVAILABLE" />
+                        )}
+                        {isEnrolled && <ArrowUpRight size={15} className="text-slate-400" aria-hidden="true" />}
+                      </div>
+                    </>
+                  );
+
+                  return isEnrolled ? (
+                    <Link
+                      key={lesson.id}
+                      to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(lesson.id)}`}
+                      className="p-4 rounded-xl border border-white/70 bg-white/60 hover:bg-white hover:border-slate-300 flex items-center justify-between gap-3 transition-all"
+                    >
+                      {rowBody}
+                    </Link>
+                  ) : (
+                    <div
+                      key={lesson.id}
+                      className="p-4 rounded-xl border border-white/70 bg-white/40 flex items-center justify-between gap-3 opacity-80"
+                    >
+                      {rowBody}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
