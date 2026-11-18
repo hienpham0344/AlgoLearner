@@ -52,11 +52,17 @@ export interface InvitationRecord {
 
 export interface InvitationNotificationRecord {
   id: string;
-  invitationId: string;
-  classroomId: string;
-  classroomName: string;
-  status: InvitationRecord['status'];
-  expiresAt: string;
+  type: string;
+  title: string;
+  message: string | null;
+  targetType: string;
+  targetId: string | null;
+  actionUrl: string | null;
+  invitationId: string | null;
+  classroomId: string | null;
+  classroomName: string | null;
+  status: InvitationRecord['status'] | string;
+  expiresAt: string | null;
   createdAt: string;
   readAt: string | null;
 }

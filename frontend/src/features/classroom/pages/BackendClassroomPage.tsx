@@ -168,22 +168,24 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
             </form>
           </section>
           <section id="invitations" className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-2 text-lg font-bold">Lời mời lớp học</h2>
+            <h2 className="mb-2 text-lg font-bold">Thông báo</h2>
             {notifications.isPending && <p role="status">Đang tải thông báo…</p>}
             {notifications.isError && <p role="alert">{classroomError(notifications.error)}</p>}
             {notifications.data && <>
-              {notifications.data.items.length === 0 && <p className="text-sm text-slate-600">Chưa có lời mời.</p>}
+              {notifications.data.items.length === 0 && <p className="text-sm text-slate-600">Chưa có thông báo.</p>}
               <ul className="divide-y divide-slate-100">{notifications.data.items.map(item => <li key={item.id} className="py-4 text-sm">
-                <strong>{item.classroomName}</strong>
-                <p className="text-slate-600">Trạng thái: {item.status} · Hết hạn: {new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(item.expiresAt))}</p>
+                <strong>{item.title ?? item.classroomName}</strong>
+                {item.message && <p className="text-slate-600">{item.message}</p>}
+                {item.expiresAt && <p className="text-slate-600">Trạng thái: {item.status} · Hết hạn: {new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(item.expiresAt))}</p>}
                 {!item.readAt && <button type="button" className="mt-2 text-slate-700 underline" disabled={pending}
                   onClick={() => void run(() => classroomApi.markNotificationRead(item.id), 'Đã đánh dấu đã đọc.')}>Đánh dấu đã đọc</button>}
-                {item.status === 'PENDING' && <div className="mt-2 flex gap-2">
+                {item.status === 'PENDING' && item.invitationId && <div className="mt-2 flex gap-2">
                   <button type="button" className={button} disabled={pending} onClick={() => void run(
-                    () => classroomApi.acceptInvitation(item.invitationId), 'Đã tham gia lớp.', () => navigate(`${base}/${item.classroomId}`))}>Chấp nhận</button>
+                    () => classroomApi.acceptInvitation(item.invitationId!), 'Đã tham gia lớp.', () => navigate(`${base}/${item.classroomId}`))}>Chấp nhận</button>
                   <button type="button" className={secondary} disabled={pending} onClick={() => void run(
-                    () => classroomApi.declineInvitation(item.invitationId), 'Đã từ chối lời mời.')}>Từ chối</button>
+                    () => classroomApi.declineInvitation(item.invitationId!), 'Đã từ chối lời mời.')}>Từ chối</button>
                 </div>}
+                {item.type !== 'CLASS_INVITATION' && item.actionUrl && <Link className="mt-2 inline-block underline" to={item.actionUrl}>Xem chi tiết</Link>}
                 {(item.status === 'REVOKED' || item.status === 'EXPIRED') && <p>Lời mời đã hết hạn.</p>}
               </li>)}</ul>
               <PageControls page={notificationPage} totalPages={notifications.data.pagination.totalPages} onPage={setNotificationPage} />
