@@ -5,7 +5,10 @@ import { ArrowLeft, ArrowUpRight, BookOpen, CheckCircle2, FileText, Plus } from 
 import { useAuth } from '@/hooks/useAuth';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { classroomApi } from '../../api/classroomApi';
+import { readStoredPersona } from '../../mock/useClassroomStore';
+import type { Classroom } from '../../types';
 import { lessonApi, lessonError, lessonKeys } from '../api/lessonApi';
+import { getSynchronizedClassroom, lessonMockStore } from '../mock/lessonMockStore';
 import { activityPath, canCompleteLesson, lessonDate, visibleLessons } from '../lessonRules';
 import type { Lesson, LessonInput, LessonRole } from '../types';
 import { LessonEditor } from '../components/LessonEditor';
@@ -14,6 +17,8 @@ import { LessonAttachments } from '../components/LessonAttachments';
 import { LessonProgress } from '../components/LessonProgress';
 import { LessonConfirm, LessonErrorState, LessonPagination } from '../components/LessonState';
 import '../styles/lessons.css';
+
+const IS_PROTOTYPE_DEMO = import.meta.env.MODE === 'auth-demo';
 
 export function LessonWorkspacePage({ role }: { role: LessonRole }) {
   const { user, isLoading } = useAuth();
@@ -26,27 +31,73 @@ export function LessonWorkspacePage({ role }: { role: LessonRole }) {
 function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
   const { id = '', lessonId } = useParams<{ id: string; lessonId: string }>();
   const { user } = useAuth();
-  const classroom = useQuery({ queryKey: ['lesson-classroom', userId, id], queryFn: () => classroomApi.get(id), retry: false, staleTime: 0, refetchInterval: 15_000 });
+
+  const demoPersona = IS_PROTOTYPE_DEMO ? readStoredPersona(role) : null;
+  const effectiveUserId = demoPersona ? demoPersona.id : userId;
+
+  const classroom = useQuery({
+    queryKey: ['lesson-classroom', effectiveUserId, id],
+    queryFn: async () => {
+      if (IS_PROTOTYPE_DEMO) {
+        const match = getSynchronizedClassroom(id);
+        if (!match) throw new Error('Classroom not found.');
+        return match;
+      }
+      return classroomApi.get(id);
+    },
+    retry: false,
+    staleTime: 0,
+    refetchInterval: IS_PROTOTYPE_DEMO ? false : 15_000,
+  });
+
   const base = `/${role.toLowerCase()}/classrooms/${encodeURIComponent(id)}`;
-  return <ClassroomLayout className="lesson-shell" role={role} persona={{ id: userId, username: user?.username || '', fullName: user?.fullName || user?.username || '', email: user?.email || '', role }} breadcrumbChild="Class lessons">
+  const layoutPersona = demoPersona || {
+    id: userId,
+    username: user?.username || '',
+    fullName: user?.fullName || user?.username || '',
+    email: user?.email || '',
+    role,
+  };
+
+  const syncClassroom = IS_PROTOTYPE_DEMO ? (classroom.data as Classroom | undefined) : undefined;
+  const isMember =
+    !IS_PROTOTYPE_DEMO
+    || role !== 'STUDENT'
+    || Boolean(syncClassroom?.members.some(m => m.studentId === effectiveUserId && m.status === 'ACTIVE'));
+
+  return <ClassroomLayout className="lesson-shell" role={role} persona={layoutPersona} breadcrumbChild="Class lessons">
     <div className="lesson-workspace" id="lesson-main">
-      {['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE) && <p className="lesson-notice" role="status">Lesson demo · Sample data resets when the demo server restarts.</p>}
+      {['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE) && <p className="lesson-notice" role="status">Lesson demo · Synced with current classroom workspace.</p>}
       <Link className="lesson-back" to={base}><ArrowLeft size={15} aria-hidden="true" />Back to classroom</Link>
       {classroom.isPending ? <p role="status">Loading classroom…</p> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
-        : classroom.data && (role === 'TEACHER' && classroom.data.ownerId !== userId ? <LessonErrorState error={new Error('Only the classroom owner can manage these lessons.')} /> : <>
-          <header className="lesson-page-header"><div><p className="lesson-eyebrow">{classroom.data.name} / Learning space</p><h1>Class lessons<span className="lesson-heading-dot">.</span></h1><p className="lesson-muted">{role === 'TEACHER' ? 'Turn the next concept into a clear path forward.' : 'Read, explore, and put the next idea into practice.'}</p></div><BookOpen size={36} strokeWidth={1.3} aria-hidden="true" /></header>
-          {classroom.data.status === 'ARCHIVED' && <p className="lesson-alert" role="status">This classroom is archived. Lessons are read-only.</p>}
-          {!lessonId ? <LessonList key={id} classId={id} userId={userId} role={role} writable={classroom.data.status === 'ACTIVE'} />
-            : lessonId === 'new' ? role === 'TEACHER' && classroom.data.status === 'ACTIVE' ? <LessonDetail key="new" classId={id} userId={userId} role={role} writable create /> : <LessonErrorState error={new Error('You cannot create lessons in this classroom.')} />
-            : <LessonDetail key={lessonId} classId={id} userId={userId} role={role} lessonId={lessonId} writable={classroom.data.status === 'ACTIVE'} />}
-        </>)}
+        : classroom.data && (
+          role === 'TEACHER' && classroom.data.ownerId !== effectiveUserId
+            ? <LessonErrorState error={new Error('Only the classroom owner can manage these lessons.')} />
+            : !isMember
+              ? <LessonErrorState error={new Error('You must be an active member of this classroom to access its lessons.')} />
+              : <>
+                  <header className="lesson-page-header"><div><p className="lesson-eyebrow">{classroom.data.name} / Learning space</p><h1>Class lessons<span className="lesson-heading-dot">.</span></h1><p className="lesson-muted">{role === 'TEACHER' ? 'Turn the next concept into a clear path forward.' : 'Read, explore, and put the next idea into practice.'}</p></div><BookOpen size={36} strokeWidth={1.3} aria-hidden="true" /></header>
+                  {classroom.data.status === 'ARCHIVED' && <p className="lesson-alert" role="status">This classroom is archived. Lessons are read-only.</p>}
+                  {!lessonId ? <LessonList key={id} classId={id} userId={effectiveUserId} role={role} writable={classroom.data.status === 'ACTIVE'} />
+                    : lessonId === 'new' ? role === 'TEACHER' && classroom.data.status === 'ACTIVE' ? <LessonDetail key="new" classId={id} userId={effectiveUserId} role={role} writable create /> : <LessonErrorState error={new Error('You cannot create lessons in this classroom.')} />
+                    : <LessonDetail key={lessonId} classId={id} userId={effectiveUserId} role={role} lessonId={lessonId} writable={classroom.data.status === 'ACTIVE'} />}
+                </>
+        )}
     </div>
   </ClassroomLayout>;
 }
 
 function LessonList({ classId, userId, role, writable }: { classId: string; userId: string; role: LessonRole; writable: boolean }) {
   const [page, setPage] = useState(0);
-  const query = useQuery({ queryKey: lessonKeys.list(userId, classId, page), queryFn: ({ signal }) => lessonApi.list(classId, page, signal), retry: false, staleTime: 0, refetchInterval: role === 'STUDENT' ? 15_000 : false });
+  const query = useQuery({
+    queryKey: lessonKeys.list(userId, classId, page),
+    queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
+      ? Promise.resolve(lessonMockStore.list(classId, role, userId, page))
+      : lessonApi.list(classId, page, signal),
+    retry: false,
+    staleTime: 0,
+    refetchInterval: !IS_PROTOTYPE_DEMO && role === 'STUDENT' ? 15_000 : false,
+  });
   const items = visibleLessons(query.data?.items || [], role);
   return <>
     <div className="lesson-library-bar"><div><h2>Your curriculum</h2><p className="lesson-muted">{role === 'TEACHER' ? 'Drafts, published lessons and your archive.' : 'Published lessons from your teacher.'}</p></div>{role === 'TEACHER' && writable && <Link className="lesson-button" to="new"><Plus size={16} aria-hidden="true" />Create lesson</Link>}</div>
@@ -76,10 +127,28 @@ function LessonDetail({ classId, userId, role, lessonId = '', writable, create =
   const [editing, setEditing] = useState(create);
   const [action, setAction] = useState<Action | null>(null);
   const [notice, setNotice] = useState('');
-  const detail = useQuery({ queryKey: lessonKeys.detail(userId, classId, lessonId), queryFn: ({ signal }) => lessonApi.get(classId, lessonId, signal), enabled: !create,
-    retry: false, staleTime: 0, refetchInterval: role === 'STUDENT' ? 15_000 : false });
-  const policy = useQuery({ queryKey: lessonKeys.capabilities(userId, classId), queryFn: () => lessonApi.capabilities(classId), enabled: role === 'TEACHER', retry: false });
-  const options = useQuery({ queryKey: lessonKeys.activities(userId, classId), queryFn: () => lessonApi.activities(classId), enabled: role === 'TEACHER' && editing && policy.data?.activityLinkingAvailable === true, retry: false });
+  const detail = useQuery({
+    queryKey: lessonKeys.detail(userId, classId, lessonId),
+    queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
+      ? Promise.resolve(lessonMockStore.get(classId, lessonId, role, userId))
+      : lessonApi.get(classId, lessonId, signal),
+    enabled: !create,
+    retry: false,
+    staleTime: 0,
+    refetchInterval: !IS_PROTOTYPE_DEMO && role === 'STUDENT' ? 15_000 : false,
+  });
+  const policy = useQuery({
+    queryKey: lessonKeys.capabilities(userId, classId),
+    queryFn: () => IS_PROTOTYPE_DEMO ? Promise.resolve(lessonMockStore.getCapabilities()) : lessonApi.capabilities(classId),
+    enabled: role === 'TEACHER',
+    retry: false,
+  });
+  const options = useQuery({
+    queryKey: lessonKeys.activities(userId, classId),
+    queryFn: () => IS_PROTOTYPE_DEMO ? Promise.resolve(lessonMockStore.getActivities(classId)) : lessonApi.activities(classId),
+    enabled: role === 'TEACHER' && editing && policy.data?.activityLinkingAvailable === true,
+    retry: false,
+  });
   const mutation = useMutation({ mutationFn: async (operation: () => Promise<void>) => operation(), onError: () => { if (!create) void client.invalidateQueries({ queryKey: lessonKeys.detail(userId, classId, lessonId) }); } });
   const refresh = async () => { await client.invalidateQueries({ queryKey: lessonKeys.root(userId, classId) }); };
   const lesson = detail.data;
@@ -87,7 +156,9 @@ function LessonDetail({ classId, userId, role, lessonId = '', writable, create =
 
   async function save(input: LessonInput) {
     await mutation.mutateAsync(async () => {
-      const saved = create ? await lessonApi.create(classId, input) : await lessonApi.update(classId, lessonId, input);
+      const saved = IS_PROTOTYPE_DEMO
+        ? (create ? lessonMockStore.create(classId, input, userId) : lessonMockStore.update(classId, lessonId, input, userId))
+        : (create ? await lessonApi.create(classId, input) : await lessonApi.update(classId, lessonId, input));
       await refresh(); setEditing(false); setNotice('Lesson saved.');
       if (create) navigate(`${base}/${encodeURIComponent(saved.id)}`, { replace: true });
     });
@@ -97,8 +168,13 @@ function LessonDetail({ classId, userId, role, lessonId = '', writable, create =
     setNotice('');
     try {
       await mutation.mutateAsync(async () => {
-        if (action === 'delete') await lessonApi.remove(classId, lessonId);
-        else await lessonApi.transition(classId, lessonId, action);
+        if (IS_PROTOTYPE_DEMO) {
+          if (action === 'delete') lessonMockStore.remove(classId, lessonId);
+          else lessonMockStore.transition(classId, lessonId, action, userId);
+        } else {
+          if (action === 'delete') await lessonApi.remove(classId, lessonId);
+          else await lessonApi.transition(classId, lessonId, action);
+        }
         await refresh(); setAction(null); setNotice('Lesson updated.');
         if (action === 'delete') navigate(base, { replace: true });
       });
@@ -107,7 +183,9 @@ function LessonDetail({ classId, userId, role, lessonId = '', writable, create =
   async function complete() {
     setNotice('');
     try { await mutation.mutateAsync(async () => {
-      const saved = await lessonApi.complete(classId, lessonId);
+      const saved = IS_PROTOTYPE_DEMO
+        ? lessonMockStore.complete(classId, lessonId, userId)
+        : await lessonApi.complete(classId, lessonId);
       if (!saved.progress?.completed) throw new Error('The server did not confirm completion. Refresh and try again.');
       await refresh(); setNotice('Your completion has been saved.');
     }); } catch { /* Mutation feedback is rendered below. */ }

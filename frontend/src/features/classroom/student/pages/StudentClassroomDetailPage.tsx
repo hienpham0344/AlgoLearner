@@ -7,7 +7,8 @@ import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnounceme
 import { UserAvatar } from '../../components/UserAvatar';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
 import { useClassroomStore } from '../../mock/useClassroomStore';
-import { ArrowLeft, Users, LogOut, Calendar, BookOpen, Bell, Pin } from 'lucide-react';
+import { getLessonCountForClassroom } from '../../lessons/mock/lessonMockStore';
+import { ArrowLeft, Users, LogOut, Calendar, BookOpen, BookOpenText, Bell, Pin } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 
@@ -163,7 +164,6 @@ export const StudentClassroomDetailPage: React.FC = () => {
       )}
 
       {/* 03 / Workspace Navigation Tabs */}
-      {isEnrolled && <Link className="inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white mb-4" to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons`}>Open class lessons →</Link>}
       <div className="classroom-tabs mb-6" role="tablist">
         <button
           type="button"
@@ -178,6 +178,16 @@ export const StudentClassroomDetailPage: React.FC = () => {
           <BookOpen size={14} className="inline mr-1.5" />
           Overview & Curriculum
         </button>
+        {isEnrolled && (
+          <Link
+            to={`/student/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
+            className="classroom-tab-btn"
+            role="tab"
+          >
+            <BookOpenText size={14} className="inline mr-1.5" />
+            Class lessons ({getLessonCountForClassroom(classroom.id, 'STUDENT')})
+          </Link>
+        )}
         <button
           type="button"
           role="tab"

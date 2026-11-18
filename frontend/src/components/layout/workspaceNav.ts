@@ -3,7 +3,6 @@ export type WorkspaceRole = 'STUDENT' | 'TEACHER' | 'ADMIN';
 export type WorkspaceNavIconKey =
   | 'dashboard'
   | 'classes'
-  | 'lessons'
   | 'courses'
   | 'practice'
   | 'assignments'
@@ -27,27 +26,15 @@ export interface WorkspaceNavItemConfig {
 export function getWorkspaceNavItems(
   role: WorkspaceRole,
   pathname: string,
-  classroomId?: string,
 ): WorkspaceNavItemConfig[] {
   const rolePrefix = role.toLowerCase();
   const isOnDashboard = pathname === '/dashboard';
-  const isLessonsRoute =
-    pathname.startsWith(`/${rolePrefix}/lessons`)
-    || (pathname.startsWith(`/${rolePrefix}/classrooms`) && pathname.includes('/lessons'));
-  const isClassroomsRoute =
-    pathname.startsWith(`/${rolePrefix}/classrooms`) && !pathname.includes('/lessons');
-
-  const lessonsHref = isOnDashboard
-    ? '#lessons'
-    : classroomId && role !== 'ADMIN'
-      ? `/${rolePrefix}/classrooms/${encodeURIComponent(classroomId)}/lessons`
-      : `/${rolePrefix}/lessons`;
+  const isClassroomsRoute = pathname.startsWith(`/${rolePrefix}/classrooms`);
 
   if (role === 'TEACHER') {
     return [
       { label: 'Dashboard', href: '/dashboard', iconKey: 'dashboard', isCurrent: isOnDashboard },
       { label: 'My classes', href: '/teacher/classrooms', iconKey: 'classes', isCurrent: isClassroomsRoute },
-      { label: 'Class lessons', href: lessonsHref, iconKey: 'lessons', isCurrent: isLessonsRoute },
       { label: 'Assignments', href: '/teacher/assignments', iconKey: 'assignments', isCurrent: pathname === '/teacher/assignments' },
       { label: 'Review queue', href: '/teacher/review-queue', iconKey: 'review', isCurrent: pathname === '/teacher/review-queue' },
       { label: 'Notifications', href: '/notifications', iconKey: 'notifications', isCurrent: pathname === '/notifications' },
@@ -70,11 +57,9 @@ export function getWorkspaceNavItems(
   return [
     { label: 'Dashboard', href: '/dashboard', iconKey: 'dashboard', isCurrent: isOnDashboard },
     { label: 'My classes', href: '/student/classrooms', iconKey: 'classes', isCurrent: isClassroomsRoute },
-    { label: 'Class lessons', href: lessonsHref, iconKey: 'lessons', isCurrent: isLessonsRoute },
     { label: 'Public courses', href: '/student/courses', iconKey: 'courses', isCurrent: pathname === '/student/courses' },
     { label: 'Coding practice', href: '/practice', iconKey: 'practice', isCurrent: pathname === '/practice' },
     { label: 'Notifications', href: '/notifications', iconKey: 'notifications', isCurrent: pathname === '/notifications' },
     { label: 'My profile', href: '/profile', iconKey: 'profile', isCurrent: pathname === '/profile' || pathname === '/account/security' },
   ];
 }
-

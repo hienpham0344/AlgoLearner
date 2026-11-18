@@ -16,7 +16,6 @@ import { ProfilePage } from '@/features/profile/pages/ProfilePage';
 import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
 import { PlaceholderPage } from '@/components/common/PlaceholderPage';
 import { NotificationsPage } from '@/features/dashboard/pages/NotificationsPage';
-import { ClassLessonsHubPage } from '@/features/classroom/lessons/pages/ClassLessonsHubPage';
 const LessonWorkspacePage = lazy(() => import('@/features/classroom/lessons/pages/LessonWorkspacePage').then(module => ({ default: module.LessonWorkspacePage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -63,8 +62,6 @@ export const App: React.FC = () => {
 
       {/* Feature Placeholders & Workspace Sections */}
       <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
-      <Route path="/student/lessons" element={<ProtectedRoute><ClassLessonsHubPage role="STUDENT" /></ProtectedRoute>} />
-      <Route path="/teacher/lessons" element={<ProtectedRoute><ClassLessonsHubPage role="TEACHER" /></ProtectedRoute>} />
       <Route path="/student/courses" element={<ProtectedRoute><PlaceholderPage feature="public-courses" /></ProtectedRoute>} />
       <Route path="/practice" element={<ProtectedRoute><PlaceholderPage feature="practice" /></ProtectedRoute>} />
       <Route path="/teacher/assignments" element={<ProtectedRoute><PlaceholderPage feature="teacher-assignments" /></ProtectedRoute>} />

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Bell,
   BookOpen,
-  BookOpenText,
   ChevronRight,
   ClipboardCheck,
   Code2,
@@ -28,7 +27,6 @@ export type { WorkspaceRole };
 const NAV_ICONS: Record<WorkspaceNavIconKey, React.ElementType> = {
   dashboard: LayoutDashboard,
   classes: BookOpen,
-  lessons: BookOpenText,
   courses: Code2,
   practice: Flame,
   assignments: FileCode2,
@@ -86,11 +84,10 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { id } = useParams<{ id?: string }>();
   const [navOpen, setNavOpen] = useState(false);
 
   const activeRole: WorkspaceRole = propRole || (user?.role as WorkspaceRole) || 'STUDENT';
-  const navItems = getWorkspaceNavItems(activeRole, location.pathname, id);
+  const navItems = getWorkspaceNavItems(activeRole, location.pathname);
 
   const rawDisplayName = displayNameOverride || user?.fullName || user?.username || activeRole;
   const displayName = rawDisplayName.replace(/^Demo\s+/i, '') || activeRole;

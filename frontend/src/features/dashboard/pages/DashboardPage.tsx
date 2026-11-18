@@ -14,7 +14,8 @@ import { mapStudentDashboard } from '../mapStudentDashboard';
 import { RoleDashboardPage } from './RoleDashboardPage';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { PracticePulse } from '../components/PracticePulse';
-import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
+import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
+import { getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
 import '../styles/dashboard.css';
 
 const IS_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
@@ -148,8 +149,35 @@ export const DashboardPage = () => {
     return user?.role === 'TEACHER' || user?.role === 'ADMIN' ? <RoleDashboardPage role={user.role} /> : null;
   }
 
-  const data = IS_DEMO
-    ? dashboardDemoData
+  const syncedDemoClasses: EnrolledClass[] =
+    import.meta.env.MODE === 'auth-demo'
+      ? (() => {
+          const studentPersona = readStoredPersona('STUDENT');
+          return readStoredClassrooms()
+            .filter(
+              c =>
+                c.status === 'ACTIVE'
+                && c.members.some(m => m.studentId === studentPersona.id && m.status === 'ACTIVE'),
+            )
+            .map(c => {
+              const lessonCount = getLessonCountForClassroom(c.id, 'STUDENT');
+              return {
+                id: c.id,
+                name: c.name,
+                code: c.classCode,
+                teacher: c.ownerName,
+                currentActivity: c.description,
+                nextAction: `${lessonCount} published ${lessonCount === 1 ? 'lesson' : 'lessons'} available`,
+                completedModules: Math.min(c.stats?.lessonsCount ?? lessonCount, lessonCount),
+                totalModules: Math.max(lessonCount, 1),
+                href: `/student/classrooms/${encodeURIComponent(c.id)}`,
+              };
+            });
+        })()
+      : dashboardDemoData.classes;
+
+  const data: StudentDashboardData = IS_DEMO
+    ? { ...dashboardDemoData, classes: syncedDemoClasses }
     : dashboardQuery.data
       ? mapStudentDashboard(dashboardQuery.data)
       : EMPTY_DASHBOARD_DATA;
@@ -184,8 +212,6 @@ export const DashboardPage = () => {
                 : 'Your learning activity is up to date.'}
             </p>
           )}
-
-          <DashboardLessonLinks role="STUDENT" />
 
           {!IS_DEMO && (dashboardQuery.isPending || dashboardQuery.isError) ? (
             <div className="dashboard-fetch-state" role={dashboardQuery.isError ? 'alert' : 'status'}>

@@ -1,8 +1,11 @@
 import { useState, type ChangeEvent } from 'react';
 import { Download, Paperclip, Trash2, Upload } from 'lucide-react';
 import { lessonApi, lessonError } from '../api/lessonApi';
+import { lessonMockStore } from '../mock/lessonMockStore';
 import { SUPPORTED_EXTENSIONS, formatBytes, validateAttachment } from '../lessonRules';
 import type { Lesson, LessonCapabilities } from '../types';
+
+const IS_PROTOTYPE_DEMO = import.meta.env.MODE === 'auth-demo';
 
 interface Props { lesson: Lesson; editable: boolean; policy: LessonCapabilities | null; onChanged: () => Promise<void> }
 export function LessonAttachments({ lesson, editable, policy, onChanged }: Props) {
@@ -17,14 +20,20 @@ export function LessonAttachments({ lesson, editable, policy, onChanged }: Props
     const validation = validateAttachment(file, policy);
     if (validation) { setError(validation); return; }
     setBusy(true); setError('');
-    try { await lessonApi.upload(lesson.classroomId, lesson.id, file); await onChanged(); setNotice('File uploaded.'); }
+    try {
+      if (IS_PROTOTYPE_DEMO) await lessonMockStore.uploadAttachment(lesson.classroomId, lesson.id, file);
+      else await lessonApi.upload(lesson.classroomId, lesson.id, file);
+      await onChanged(); setNotice('File uploaded.');
+    }
     catch (failure) { setError(`Upload failed. ${lessonError(failure)} Your saved lesson content is preserved.`); }
     finally { setBusy(false); }
   }
   async function download(id: string, name: string) {
     setBusy(true); setError(''); setNotice('');
     try {
-      const blob = await lessonApi.download(lesson.classroomId, lesson.id, id);
+      const blob = IS_PROTOTYPE_DEMO
+        ? lessonMockStore.downloadAttachment(id)
+        : await lessonApi.download(lesson.classroomId, lesson.id, id);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = name.replace(/[\\/\u0000-\u001f]/g, '_');
       document.body.append(anchor); anchor.click(); anchor.remove();
@@ -36,7 +45,11 @@ export function LessonAttachments({ lesson, editable, policy, onChanged }: Props
   async function remove(id: string) {
     if (!window.confirm('Remove this attachment from the lesson?')) return;
     setBusy(true); setError(''); setNotice('');
-    try { await lessonApi.removeAttachment(lesson.classroomId, lesson.id, id); await onChanged(); setNotice('Attachment removed.'); }
+    try {
+      if (IS_PROTOTYPE_DEMO) lessonMockStore.removeAttachment(lesson.classroomId, lesson.id, id);
+      else await lessonApi.removeAttachment(lesson.classroomId, lesson.id, id);
+      await onChanged(); setNotice('Attachment removed.');
+    }
     catch (failure) { setError(lessonError(failure)); }
     finally { setBusy(false); }
   }

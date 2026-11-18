@@ -12,7 +12,8 @@ import {
   type TeacherDashboardResponse,
 } from '../api/dashboardApi';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
-import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
+import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
+import { getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
@@ -132,7 +133,6 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
         <span className="dashboard-today">{todayFormatter.format(new Date())}</span>
       </div>
 
-      <DashboardLessonLinks role="TEACHER" />
       <div className="dashboard-grid">
         <div className="dashboard-primary">
           {/* 01 / Featured Teaching Card */}
@@ -851,9 +851,42 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
 
   const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
 
+  const syncedTeacherData: TeacherDashboardResponse | undefined =
+    role === 'TEACHER' && teacherQuery.data
+      ? import.meta.env.MODE === 'auth-demo'
+        ? (() => {
+            const teacherPersona = readStoredPersona('TEACHER');
+            const owned = readStoredClassrooms().filter(
+              c => c.ownerId === teacherPersona.id && c.status === 'ACTIVE',
+            );
+            return {
+              ...teacherQuery.data,
+              classrooms: {
+                items: owned.map(c => ({ classroomId: c.id, name: c.name })),
+                totalElements: owned.length,
+                hasMore: false,
+              },
+              classroomStatistics: {
+                items: owned.map(c => ({
+                  classroomId: c.id,
+                  name: c.name,
+                  activeStudentCount: c.members.filter(m => m.status === 'ACTIVE').length,
+                  publishedAssignmentCount: getLessonCountForClassroom(c.id, 'TEACHER'),
+                  publishedQuizCount: c.stats?.quizzesCount ?? 0,
+                  ungradedWorkCount: teacherQuery.data.classroomStatistics.items.find(
+                    s => s.classroomId === c.id,
+                  )?.ungradedWorkCount ?? 0,
+                })),
+                totalElements: owned.length,
+                hasMore: false,
+              },
+            };
+          })()
+        : teacherQuery.data
+      : undefined;
+
   return (
     <WorkspaceLayout role={role} unreadCount={unreadCount} displayNameOverride={displayName}>
-      {role === 'TEACHER' && (teacherQuery.isPending || teacherQuery.isError || !teacherQuery.data) && <DashboardLessonLinks role="TEACHER" />}
       {query.isPending ? (
         <div className="dashboard-fetch-state" role="status">
           <span className="dashboard-eyebrow">{role} WORKSPACE</span>
@@ -874,8 +907,8 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
             </button>
           )}
         </div>
-      ) : role === 'TEACHER' && teacherQuery.data ? (
-        <TeacherWorkspace data={teacherQuery.data} firstName={firstName} />
+      ) : role === 'TEACHER' && syncedTeacherData ? (
+        <TeacherWorkspace data={syncedTeacherData} firstName={firstName} />
       ) : adminQuery.data ? (
         <AdminWorkspace data={adminQuery.data} />
       ) : null}

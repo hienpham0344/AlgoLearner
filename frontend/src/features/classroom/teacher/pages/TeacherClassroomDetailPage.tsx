@@ -11,10 +11,12 @@ import { InviteStudentModal } from '../../components/InviteStudentModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnouncementsList';
 import { useClassroomStore } from '../../mock/useClassroomStore';
+import { getLessonCountForClassroom } from '../../lessons/mock/lessonMockStore';
 import {
   Users,
   KeyRound,
   BookOpen,
+  BookOpenText,
   Settings,
   FileCode,
   CheckCircle2,
@@ -174,7 +176,6 @@ export const TeacherClassroomDetailPage: React.FC = () => {
       />
 
       {/* 02 / Subnavigation Tabs */}
-      <Link className="inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white mb-4" to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons`}>Open class lessons →</Link>
       <nav className="classroom-subnav" role="tablist" aria-label="Classroom sections">
         <button
           type="button"
@@ -190,6 +191,18 @@ export const TeacherClassroomDetailPage: React.FC = () => {
           <BookOpen size={16} aria-hidden="true" />
           <span>Overview & Modules</span>
         </button>
+
+        <Link
+          to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
+          className="classroom-subnav-link"
+          role="tab"
+        >
+          <BookOpenText size={16} aria-hidden="true" />
+          <span>Class lessons</span>
+          <span className="classroom-subnav-badge">
+            {getLessonCountForClassroom(classroom.id, 'TEACHER')}
+          </span>
+        </Link>
 
         <button
           type="button"
