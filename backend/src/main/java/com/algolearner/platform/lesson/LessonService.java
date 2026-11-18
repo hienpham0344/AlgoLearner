@@ -34,6 +34,10 @@ public class LessonService {
     private final AccountRepository accounts;
     private final AssignmentRepository assignments;
     private final Clock clock;
+    private final com.algolearner.platform.classroom.ClassroomService classroomService;
+    private final List<LessonProgressProvider> progressProviders;
+    private final LessonProgressService progressService;
+    private final com.algolearner.platform.storage.ManagedFileService managedFiles;
 
     public List<LessonDtos.LessonSummaryView> list(UUID accountId, UUID classroomId) {
         var classroom = requireClassroom(classroomId);
@@ -69,7 +73,7 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LessonDetailView create(UUID accountId, UUID classroomId, LessonDtos.CreateLessonRequest request) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         int nextOrder = (int) lessons.countByClassroomId(classroomId);
@@ -90,16 +94,20 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LessonDetailView update(UUID accountId, UUID classroomId, UUID lessonId, LessonDtos.UpdateLessonRequest request) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
+        if (lesson.getStatus() == LessonStatus.ARCHIVED) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
         lesson.setTitle(request.title().trim());
         if (request.content() != null) lesson.setContent(request.content());
         if (request.codeExample() != null) lesson.setCodeExample(request.codeExample());
         if (request.externalLinks() != null) lesson.setExternalLinks(request.externalLinks());
+        if (request.completionMode() == CompletionMode.AUTO_ITEMS && lesson.getStatus() == LessonStatus.PUBLISHED
+                && lesson.getRuleVersion() == 0)
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before enabling automatic completion");
         if (request.completionMode() != null) lesson.setCompletionMode(request.completionMode());
 
         return toDetailView(lessons.save(lesson), accountId);
@@ -107,14 +115,14 @@ public class LessonService {
 
     @Transactional
     public void delete(UUID accountId, UUID classroomId, UUID lessonId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
         // FR-LES-005: Hard delete ONLY allowed when no progress or submissions exist
-        if (completions.existsByLessonId(lessonId) || linkedItems.countByLessonId(lessonId) > 0) {
+        if (lesson.getRuleVersion() > 0 || completions.existsByLessonId(lessonId) || linkedItems.countByLessonId(lessonId) > 0) {
             throw new ApiException(ErrorCode.CANNOT_HARD_DELETE_LESSON);
         }
 
@@ -123,24 +131,28 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LessonDetailView publish(UUID accountId, UUID classroomId, UUID lessonId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
+        requireStatus(lesson, LessonStatus.DRAFT);
+        if (lesson.getCompletionMode() == CompletionMode.AUTO_ITEMS && lesson.getRuleVersion() == 0)
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before publishing");
         lesson.setStatus(LessonStatus.PUBLISHED);
         return toDetailView(lessons.save(lesson), accountId);
     }
 
     @Transactional
     public LessonDtos.LessonDetailView unpublish(UUID accountId, UUID classroomId, UUID lessonId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
+        requireStatus(lesson, LessonStatus.PUBLISHED);
         // FR-LES-004: Chuyển về Draft giữ nguyên tiến độ đã lưu của học viên
         lesson.setStatus(LessonStatus.DRAFT);
         return toDetailView(lessons.save(lesson), accountId);
@@ -148,43 +160,51 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LessonDetailView archive(UUID accountId, UUID classroomId, UUID lessonId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
+        if (lesson.getStatus() != LessonStatus.ARCHIVED) lesson.setArchivedFromStatus(lesson.getStatus());
         lesson.setStatus(LessonStatus.ARCHIVED);
         return toDetailView(lessons.save(lesson), accountId);
     }
 
     @Transactional
     public LessonDtos.LessonDetailView restore(UUID accountId, UUID classroomId, UUID lessonId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
-        lesson.setStatus(LessonStatus.PUBLISHED);
+        requireStatus(lesson, LessonStatus.ARCHIVED);
+        lesson.setStatus(lesson.getArchivedFromStatus() == LessonStatus.PUBLISHED ? LessonStatus.PUBLISHED : LessonStatus.DRAFT);
+        lesson.setArchivedFromStatus(null);
         return toDetailView(lessons.save(lesson), accountId);
     }
 
     @Transactional
     public LessonDtos.MaterialView addMaterial(UUID accountId, UUID classroomId, UUID lessonId, LessonDtos.AddMaterialRequest request) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
+        if (lesson.getStatus() == LessonStatus.ARCHIVED) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
 
+        if (request.fileId() == null) throw new ApiException(ErrorCode.VALIDATION_FAILED, "Upload lesson material before attaching it");
+        var file = managedFiles.requireReady(accountId, classroomId, request.fileId(), com.algolearner.platform.storage.FilePurpose.LESSON_MATERIAL);
         var material = LessonMaterialEntity.builder()
                 .id(UUID.randomUUID())
                 .lesson(lesson)
-                .fileName(request.fileName())
-                .fileUrl(request.fileUrl())
-                .fileType(request.fileType())
-                .fileSize(request.fileSize())
+                .fileName(file.name())
+                .fileUrl("/api/v1/files/" + file.id() + "/content")
+                .fileType(MaterialFileType.valueOf(file.kind().name()))
+                .fileSize(file.size())
+                .storedFileId(file.id())
+                .materialState("READY")
                 .build();
 
         var saved = materials.save(material);
@@ -193,26 +213,21 @@ public class LessonService {
 
     @Transactional
     public LessonDtos.LinkedItemView linkItem(UUID accountId, UUID classroomId, UUID lessonId, LessonDtos.LinkItemRequest request) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
+        if (lesson.getStatus() == LessonStatus.ARCHIVED) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
 
-        if (request.itemType() == LinkedItemType.ASSIGNMENT) {
-            assignments.findByIdAndClassroomId(request.itemId(), classroomId)
-                    .orElseThrow(() -> new ApiException(ErrorCode.ASSIGNMENT_NOT_FOUND));
-        } else if (request.itemType() != LinkedItemType.QUIZ) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Linked item type is not available yet");
-        }
-
-        // BR-LES-002: Mỗi Quiz chỉ liên kết tối đa với một Lesson
-        if (request.itemType() == LinkedItemType.QUIZ && linkedItems.existsByItemTypeAndItemId(LinkedItemType.QUIZ, request.itemId())) {
+        if (linkedItems.existsByLessonIdAndItemTypeAndItemId(lessonId, request.itemType(), request.itemId()))
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Item is already linked");
+        if (request.itemType() == LinkedItemType.QUIZ && linkedItems.existsByItemTypeAndItemId(LinkedItemType.QUIZ, request.itemId()))
             throw new ApiException(ErrorCode.QUIZ_ALREADY_LINKED);
-        }
-        if (request.itemType() == LinkedItemType.QUIZ) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Quiz links require the quiz module");
-        }
+        var provider = provider(request.itemType());
+        boolean exists = provider != null ? provider.existsInClassroom(request.itemId(), classroomId)
+                : request.itemType() == LinkedItemType.ASSIGNMENT && assignments.findByIdAndClassroomId(request.itemId(), classroomId).isPresent();
+        if (!exists) throw new ApiException(ErrorCode.VALIDATION_FAILED, "Linked item is unavailable in this classroom");
 
         int nextOrder = (int) linkedItems.countByLessonId(lessonId);
         var linked = LessonLinkedItemEntity.builder()
@@ -229,24 +244,33 @@ public class LessonService {
 
     @Transactional
     public void unlinkItem(UUID accountId, UUID classroomId, UUID lessonId, UUID itemId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockWritable(classroomId);
         requireOwner(classroom, accountId);
+
+        var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
+                .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
+        if (lesson.getStatus() == LessonStatus.ARCHIVED) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
 
         var item = linkedItems.findByLessonIdAndItemId(lessonId, itemId)
                 .orElseThrow(() -> new ResourceNotFoundException("Linked item not found"));
 
+        if (progressService.ruleReferences(lessonId, item.getItemType(), item.getItemId()))
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Update completion rule before unlinking this item");
         linkedItems.delete(item);
     }
 
     @Transactional
     public void completeLesson(UUID studentId, UUID classroomId, UUID lessonId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
+        if (classroom.getStatus() != com.algolearner.platform.classroom.ClassroomStatus.ACTIVE
+                || classroom.getOwner().getStatus() != com.algolearner.platform.auth.AccountStatus.ACTIVE)
+            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
         requireActiveStudent(classroomId, studentId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
-        if (lesson.getStatus() != LessonStatus.PUBLISHED) {
+        if (lesson.getStatus() != LessonStatus.PUBLISHED || lesson.getCompletionMode() != CompletionMode.MANUAL) {
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
         }
 
@@ -260,9 +284,51 @@ public class LessonService {
                         .student(student)
                         .build());
 
+        if (completion.isCompleted()) return;
         completion.setCompleted(true);
         completion.setCompletedAt(clock.instant());
         completions.save(completion);
+        progressService.recordManual(lesson, studentId);
+    }
+
+    public LessonDtos.CompletionRuleView completionRule(UUID actorId, UUID classroomId, UUID lessonId) {
+        requireOwnerForRead(requireClassroom(classroomId), actorId);
+        if (lessons.findByIdAndClassroomId(lessonId,classroomId).isEmpty()) throw new ApiException(ErrorCode.LESSON_NOT_FOUND);
+        return progressService.rule(lessonId);
+    }
+
+    @Transactional
+    public void configureCompletionRule(UUID actorId, UUID classroomId, UUID lessonId, LessonCompletionRule rule) {
+        var classroom = classroomService.lockReadable(classroomId);
+        requireOwner(classroom, actorId);
+        progressService.configure(classroomId, lessonId, rule);
+    }
+
+    @Transactional
+    public void recomputeForItem(UUID classroomId, LinkedItemType type, UUID itemId, UUID studentId) {
+        classroomService.lockReadable(classroomId);
+        progressService.recomputeForItem(classroomId, type, itemId, studentId);
+    }
+
+    public com.algolearner.platform.common.dto.PageResponse<LessonDtos.StudentProgressView> studentProgress(
+            UUID actorId, UUID classroomId, UUID lessonId, org.springframework.data.domain.Pageable pageable) {
+        var classroom = requireClassroom(classroomId);
+        requireOwnerForRead(classroom, actorId);
+        if (lessons.findByIdAndClassroomId(lessonId, classroomId).isEmpty()) throw new ApiException(ErrorCode.LESSON_NOT_FOUND);
+        return com.algolearner.platform.common.dto.PageResponse.fromPage(
+                memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE, pageable).map(member -> {
+                    var completion = completions.findByLessonIdAndStudentId(lessonId, member.getStudent().getId());
+                    return new LessonDtos.StudentProgressView(member.getStudent().getId(), member.getStudent().getUsername(),
+                            completion.map(LessonCompletionEntity::isCompleted).orElse(false),
+                            completion.map(LessonCompletionEntity::getCompletedAt).orElse(null));
+                }));
+    }
+
+    LessonProgressProvider provider(LinkedItemType type) {
+        return progressProviders.stream().filter(provider -> provider.itemType() == type).findFirst().orElse(null);
+    }
+    private void requireStatus(LessonEntity lesson, LessonStatus status) {
+        if (lesson.getStatus() != status) throw new ApiException(ErrorCode.VALIDATION_FAILED, "Invalid lesson state transition");
     }
 
     private ClassroomEntity requireClassroom(UUID classroomId) {
@@ -270,7 +336,13 @@ public class LessonService {
                 .orElseThrow(() -> new ResourceNotFoundException("Classroom not found"));
     }
 
+    private void requireOwnerForRead(ClassroomEntity classroom, UUID accountId) {
+        if (!classroom.getOwner().getId().equals(accountId)) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
+    }
     private void requireOwner(ClassroomEntity classroom, UUID accountId) {
+        if (classroom.getStatus() != com.algolearner.platform.classroom.ClassroomStatus.ACTIVE
+                || classroom.getOwner().getStatus() != com.algolearner.platform.auth.AccountStatus.ACTIVE)
+            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
         if (!classroom.getOwner().getId().equals(accountId)) {
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
         }
@@ -309,11 +381,14 @@ public class LessonService {
             completedAt = comp.get().getCompletedAt();
         }
 
-        var matViews = materials.findByLessonId(l.getId()).stream().map(m ->
+        var matViews = materials.findByLessonId(l.getId()).stream().filter(m -> "READY".equals(m.getMaterialState()) && m.getStoredFileId() != null).map(m ->
                 new LessonDtos.MaterialView(m.getId(), m.getFileName(), m.getFileUrl(), m.getFileType(), m.getFileSize(), m.getCreatedAt())
         ).toList();
 
-        var linkViews = linkedItems.findByLessonIdOrderByDisplayOrderAsc(l.getId()).stream().map(item ->
+        var linkViews = linkedItems.findByLessonIdOrderByDisplayOrderAsc(l.getId()).stream()
+                .filter(item -> l.getClassroom().getOwner().getId().equals(accountId) || (provider(item.getItemType()) != null
+                        && provider(item.getItemType()).availableToStudent(item.getItemId(), l.getClassroom().getId(), accountId)))
+                .map(item ->
                 new LessonDtos.LinkedItemView(item.getId(), item.getItemType(), item.getItemId(), item.getDisplayOrder())
         ).toList();
 

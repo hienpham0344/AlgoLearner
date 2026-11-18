@@ -33,6 +33,13 @@ public class LessonMaterialEntity extends BaseAuditableEntity {
     @Column(name = "file_type", nullable = false, length = 50)
     private MaterialFileType fileType;
 
+    @Column(name = "stored_file_id")
+    private UUID storedFileId;
+
+    @Column(name = "material_state", nullable = false, length = 30)
+    @Builder.Default
+    private String materialState = "NEEDS_REUPLOAD";
+
     @Column(name = "file_size", nullable = false)
     private long fileSize;
 }

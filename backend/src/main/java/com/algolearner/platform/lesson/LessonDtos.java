@@ -12,6 +12,10 @@ import java.util.UUID;
 public final class LessonDtos {
     private LessonDtos() { }
 
+    public record CompletionRuleView(long version, LessonCompletionRule rule) { }
+
+    public record StudentProgressView(UUID studentId, String username, boolean completed, Instant completedAt) { }
+
     public record CreateLessonRequest(
             @NotBlank(message = "Title is required")
             @Size(max = 255, message = "Title cannot exceed 255 characters")
@@ -39,16 +43,11 @@ public final class LessonDtos {
             UUID itemId
     ) { }
 
-    public record AddMaterialRequest(
-            @NotBlank(message = "File name is required")
-            String fileName,
-            @NotBlank(message = "File URL is required")
-            String fileUrl,
-            @NotNull(message = "File type is required")
-            MaterialFileType fileType,
-            @Positive(message = "File size must be positive")
-            long fileSize
-    ) { }
+    public record AddMaterialRequest(UUID fileId, String fileName, String fileUrl, MaterialFileType fileType, long fileSize) {
+        public AddMaterialRequest(String fileName, String fileUrl, MaterialFileType fileType, long fileSize) {
+            this(null, fileName, fileUrl, fileType, fileSize);
+        }
+    }
 
     public record MaterialView(
             UUID id,

@@ -128,8 +128,7 @@ public class LessonApiTest extends com.algolearner.platform.support.PostgresInte
                         .with(actor(teacher))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"fileName\":\"trees.pdf\",\"fileUrl\":\"https://storage.example.test/trees.pdf\",\"fileType\":\"PDF\",\"fileSize\":1048576}"))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.fileName").value("trees.pdf"));
+                .andExpect(status().isBadRequest());
 
         // Teacher publishes lesson
         mvc.perform(patch("/api/v1/classrooms/{classId}/lessons/{lessonId}/publish", classId, lessonId)
@@ -180,6 +179,7 @@ public class LessonApiTest extends com.algolearner.platform.support.PostgresInte
         account.setEmail(username + UUID.randomUUID() + "@example.test");
         account.setRole(role);
         account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         AccountEntity saved = accounts.save(account);
         testAccounts.add(saved);
         return saved;

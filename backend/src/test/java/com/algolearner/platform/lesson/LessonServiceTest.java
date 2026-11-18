@@ -16,6 +16,8 @@ import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -42,6 +44,7 @@ class LessonServiceTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T12:00:00Z"), ZoneOffset.UTC);
 
     private LessonService service;
+    private final com.algolearner.platform.classroom.ClassroomService classroomService = mock(com.algolearner.platform.classroom.ClassroomService.class);
 
     private AccountEntity teacher;
     private AccountEntity student;
@@ -50,7 +53,7 @@ class LessonServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships, accounts, assignments, clock);
+        service = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships, accounts, assignments, clock, classroomService, List.of(), mock(LessonProgressService.class), mock(com.algolearner.platform.storage.ManagedFileService.class));
 
         teacher = new AccountEntity();
         teacher.setId(UUID.randomUUID());
@@ -71,6 +74,8 @@ class LessonServiceTest {
         classroom.setName("Algorithms");
         classroom.setOwner(teacher);
         classroom.setStatus(ClassroomStatus.ACTIVE);
+        when(classroomService.lockReadable(classroom.getId())).thenReturn(classroom);
+        when(classroomService.lockWritable(classroom.getId())).thenReturn(classroom);
 
         lesson = LessonEntity.builder()
                 .id(UUID.randomUUID())
@@ -129,7 +134,7 @@ class LessonServiceTest {
         assertThat(archived.status()).isEqualTo(LessonStatus.ARCHIVED);
 
         var restored = service.restore(teacher.getId(), classroom.getId(), lesson.getId());
-        assertThat(restored.status()).isEqualTo(LessonStatus.PUBLISHED);
+        assertThat(restored.status()).isEqualTo(LessonStatus.DRAFT);
     }
 
     @Test
@@ -186,6 +191,26 @@ class LessonServiceTest {
         ));
     }
 
+    @ParameterizedTest
+    @EnumSource(value = CompletionMode.class, names = {"AUTO_ITEMS", "NONE"})
+    void completeLesson_RejectsManualCompletionOutsideManualMode(CompletionMode mode) {
+        lesson.setStatus(LessonStatus.PUBLISHED);
+        lesson.setCompletionMode(mode);
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        var membership = new ClassroomMembershipEntity();
+        membership.setStatus(MembershipStatus.ACTIVE);
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId()))
+                .thenReturn(Optional.of(membership));
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+
+        assertThatThrownBy(() -> service.completeLesson(student.getId(), classroom.getId(), lesson.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
+
+        verify(completions, never()).save(any());
+    }
+
     @Test
     void updateLesson_ModifiesContentAndTitle() {
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
@@ -207,21 +232,18 @@ class LessonServiceTest {
     }
 
     @Test
-    void addMaterial_SavesMaterial() {
-        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+    void addMaterialRejectsUnmanagedUrl() {
         when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
-        when(materials.save(any(LessonMaterialEntity.class))).thenAnswer(i -> i.getArgument(0));
-
         var req = new LessonDtos.AddMaterialRequest("slides.pdf", "https://storage.test/slides.pdf", MaterialFileType.PDF, 1024L);
-        var res = service.addMaterial(teacher.getId(), classroom.getId(), lesson.getId(), req);
-
-        assertThat(res.fileName()).isEqualTo("slides.pdf");
-        assertThat(res.fileType()).isEqualTo(MaterialFileType.PDF);
+        assertThatThrownBy(() -> service.addMaterial(teacher.getId(), classroom.getId(), lesson.getId(), req))
+                .isInstanceOf(ApiException.class);
+        verify(materials, never()).save(any());
     }
 
     @Test
     void unlinkItem_Success() {
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
         var itemId = UUID.randomUUID();
         var linked = LessonLinkedItemEntity.builder()
                 .id(UUID.randomUUID())
@@ -235,6 +257,26 @@ class LessonServiceTest {
         service.unlinkItem(teacher.getId(), classroom.getId(), lesson.getId(), itemId);
 
         verify(linkedItems).delete(linked);
+    }
+
+    @Test
+    void unlinkItem_RejectsLessonFromAnotherClassroomWithoutDeletingItsLink() {
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        var foreignLessonId = UUID.randomUUID();
+        var itemId = UUID.randomUUID();
+        var foreignLink = LessonLinkedItemEntity.builder()
+                .id(UUID.randomUUID())
+                .itemId(itemId)
+                .itemType(LinkedItemType.ASSIGNMENT)
+                .build();
+        when(lessons.findByIdAndClassroomId(foreignLessonId, classroom.getId())).thenReturn(Optional.empty());
+        when(linkedItems.findByLessonIdAndItemId(foreignLessonId, itemId)).thenReturn(Optional.of(foreignLink));
+
+        assertThatThrownBy(() -> service.unlinkItem(teacher.getId(), classroom.getId(), foreignLessonId, itemId))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.LESSON_NOT_FOUND.getCode());
+
+        verify(linkedItems, never()).delete(any());
     }
 
     @Test

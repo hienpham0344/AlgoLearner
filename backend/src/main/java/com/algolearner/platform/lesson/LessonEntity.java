@@ -18,6 +18,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class LessonEntity extends BaseAuditableEntity {
 
+    @Version @Column(nullable = false)
+    private long version;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
@@ -44,6 +47,13 @@ public class LessonEntity extends BaseAuditableEntity {
     @Column(name = "status", nullable = false, length = 30)
     @Builder.Default
     private LessonStatus status = LessonStatus.DRAFT;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "archived_from_status", length = 30)
+    private LessonStatus archivedFromStatus;
+
+    @Column(name = "rule_version", nullable = false)
+    private long ruleVersion;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "completion_mode", nullable = false, length = 30)

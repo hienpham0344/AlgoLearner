@@ -163,6 +163,29 @@ public class LessonController {
         service.completeLesson(actor(auth), classId, lessonId);
     }
 
+    @GetMapping("/{lessonId}/completion-rule")
+    @Operation(summary = "Read the current versioned completion rule (Teacher owner only)")
+    public ApiResponse<LessonDtos.CompletionRuleView> completionRule(Authentication auth,
+            @PathVariable UUID classId, @PathVariable UUID lessonId) {
+        return ApiResponse.success(service.completionRule(actor(auth),classId,lessonId));
+    }
+
+    @PutMapping("/{lessonId}/completion-rule")
+    @Operation(summary = "Configure typed ALL/ANY completion rules using linked Assignment/Quiz items")
+    public ApiResponse<Void> completionRule(Authentication auth, @PathVariable UUID classId,
+            @PathVariable UUID lessonId, @Valid @RequestBody LessonCompletionRule rule) {
+        service.configureCompletionRule(actor(auth), classId, lessonId, rule);
+        return ApiResponse.success(null);
+    }
+
+    @GetMapping("/{lessonId}/progress")
+    @Operation(summary = "Page student lesson progress (Teacher owner only)")
+    public ApiResponse<com.algolearner.platform.common.dto.PageResponse<LessonDtos.StudentProgressView>> progress(
+            Authentication auth, @PathVariable UUID classId, @PathVariable UUID lessonId,
+            org.springframework.data.domain.Pageable pageable) {
+        return ApiResponse.success(service.studentProgress(actor(auth), classId, lessonId, pageable));
+    }
+
     private UUID actor(Authentication auth) {
         return UUID.fromString(auth.getName());
     }
