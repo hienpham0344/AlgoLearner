@@ -1,0 +1,1315 @@
+{
+  "info": {
+    "name": "AlgoLearner 4.1–4.6 local PostgreSQL smoke",
+    "description": "Disposable local integration smoke. OTP lookup requires the local SMTP fixture; never target production.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 Backend status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/status"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"real backend\", function () { pm.expect(pm.response.json().data.source).to.eql(\"backend\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Register teacher",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{teacherEmail}}\", \"username\": \"{{teacherUsername}}\", \"password\": \"{{userPassword}}\", \"confirmPassword\": \"{{userPassword}}\", \"role\": \"TEACHER\", \"termsAccepted\": true, \"privacyAccepted\": true}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Read teacher OTP from local SMTP fixture",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{otpUrl}}/latest?email={{teacherEmail}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"OTP fixture returned code\", function () { pm.expect(pm.response.json().code).to.match(/^\\d{6}$/); });",
+              "pm.collectionVariables.set(\"teacherOtp\", pm.response.json().code);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Verify teacher OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/verify-otp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{teacherEmail}}\", \"code\": \"{{teacherOtp}}\", \"purpose\": \"REGISTER\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"teacherToken\", pm.response.json().data.token); pm.collectionVariables.set(\"teacherId\", pm.response.json().data.user.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Register student",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/register",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{studentEmail}}\", \"username\": \"{{studentUsername}}\", \"password\": \"{{userPassword}}\", \"confirmPassword\": \"{{userPassword}}\", \"role\": \"STUDENT\", \"termsAccepted\": true, \"privacyAccepted\": true}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Read student OTP from local SMTP fixture",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{otpUrl}}/latest?email={{studentEmail}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"OTP fixture returned code\", function () { pm.expect(pm.response.json().code).to.match(/^\\d{6}$/); });",
+              "pm.collectionVariables.set(\"studentOtp\", pm.response.json().code);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Verify student OTP",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/verify-otp",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"email\": \"{{studentEmail}}\", \"code\": \"{{studentOtp}}\", \"purpose\": \"REGISTER\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"studentToken\", pm.response.json().data.token); pm.collectionVariables.set(\"studentId\", pm.response.json().data.user.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Teacher login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"usernameOrEmail\": \"{{teacherEmail}}\", \"password\": \"{{userPassword}}\", \"identityType\": \"EMAIL\", \"rememberMe\": false}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"teacherToken\", pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Admin login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/login",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"usernameOrEmail\": \"{{adminEmail}}\", \"password\": \"{{adminPassword}}\", \"identityType\": \"EMAIL\", \"rememberMe\": false}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"adminToken\", pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Session restore",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/auth/me"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.1 Admin account list",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/accounts?page=0&size=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"page metadata\", function () { pm.expect(pm.response.json().data.pagination).to.be.an(\"object\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Teacher profile",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/users/me/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Update teacher profile",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/users/me/profile",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"fullName\": \"Postman Test Teacher\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Enable public profile",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/users/me/profile/privacy",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"isPublic\": true}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Public profile allowlist",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/users/{{teacherUsername}}/profile"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"email not public\", function () { pm.expect(pm.response.json().data).not.to.have.property(\"email\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Teacher dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/dashboards/teacher"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Student dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/dashboards/student"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.2 Admin dashboard",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/dashboard"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.3 Create classroom",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"name\": \"Postman Smoke {{runId}}\", \"description\": \"Local API verification\", \"joinMode\": \"AUTO_JOIN\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"classId\", pm.response.json().data.id); pm.collectionVariables.set(\"classCode\", pm.response.json().data.classCode);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.3 Student joins by code",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/join",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"classCode\": \"{{classCode}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"joined\", function () { pm.expect(pm.response.json().data.outcome).to.eql(\"JOINED\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.3 Student class view hides code",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"class code hidden\", function () { pm.expect(pm.response.json().data.classCode).to.be.null; });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.3 Teacher members page",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/members?page=0&size=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"member present\", function () { pm.expect(pm.response.json().data.items.length).to.be.at.least(1); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.4 Teacher creates announcement",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/announcements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Postman notice\", \"content\": \"API smoke\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"announcementId\", pm.response.json().data.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.4 Student lists announcements",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/announcements"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"notice visible\", function () { pm.expect(pm.response.json().data.items.length).to.be.at.least(1); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.4 Student cannot create announcement",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/announcements",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Denied\", \"content\": \"Denied\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.5 Teacher creates lesson",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/lessons",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Postman lesson\", \"content\": \"Local lesson\", \"completionMode\": \"MANUAL\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"lessonId\", pm.response.json().data.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.5 Publish lesson",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/lessons/{{lessonId}}/publish"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.5 Student reads lesson",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/lessons/{{lessonId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.5 Student completes lesson",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/lessons/{{lessonId}}/complete"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.5 Teacher reads progress",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/lessons/{{lessonId}}/progress?page=0&size=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"nested page\", function () { pm.expect(pm.response.json().data.data.items).to.be.an(\"array\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Teacher creates assignment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"title\": \"Postman assignment\", \"description\": \"Objective question\", \"type\": \"GRADED\", \"maxAttempts\": 2, \"gradePublishMode\": \"MANUAL\", \"viewAnswersMode\": \"AFTER_SUBMIT\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"assignmentId\", pm.response.json().data.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Teacher adds question",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/questions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"questionType\": \"SINGLE_CHOICE\", \"title\": \"1 + 1\", \"prompt\": \"Choose result\", \"points\": 10, \"gradingPolicy\": \"ALL_OR_NOTHING\", \"options\": [{\"content\": \"2\", \"isCorrect\": true}, {\"content\": \"3\", \"isCorrect\": false}]}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "var q=pm.response.json().data; pm.collectionVariables.set(\"questionId\",q.id); pm.collectionVariables.set(\"correctOptionId\",q.options.find(function(o){return o.isCorrect;}).id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Publish assignment",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/publish"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Student starts attempt",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/attempts"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.collectionVariables.set(\"attemptId\", pm.response.json().data.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Student autosaves answer",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/attempts/{{attemptId}}/draft",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"questionId\": \"{{questionId}}\", \"selectedOptions\": [\"{{correctOptionId}}\"], \"expectedVersion\": 0, \"clientMutationId\": \"{{$guid}}\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"version incremented\", function () { pm.expect(pm.response.json().data.version).to.be.above(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Student submits",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/attempts/{{attemptId}}/submit"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Student own history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/attempts"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"one official attempt\", function () { pm.expect(pm.response.json().data.length).to.eql(1); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Teacher submissions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/submissions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Student cannot read teacher submissions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/submissions"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", function () { pm.response.to.have.status(403); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Teacher publishes grades",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/publish-grades"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Student reads released grade",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{studentToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/attempts/{{attemptId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"objective grade\", function () { pm.expect(Number(pm.response.json().data.finalScore)).to.eql(10); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Teacher rejudges ORIGINAL",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/rejudge",
+        "body": {
+          "mode": "raw",
+          "raw": "{\"reason\": \"Postman original revision check\", \"target\": \"ORIGINAL\"}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Teacher evaluation history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{teacherToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/classrooms/{{classId}}/assignments/{{assignmentId}}/submissions/{{attemptId}}/evaluations"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
+              "pm.test(\"history retained\", function () { pm.expect(pm.response.json().data.length).to.be.at.least(1); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4.6 Admin evaluation history",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{adminToken}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/classrooms/{{classId}}/assignments/{{assignmentId}}/submissions/{{attemptId}}/evaluations"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:18080"
+    },
+    {
+      "key": "otpUrl",
+      "value": "http://127.0.0.1:1026"
+    }
+  ]
+}
