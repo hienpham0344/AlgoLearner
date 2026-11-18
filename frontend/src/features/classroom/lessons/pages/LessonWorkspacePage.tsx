@@ -341,7 +341,7 @@ function LessonList({
 
                 {nextLesson ? (
                   <div className="mt-4 pt-4 border-t border-slate-200 space-y-2.5">
-                    <span className="lesson-rail-eyebrow block" style={{ color: 'var(--lesson-green)' }}>UP NEXT</span>
+                    <span className="lesson-rail-eyebrow block">UP NEXT</span>
                     <p className="text-sm font-bold text-slate-900 leading-snug">{nextLesson.title}</p>
                     <Link to={encodeURIComponent(nextLesson.id)} className="lesson-button w-full">
                       <span>Continue next lesson</span>
@@ -725,7 +725,7 @@ function LessonDetail({
         </div>
 
         <aside className="lesson-rail" aria-label="Lesson reading progress and outline">
-          <div className="lesson-rail-card">
+          <div className="lesson-rail-card" data-completed={isCompleted}>
             <div className="lesson-rail-head">
               <span className="lesson-rail-eyebrow">READING PROGRESS</span>
               <span className="lesson-rail-pct" aria-live="polite">{displayPercent}%</span>
@@ -771,7 +771,7 @@ function LessonDetail({
           </div>
 
           {outline.length > 0 && (
-            <div className="lesson-rail-card">
+            <div className="lesson-rail-card" data-completed={isCompleted}>
               <div className="lesson-rail-head">
                 <span className="lesson-rail-eyebrow">ON THIS PAGE</span>
                 <span className="text-[11px] font-mono text-slate-500">
@@ -806,7 +806,7 @@ function LessonDetail({
           )}
 
           {orderedLessons.length > 0 && (
-            <div className="lesson-rail-card">
+            <div className="lesson-rail-card" data-completed={isCompleted}>
               <div className="lesson-rail-head">
                 <span className="lesson-rail-eyebrow">COURSE LESSONS</span>
                 <span className="text-[11px] font-mono text-slate-500">
