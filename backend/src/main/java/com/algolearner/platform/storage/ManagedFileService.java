@@ -39,15 +39,15 @@ public class ManagedFileService {
     public record UploadCapabilities(boolean uploadsAvailable, long maxFileSizeBytes, List<String> allowedExtensions) { }
 
     public UploadCapabilities capabilities() {
-        boolean uploadsAvailable = objects.isAvailable() && scanner.isAvailable();
         var policy = records.uploadPolicy();
         if (policy == null) {
             return new UploadCapabilities(false, 0L, List.of());
         }
-        long limit = Math.min(maxBytes, policy.maxBytes());
+        long effectiveMax = Math.max(0L, Math.min(maxBytes, policy.maxBytes()));
+        var allowedKinds = policy.allowedKinds() != null ? policy.allowedKinds() : java.util.Set.<FileKind>of();
         var extensions = new ArrayList<String>();
         for (var kind : FileKind.values()) {
-            if (!policy.allowedKinds().contains(kind)) continue;
+            if (!allowedKinds.contains(kind)) continue;
             switch (kind) {
                 case PDF -> extensions.add("pdf");
                 case DOCX -> extensions.add("docx");
@@ -56,7 +56,9 @@ public class ManagedFileService {
                 case IMAGE -> extensions.addAll(List.of("png", "jpg", "jpeg"));
             }
         }
-        return new UploadCapabilities(uploadsAvailable, limit, List.copyOf(extensions));
+        boolean uploadsAvailable = objects.isAvailable() && scanner.isAvailable()
+                && effectiveMax > 0 && !extensions.isEmpty();
+        return new UploadCapabilities(uploadsAvailable, effectiveMax, List.copyOf(extensions));
     }
 
     public FileMetadata upload(UUID actor, UUID classroom, FilePurpose purpose, MultipartFile file) {

@@ -88,6 +88,16 @@ class ManagedFileServiceTest {
 
         when(scanner.isAvailable()).thenReturn(false);
         assertThat(files.capabilities().uploadsAvailable()).isFalse();
+
+        when(scanner.isAvailable()).thenReturn(true);
+        when(records.uploadPolicy()).thenReturn(new FilePolicyService.Policy(0L, java.util.Set.of(FileKind.PDF)));
+        assertThat(files.capabilities().uploadsAvailable()).isFalse();
+        assertThat(files.capabilities().maxFileSizeBytes()).isZero();
+
+        when(records.uploadPolicy()).thenReturn(new FilePolicyService.Policy(1024L, null));
+        var noKinds = files.capabilities();
+        assertThat(noKinds.uploadsAvailable()).isFalse();
+        assertThat(noKinds.allowedExtensions()).isEmpty();
     }
 
     private MockMultipartFile pdf() {

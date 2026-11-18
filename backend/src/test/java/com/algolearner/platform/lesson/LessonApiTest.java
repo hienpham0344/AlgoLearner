@@ -356,6 +356,116 @@ public class LessonApiTest extends com.algolearner.platform.support.PostgresInte
                 .andExpect(jsonPath("$.data.linkedItems[0].available").value(true));
     }
 
+    @Test
+    void studentDetailHidesDraftRequiredItemIdsAndOwnerMetadataAndOtherTeacherIsForbidden() throws Exception {
+        String classRes = mvc.perform(post("/api/v1/classrooms")
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Privacy Class\",\"joinMode\":\"AUTO_JOIN\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID classId = UUID.fromString(objectMapper.readTree(classRes).path("data").path("id").asText());
+        String code = objectMapper.readTree(classRes).path("data").path("classCode").asText();
+
+        mvc.perform(post("/api/v1/classrooms/join")
+                        .with(actor(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"classCode\":\"" + code + "\"}"))
+                .andExpect(status().isOk());
+
+        // Fresh published manual lesson: teacher sees canDelete=true, student sees canDelete=false
+        String manualLessonRes = mvc.perform(post("/api/v1/classrooms/{classId}/lessons", classId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Manual Lesson\",\"content\":\"Body\",\"completionMode\":\"MANUAL\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID manualLessonId = UUID.fromString(objectMapper.readTree(manualLessonRes).path("data").path("id").asText());
+
+        var file = new com.algolearner.platform.storage.StoredFileEntity();
+        file.setId(UUID.randomUUID());
+        file.setUploaderId(teacher.getId());
+        file.setClassroomId(classId);
+        file.setObjectKey(teacher.getId() + "/" + file.getId());
+        file.setName("handout.pdf");
+        file.setMediaType("application/pdf");
+        file.setKind(com.algolearner.platform.storage.FileKind.PDF);
+        file.setSize(128L);
+        file.setSha256("b".repeat(64));
+        file.setPurpose(com.algolearner.platform.storage.FilePurpose.LESSON_MATERIAL);
+        file.setState(com.algolearner.platform.storage.FileState.READY);
+        file.setObjectUploaded(true);
+        storedFiles.saveAndFlush(file);
+
+        String matRes = mvc.perform(post("/api/v1/classrooms/{classId}/lessons/{lessonId}/materials", classId, manualLessonId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fileId\":\"" + file.getId() + "\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String materialId = objectMapper.readTree(matRes).path("data").path("id").asText();
+
+        // Non-owner teacher gets 403 FORBIDDEN_OPERATION on capabilities, activities, and removeMaterial
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/capabilities", classId)
+                        .with(actor(otherTeacher)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN_OPERATION"));
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/activities", classId)
+                        .with(actor(otherTeacher)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN_OPERATION"));
+        mvc.perform(delete("/api/v1/classrooms/{classId}/lessons/{lessonId}/materials/{materialId}", classId, manualLessonId, materialId)
+                        .with(actor(otherTeacher)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN_OPERATION"));
+
+        mvc.perform(patch("/api/v1/classrooms/{classId}/lessons/{lessonId}/publish", classId, manualLessonId)
+                        .with(actor(teacher)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.canDelete").value(true));
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/{lessonId}", classId, manualLessonId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.canDelete").value(false))
+                .andExpect(jsonPath("$.data.previousStatus").value(org.hamcrest.Matchers.nullValue()));
+
+        // Published AUTO_ITEMS lesson linked to a DRAFT assignment: student receives empty linkedItems and empty requiredItemIds
+        var draftAsg = assignmentService.create(teacher.getId(), classId, new com.algolearner.platform.assignment.AssignmentDtos.CreateAssignmentRequest(
+                "Secret Draft Lab", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null));
+        entityManager.flush();
+
+        String autoLessonRes = mvc.perform(post("/api/v1/classrooms/{classId}/lessons", classId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Auto Lesson\",\"content\":\"Body\",\"completionMode\":\"MANUAL\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID autoLessonId = UUID.fromString(objectMapper.readTree(autoLessonRes).path("data").path("id").asText());
+
+        mvc.perform(post("/api/v1/classrooms/{classId}/lessons/{lessonId}/items", classId, autoLessonId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"itemType\":\"ASSIGNMENT\",\"itemId\":\"" + draftAsg.id() + "\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(put("/api/v1/classrooms/{classId}/lessons/{lessonId}/completion-rule", classId, autoLessonId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"operator\":\"ALL\",\"conditions\":[{\"itemType\":\"ASSIGNMENT\",\"itemId\":\"" + draftAsg.id() + "\",\"requirement\":\"SUBMITTED\"}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/classrooms/{classId}/lessons/{lessonId}/publish", classId, autoLessonId)
+                        .with(actor(teacher)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.requiredItemIds[0]").value(draftAsg.id().toString()));
+
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/{lessonId}", classId, autoLessonId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.linkedItems").isEmpty())
+                .andExpect(jsonPath("$.data.requiredItemIds").isEmpty())
+                .andExpect(jsonPath("$.data.canDelete").value(false))
+                .andExpect(jsonPath("$.data.previousStatus").value(org.hamcrest.Matchers.nullValue()));
+    }
+
     private AccountEntity account(String username, AccountRole role) {
         var account = new AccountEntity();
         account.setId(UUID.randomUUID());

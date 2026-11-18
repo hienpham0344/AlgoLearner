@@ -1,6 +1,8 @@
 package com.algolearner.platform.lesson;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,6 +15,7 @@ public interface LessonLinkedItemRepository extends JpaRepository<LessonLinkedIt
     Optional<LessonLinkedItemEntity> findByLessonIdAndItemId(UUID lessonId, UUID itemId);
     boolean existsByLessonIdAndItemTypeAndItemId(UUID lessonId, LinkedItemType type, UUID itemId);
     List<LessonLinkedItemEntity> findByItemTypeAndItemId(LinkedItemType type, UUID itemId);
-    List<LessonLinkedItemEntity> findByLessonClassroomId(UUID classroomId);
+    @Query("select li from LessonLinkedItemEntity li join fetch li.lesson where li.lesson.classroom.id = :classroomId")
+    List<LessonLinkedItemEntity> findByLessonClassroomId(@Param("classroomId") UUID classroomId);
     long countByLessonId(UUID lessonId);
 }

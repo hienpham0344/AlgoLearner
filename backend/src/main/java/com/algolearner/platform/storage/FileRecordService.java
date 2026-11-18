@@ -59,9 +59,8 @@ public class FileRecordService {
     @Transactional
     public StoredFileEntity begin(UUID actor, UUID classroom, FilePurpose purpose, ValidatedFile file, String sha256) {
         authorizeWrite(actor, classroom, purpose, true);
-        var policy = jdbc.queryForMap("SELECT max_bytes,allowed_kinds FROM tbl_file_policy WHERE id='00000000-0000-0000-0000-000000000001'");
-        if (file.bytes().length > ((Number) policy.get("max_bytes")).longValue()
-                || !java.util.Set.of(policy.get("allowed_kinds").toString().split(",")).contains(file.kind().name())) {
+        var policy = uploadPolicy();
+        if (file.bytes().length > policy.maxBytes() || !policy.allowedKinds().contains(file.kind())) {
             throw new StorageException("FILE_POLICY_REJECTED", HttpStatus.UNPROCESSABLE_ENTITY, "File does not satisfy upload policy");
         }
         var record = new StoredFileEntity();

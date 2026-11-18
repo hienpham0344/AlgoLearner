@@ -439,13 +439,15 @@ public class LessonService {
 
         boolean isOwner = l.getClassroom().getOwner().getId().equals(accountId);
         var rawLinkedItems = linkedItems.findByLessonIdOrderByDisplayOrderAsc(l.getId());
-        var itemSummaries = rawLinkedItems.isEmpty()
+        var visibleRawItems = isOwner ? rawLinkedItems : rawLinkedItems.stream()
+                .filter(item -> provider(item.getItemType()) != null
+                        && provider(item.getItemType()).availableToStudent(item.getItemId(), l.getClassroom().getId(), accountId))
+                .toList();
+        var itemSummaries = visibleRawItems.isEmpty()
                 ? Map.<ItemKey, LessonProgressProvider.ClassroomItemSummary>of()
                 : classroomItemSummaries(l.getClassroom().getId());
 
-        var linkViews = rawLinkedItems.stream()
-                .filter(item -> isOwner || (provider(item.getItemType()) != null
-                        && provider(item.getItemType()).availableToStudent(item.getItemId(), l.getClassroom().getId(), accountId)))
+        var linkViews = visibleRawItems.stream()
                 .map(item -> {
                     var summary = itemSummaries.get(new ItemKey(item.getItemType(), item.getItemId()));
                     String title = summary != null ? summary.title() : null;
@@ -455,15 +457,21 @@ public class LessonService {
                 })
                 .toList();
 
-        boolean canDelete = l.getRuleVersion() == 0
+        boolean canDelete = isOwner
+                && l.getRuleVersion() == 0
                 && !completions.existsByLessonId(l.getId())
                 && linkedItems.countByLessonId(l.getId()) == 0;
+        LessonStatus previousStatus = isOwner ? l.getArchivedFromStatus() : null;
 
+        var visibleItemKeys = linkViews.stream()
+                .map(item -> new ItemKey(item.itemType(), item.itemId()))
+                .collect(Collectors.toSet());
         List<UUID> requiredItemIds = List.of();
         if (l.getCompletionMode() == CompletionMode.AUTO_ITEMS && l.getRuleVersion() > 0 && progressService != null) {
             var ruleView = progressService.rule(l.getId());
             if (ruleView != null && ruleView.rule() != null && ruleView.rule().conditions() != null) {
                 requiredItemIds = ruleView.rule().conditions().stream()
+                        .filter(condition -> isOwner || visibleItemKeys.contains(new ItemKey(condition.itemType(), condition.itemId())))
                         .map(LessonCompletionRule.Condition::itemId)
                         .distinct()
                         .toList();
@@ -474,7 +482,7 @@ public class LessonService {
                 l.getId(), l.getClassroom().getId(), l.getTitle(), l.getContent(), l.getCodeExample(),
                 l.getExternalLinks(), l.getStatus(), l.getCompletionMode(), l.getDisplayOrder(),
                 matViews, linkViews, completed, completedAt, l.getCreatedAt(), l.getUpdatedAt(),
-                l.getArchivedFromStatus(), canDelete, requiredItemIds
+                previousStatus, canDelete, requiredItemIds
         );
     }
 

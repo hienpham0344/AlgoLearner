@@ -480,4 +480,94 @@ class LessonServiceTest {
                 .isInstanceOf(ApiException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
     }
+
+    @Test
+    void studentDetail_GatesOwnerMetadataAndFiltersUnavailableRequiredItemIds() {
+        var visibleItemId = UUID.randomUUID();
+        var hiddenItemId = UUID.randomUUID();
+        lesson.setStatus(LessonStatus.PUBLISHED);
+        lesson.setArchivedFromStatus(LessonStatus.DRAFT);
+        lesson.setCompletionMode(CompletionMode.AUTO_ITEMS);
+        lesson.setRuleVersion(1L);
+
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        var membership = new ClassroomMembershipEntity();
+        membership.setStatus(MembershipStatus.ACTIVE);
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId()))
+                .thenReturn(Optional.of(membership));
+
+        var hiddenLink = LessonLinkedItemEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(lesson)
+                .itemType(LinkedItemType.ASSIGNMENT)
+                .itemId(hiddenItemId)
+                .displayOrder(0)
+                .build();
+        when(linkedItems.findByLessonIdOrderByDisplayOrderAsc(lesson.getId())).thenReturn(List.of(hiddenLink));
+        when(progressService.rule(lesson.getId())).thenReturn(new LessonDtos.CompletionRuleView(1L,
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL, List.of(
+                        new LessonCompletionRule.Condition(LinkedItemType.ASSIGNMENT, hiddenItemId,
+                                LessonCompletionRule.Requirement.SUBMITTED, null)
+                ))));
+
+        var provider = mock(LessonProgressProvider.class);
+        when(provider.itemType()).thenReturn(LinkedItemType.ASSIGNMENT);
+        when(provider.availableToStudent(hiddenItemId, classroom.getId(), student.getId())).thenReturn(false);
+        when(provider.availableToStudent(visibleItemId, classroom.getId(), student.getId())).thenReturn(true);
+        when(provider.classroomItems(classroom.getId())).thenReturn(List.of(
+                new LessonProgressProvider.ClassroomItemSummary(hiddenItemId, "Draft Lab", false),
+                new LessonProgressProvider.ClassroomItemSummary(visibleItemId, "Published Lab", true)
+        ));
+
+        var serviceWithProviders = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships,
+                accounts, assignments, clock, classroomService, List.of(provider), progressService, managedFiles);
+
+        var studentHiddenOnly = serviceWithProviders.get(student.getId(), classroom.getId(), lesson.getId());
+        assertThat(studentHiddenOnly.linkedItems()).isEmpty();
+        assertThat(studentHiddenOnly.requiredItemIds()).isEmpty();
+        assertThat(studentHiddenOnly.canDelete()).isFalse();
+        assertThat(studentHiddenOnly.previousStatus()).isNull();
+        verify(completions, never()).existsByLessonId(lesson.getId());
+        verify(linkedItems, never()).countByLessonId(lesson.getId());
+        verify(provider, never()).classroomItems(classroom.getId());
+
+        var visibleLink = LessonLinkedItemEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(lesson)
+                .itemType(LinkedItemType.ASSIGNMENT)
+                .itemId(visibleItemId)
+                .displayOrder(1)
+                .build();
+        when(linkedItems.findByLessonIdOrderByDisplayOrderAsc(lesson.getId())).thenReturn(List.of(hiddenLink, visibleLink));
+        when(progressService.rule(lesson.getId())).thenReturn(new LessonDtos.CompletionRuleView(1L,
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL, List.of(
+                        new LessonCompletionRule.Condition(LinkedItemType.ASSIGNMENT, hiddenItemId,
+                                LessonCompletionRule.Requirement.SUBMITTED, null),
+                        new LessonCompletionRule.Condition(LinkedItemType.ASSIGNMENT, visibleItemId,
+                                LessonCompletionRule.Requirement.SUBMITTED, null)
+                ))));
+
+        var studentMixed = serviceWithProviders.get(student.getId(), classroom.getId(), lesson.getId());
+        assertThat(studentMixed.linkedItems()).extracting(LessonDtos.LinkedItemView::itemId).containsExactly(visibleItemId);
+        assertThat(studentMixed.requiredItemIds()).containsExactly(visibleItemId);
+        assertThat(studentMixed.canDelete()).isFalse();
+        assertThat(studentMixed.previousStatus()).isNull();
+    }
+
+    @Test
+    void nonOwnerTeacherGetsForbiddenOnRemoveMaterialCapabilitiesAndActivities() {
+        var otherTeacherId = UUID.randomUUID();
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+
+        assertThatThrownBy(() -> service.removeMaterial(otherTeacherId, classroom.getId(), lesson.getId(), UUID.randomUUID()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
+        assertThatThrownBy(() -> service.capabilities(otherTeacherId, classroom.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
+        assertThatThrownBy(() -> service.activities(otherTeacherId, classroom.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
+    }
 }
