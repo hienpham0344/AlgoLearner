@@ -248,7 +248,7 @@ export function PracticePulse({ practice, loading }: PracticePulseProps) {
 
   if (practice.currentStreak === null && practice.totalSolved === null && !hasActivityHistory) {
     return <div className="dashboard-empty dashboard-empty-notifications">
-      <p>Thống kê luyện tập sẽ hiển thị khi phân hệ này được kết nối.</p>
+      <p>Practice statistics will appear once the practice module is connected.</p>
     </div>;
   }
 

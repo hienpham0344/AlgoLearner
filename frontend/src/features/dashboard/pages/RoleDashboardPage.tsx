@@ -149,7 +149,7 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
                 <p>
                   {totalActiveStudents} enrolled students · {totalUngraded} awaiting review
                 </p>
-                <p>Tiến độ chấm bài sẽ hiển thị khi phân hệ bài nộp được kết nối.</p>
+                <p>Grading progress will appear once the submission module is connected.</p>
                 <div className="flex flex-wrap items-center gap-4">
                   <Link className="dashboard-learning-action" to="/teacher/classrooms">
                     Manage classrooms &amp; lessons <ArrowRight size={15} aria-hidden="true" />
