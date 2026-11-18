@@ -168,6 +168,7 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
         {detail.isPending && <p role="status">Loading classroom…</p>}
         {detail.isError && <p role="alert">{classroomError(detail.error)} <button type="button" className="underline" onClick={() => detail.refetch()}>Retry</button></p>}
         {content && <>
+          {role !== 'ADMIN' && <Link className="inline-flex rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white" to={`${base}/${encodeURIComponent(id)}/lessons`}>Open class lessons →</Link>}
           <section className="rounded-xl border border-slate-200 bg-white p-5 text-sm">
             <p>{content.description || 'No description'}</p>
             <p className="mt-3 text-slate-600">Status: {content.status} · Join mode: {content.joinMode}</p>

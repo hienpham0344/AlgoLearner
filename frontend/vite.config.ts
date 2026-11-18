@@ -5,11 +5,12 @@ import path from 'path';
 import { authDemoPlugin } from './dev/authDemoPlugin';
 import { profileDemoPlugin } from './dev/profileDemoPlugin';
 import { dashboardDemoPlugin } from './dev/dashboardDemoPlugin';
+import { lessonsDemoPlugin } from './dev/lessonsDemoPlugin';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
   cacheDir: `node_modules/.vite-${mode}`,
-  plugins: [react(), tailwindcss(), ...(['auth-demo', 'backend-mock'].includes(mode) ? [authDemoPlugin(mode === 'backend-mock' ? 'backend-mock' : 'demo')] : []), ...(mode === 'auth-demo' ? [profileDemoPlugin(), dashboardDemoPlugin()] : [])],
+  plugins: [react(), tailwindcss(), ...(['auth-demo', 'lessons-demo'].includes(mode) ? [lessonsDemoPlugin(), profileDemoPlugin(), dashboardDemoPlugin()] : []), ...(['auth-demo', 'backend-mock', 'lessons-demo'].includes(mode) ? [authDemoPlugin(mode === 'auth-demo' ? 'demo' : 'backend-mock')] : [])],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

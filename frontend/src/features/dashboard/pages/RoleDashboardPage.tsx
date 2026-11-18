@@ -2,23 +2,9 @@ import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  Activity,
-  ArrowRight,
-  Bell,
-  BookOpen,
-  ChevronRight,
-  ClipboardCheck,
-  FileCode2,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  ShieldAlert,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import logoMark from '@/assets/logo-mark.svg';
+import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import {
   dashboardApi,
   dashboardKeys,
@@ -26,6 +12,8 @@ import {
   type TeacherDashboardResponse,
 } from '../api/dashboardApi';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
+import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
+import { getClassroomLessonSummary, getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
@@ -181,18 +169,31 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                 >
                   <span style={{ width: `${reviewCompletionPercent}%` }} />
                 </div>
-                <a className="dashboard-learning-action" href="#review">
-                  Review submissions <ArrowRight size={15} aria-hidden="true" />
-                </a>
+                <div className="flex flex-wrap items-center gap-4">
+                  <Link className="dashboard-learning-action" to="/teacher/classrooms">
+                    Manage classrooms &amp; lessons <ArrowRight size={15} aria-hidden="true" />
+                  </Link>
+                  <Link
+                    to="/teacher/review-queue"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white underline underline-offset-4"
+                  >
+                    Review queue →
+                  </Link>
+                </div>
               </div>
             </div>
           </section>
 
           {/* 02 / Open & Upcoming Assignments Timeline */}
           <section aria-labelledby="teacher-assignments-title" id="assignments" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">02 / PLANNING</span>
-              <h2 id="teacher-assignments-title">Open & upcoming assignments</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">02 / PLANNING</span>
+                <h2 id="teacher-assignments-title">Open & upcoming assignments</h2>
+              </div>
+              <Link to="/teacher/assignments" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Manage assignments →
+              </Link>
             </div>
 
             {sortedAssignments.length ? (
@@ -243,9 +244,14 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
 
           {/* 03 / My Classes */}
           <section aria-labelledby="teacher-classes-title" id="classes" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">03 / CLASSROOMS</span>
-              <h2 id="teacher-classes-title">My classes</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">03 / CLASSROOMS</span>
+                <h2 id="teacher-classes-title">My classes</h2>
+              </div>
+              <Link to="/teacher/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                View all classrooms →
+              </Link>
             </div>
 
             {data.classrooms.items.length ? (
@@ -257,7 +263,11 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                     : 0;
 
                   return (
-                    <article className="dashboard-class-row" key={classroom.classroomId} tabIndex={0}>
+                    <Link
+                      className="dashboard-class-row"
+                      key={classroom.classroomId}
+                      to={`/teacher/classrooms/${encodeURIComponent(classroom.classroomId)}`}
+                    >
                       <div className="dashboard-class-main">
                         <div className="dashboard-class-header">
                           <strong>{classroom.name}</strong>
@@ -269,7 +279,12 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                         </div>
                         {stat && (
                           <span className="dashboard-class-next">
-                            {stat.publishedAssignmentCount} assignments · {stat.publishedQuizCount} quizzes
+                            {import.meta.env.MODE === 'auth-demo'
+                              ? (() => {
+                                  const lessonSummary = getClassroomLessonSummary(classroom.classroomId, 'TEACHER', '');
+                                  return `${lessonSummary.publishedCount} published · ${lessonSummary.draftCount} draft lessons · ${stat.publishedQuizCount} quizzes`;
+                                })()
+                              : `${stat.publishedAssignmentCount} assignments · ${stat.publishedQuizCount} quizzes`}
                           </span>
                         )}
                       </div>
@@ -297,7 +312,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                           </div>
                         </div>
                       )}
-                    </article>
+                    </Link>
                   );
                 })}
               </div>
@@ -313,9 +328,14 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
 
           {/* 04 / Ungraded Work & Recent Submissions */}
           <section aria-labelledby="teacher-review-title" id="review" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">04 / REVIEW QUEUE</span>
-              <h2 id="teacher-review-title">Recent submissions</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">04 / REVIEW QUEUE</span>
+                <h2 id="teacher-review-title">Recent submissions</h2>
+              </div>
+              <Link to="/teacher/review-queue" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Open review queue →
+              </Link>
             </div>
 
             {data.ungradedSubmissions.items.length || data.recentSubmissions.items.length ? (
@@ -543,9 +563,9 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
                 >
                   <span style={{ width: `${activeAccountPercent}%` }} />
                 </div>
-                <a className="dashboard-learning-action" href="#submissions">
+                <Link className="dashboard-learning-action" to="/admin/submissions">
                   Inspect activity <ArrowRight size={15} aria-hidden="true" />
-                </a>
+                </Link>
               </div>
             </div>
           </section>
@@ -557,9 +577,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
             className="dashboard-section"
             onMouseLeave={() => setActiveBarIndex(null)}
           >
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">02 / ACTIVITY OVER TIME</span>
-              <h2 id="admin-chart-title">Official submissions</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">02 / ACTIVITY OVER TIME</span>
+                <h2 id="admin-chart-title">Official submissions</h2>
+              </div>
+              <Link to="/admin/submissions" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                View all submissions →
+              </Link>
             </div>
 
             <div className="role-chart-studio">
@@ -614,9 +639,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 
           {/* 03 / Recent System Activity */}
           <section aria-labelledby="admin-activity-title" id="activity" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">03 / SYSTEM LOG</span>
-              <h2 id="admin-activity-title">Recent activity</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">03 / SYSTEM LOG</span>
+                <h2 id="admin-activity-title">Recent activity</h2>
+              </div>
+              <Link to="/admin/system-logs" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                View all logs →
+              </Link>
             </div>
 
             {data.recentActivities.items.length ? (
@@ -650,9 +680,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 
           {/* 04 / Important Audit Events */}
           <section aria-labelledby="admin-audit-title" id="audit" className="dashboard-section">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">04 / SECURITY AUDIT</span>
-              <h2 id="admin-audit-title">Audit events</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">04 / SECURITY AUDIT</span>
+                <h2 id="admin-audit-title">Audit events</h2>
+              </div>
+              <Link to="/admin/security-audit" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Audit details →
+              </Link>
             </div>
 
             {data.importantAuditEvents.items.length ? (
@@ -690,9 +725,14 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
         {/* Right Column: Moderation, Catalog & System Configuration */}
         <aside className="dashboard-secondary">
           <section aria-labelledby="admin-moderation-title" id="moderation" className="dashboard-practice">
-            <div className="dashboard-section-heading">
-              <span className="dashboard-eyebrow">05 / MODERATION</span>
-              <h2 id="admin-moderation-title">Accounts to watch</h2>
+            <div className="dashboard-section-heading flex items-center justify-between">
+              <div>
+                <span className="dashboard-eyebrow">05 / MODERATION</span>
+                <h2 id="admin-moderation-title">Accounts to watch</h2>
+              </div>
+              <Link to="/admin/accounts" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                Manage accounts →
+              </Link>
             </div>
 
             <div className="dashboard-practice-studio">
@@ -789,7 +829,6 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [navOpen, setNavOpen] = useState(false);
 
   const teacherQuery = useQuery({
     queryKey: dashboardKeys.teacher(),
@@ -814,11 +853,6 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
     }
   }, [query.error, logout, navigate]);
 
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
   const rawDisplayName = user?.fullName || user?.username || role;
   const displayName = rawDisplayName.replace(/^Demo\s+/i, '') || role;
   const firstName = displayName.split(' ')[0] || 'Instructor';
@@ -828,167 +862,69 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
       ? teacherQuery.data.recentNotifications.items.filter(n => n.readAt === null).length
       : 0;
 
-  const navItems =
-    role === 'TEACHER'
-      ? [
-          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-          { label: 'Assignments', href: '#assignments', icon: FileCode2, current: false },
-          { label: 'My classes', href: '#classes', icon: BookOpen, current: false },
-          { label: 'Review queue', href: '#review', icon: ClipboardCheck, current: false },
-          { label: 'Notifications', href: '#notifications', icon: Bell, current: false },
-          { label: 'My profile', href: '/profile', icon: UserRound, current: false },
-        ]
-      : [
-          { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-          { label: 'Submissions', href: '#submissions', icon: Activity, current: false },
-          { label: 'System log', href: '#activity', icon: FileCode2, current: false },
-          { label: 'Security audit', href: '#audit', icon: ShieldAlert, current: false },
-          { label: 'Moderation', href: '#moderation', icon: UserRound, current: false },
-        ];
-
   const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
 
+  const syncedTeacherData: TeacherDashboardResponse | undefined =
+    role === 'TEACHER' && teacherQuery.data
+      ? ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE)
+        ? (() => {
+            const teacherPersona = readStoredPersona('TEACHER');
+            const owned = readStoredClassrooms().filter(
+              c => c.ownerId === teacherPersona.id && c.status === 'ACTIVE',
+            );
+            return {
+              ...teacherQuery.data,
+              classrooms: {
+                items: owned.map(c => ({ classroomId: c.id, name: c.name })),
+                totalElements: owned.length,
+                hasMore: false,
+              },
+              classroomStatistics: {
+                items: owned.map(c => ({
+                  classroomId: c.id,
+                  name: c.name,
+                  activeStudentCount: c.members.filter(m => m.status === 'ACTIVE').length,
+                  publishedAssignmentCount: getLessonCountForClassroom(c.id, 'TEACHER'),
+                  publishedQuizCount: c.stats?.quizzesCount ?? 0,
+                  ungradedWorkCount: teacherQuery.data.classroomStatistics.items.find(
+                    s => s.classroomId === c.id,
+                  )?.ungradedWorkCount ?? 0,
+                })),
+                totalElements: owned.length,
+                hasMore: false,
+              },
+            };
+          })()
+        : teacherQuery.data
+      : undefined;
+
   return (
-    <div className="student-dashboard">
-      <aside className="dashboard-sidebar" data-open={navOpen}>
-        <div className="dashboard-sidebar-top">
-          <Link
-            className="dashboard-brand"
-            to="/dashboard"
-            onClick={() => setNavOpen(false)}
-            aria-label="AlgoLearn dashboard"
-          >
-            <img src={logoMark} alt="" width="38" height="40" />
-            <span>AlgoLearn</span>
-          </Link>
-          <button
-            className="dashboard-menu-toggle"
-            type="button"
-            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
-            aria-expanded={navOpen}
-            onClick={() => setNavOpen(open => !open)}
-          >
-            {navOpen ? <X size={21} /> : <Menu size={21} />}
-          </button>
+    <WorkspaceLayout role={role} unreadCount={unreadCount} displayNameOverride={displayName}>
+      {query.isPending ? (
+        <div className="dashboard-fetch-state" role="status">
+          <span className="dashboard-eyebrow">{role} WORKSPACE</span>
+          <h2>Loading {role.toLowerCase()} workspace…</h2>
         </div>
-
-        <nav className="dashboard-nav" aria-label={`${role.toLowerCase()} workspace`}>
-          <span className="dashboard-nav-label">{role} WORKSPACE</span>
-          {navItems.map(({ label, href, icon: Icon, current }) =>
-            href.startsWith('#') ? (
-              <a
-                key={label}
-                href={href}
-                className="dashboard-nav-link"
-                onClick={() => setNavOpen(false)}
-                title={label}
-              >
-                <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>{label}</span>
-              </a>
-            ) : (
-              <Link
-                key={label}
-                to={href}
-                className="dashboard-nav-link"
-                aria-current={current ? 'page' : undefined}
-                onClick={() => setNavOpen(false)}
-                title={label}
-              >
-                <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-                <span>{label}</span>
-                {current && <span className="dashboard-nav-current" aria-hidden="true" />}
-              </Link>
-            ),
+      ) : query.isError ? (
+        <div className="dashboard-fetch-state" role="alert">
+          <span className="dashboard-eyebrow">{role} WORKSPACE</span>
+          <h2>{isForbidden ? 'Access restricted.' : 'Dashboard unavailable.'}</h2>
+          <p>
+            {isForbidden
+              ? 'This account cannot access this dashboard.'
+              : 'We could not load the current workspace data.'}
+          </p>
+          {!isForbidden && (
+            <button type="button" onClick={() => query.refetch()}>
+              Try again
+            </button>
           )}
-        </nav>
-
-        <div className="dashboard-sidebar-foot">
-          <span>THINK. CODE. REPEAT.</span>
-          <p>Small steps. Real progress.</p>
         </div>
-      </aside>
-
-      <div className="dashboard-page">
-        <header className="dashboard-topbar">
-          <span className="dashboard-topbar-path">
-            Workspace <ChevronRight size={13} aria-hidden="true" />{' '}
-            {role === 'TEACHER' ? 'Teacher Dashboard' : 'Admin Dashboard'}
-          </span>
-
-          <div className="dashboard-topbar-actions">
-            {role === 'TEACHER' && (
-              <>
-                <a
-                  className="dashboard-icon-link"
-                  href="#notifications"
-                  aria-label={unreadCount ? `${unreadCount} unread updates` : 'Notifications'}
-                >
-                  <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
-                  {unreadCount > 0 && <span className="dashboard-notification-dot" />}
-                </a>
-                <Link className="dashboard-topbar-profile-link" to="/profile">
-                  <UserRound size={16} aria-hidden="true" />
-                  <span>My profile</span>
-                </Link>
-              </>
-            )}
-
-            <details className="dashboard-profile">
-              <summary aria-label="Account menu">
-                <span className="dashboard-avatar">{firstName.slice(0, 1).toUpperCase()}</span>
-                <span className="dashboard-profile-name">{displayName}</span>
-              </summary>
-              <div className="dashboard-profile-menu">
-                <strong>{displayName}</strong>
-                <span>{user?.email}</span>
-                {role === 'TEACHER' && (
-                  <Link to="/profile" className="dashboard-profile-setting">
-                    Profile settings
-                  </Link>
-                )}
-                <Link to="/account/security" className="dashboard-profile-setting">Account security</Link>
-                <button type="button" onClick={signOut}>
-                  <LogOut size={15} aria-hidden="true" /> Sign out
-                </button>
-              </div>
-            </details>
-          </div>
-        </header>
-
-        <main className="dashboard-content">
-          {query.isPending ? (
-            <div className="dashboard-fetch-state" role="status">
-              <span className="dashboard-eyebrow">{role} WORKSPACE</span>
-              <h2>Loading {role.toLowerCase()} workspace…</h2>
-            </div>
-          ) : query.isError ? (
-            <div className="dashboard-fetch-state" role="alert">
-              <span className="dashboard-eyebrow">{role} WORKSPACE</span>
-              <h2>{isForbidden ? 'Access restricted.' : 'Dashboard unavailable.'}</h2>
-              <p>
-                {isForbidden
-                  ? 'This account cannot access this dashboard.'
-                  : 'We could not load the current workspace data.'}
-              </p>
-              {!isForbidden && (
-                <button type="button" onClick={() => query.refetch()}>
-                  Try again
-                </button>
-              )}
-            </div>
-          ) : role === 'TEACHER' && teacherQuery.data ? (
-            <TeacherWorkspace data={teacherQuery.data} firstName={firstName} />
-          ) : adminQuery.data ? (
-            <AdminWorkspace data={adminQuery.data} />
-          ) : null}
-        </main>
-
-        <footer className="dashboard-footer">
-          <span>© {new Date().getFullYear()} AlgoLearn</span>
-          <span>Think. Code. Repeat.</span>
-        </footer>
-      </div>
-    </div>
+      ) : role === 'TEACHER' && syncedTeacherData ? (
+        <TeacherWorkspace data={syncedTeacherData} firstName={firstName} />
+      ) : adminQuery.data ? (
+        <AdminWorkspace data={adminQuery.data} />
+      ) : null}
+    </WorkspaceLayout>
   );
 }

@@ -73,6 +73,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
         <span
           className={`absolute rounded-full bg-emerald-500 shadow-xs ring-offset-0 ${ringColor} ${sizeStyles.activeIndicator}`}
           title="Active"
+          role="img"
           aria-label="Active"
         />
       )}
@@ -82,6 +83,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
         <span
           className={`absolute flex items-center justify-center leading-none ${sizeStyles.offlinePosition}`}
           title="Offline"
+          role="img"
           aria-label="Offline"
         >
           <Moon

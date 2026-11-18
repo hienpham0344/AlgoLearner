@@ -814,6 +814,70 @@
   margin: 0;
 }
 
+/* Asymmetric Classroom Detail Layout & Compact Metrics Strip */
+.classroom-metrics-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 28px;
+  padding: 13px 20px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  margin-bottom: 20px;
+}
+
+.classroom-metric-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.classroom-metric-item strong {
+  color: var(--dash-ink);
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.classroom-metric-item span {
+  color: var(--dash-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.classroom-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.classroom-detail-main,
+.classroom-detail-rail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.classroom-detail-rail {
+  position: sticky;
+  top: 86px;
+}
+
+@media (max-width: 1040px) {
+  .classroom-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .classroom-detail-rail {
+    position: static;
+  }
+}
+
 /* Responsive adjustments */
 @media (max-width: 950px) {
   .classroom-shell {
