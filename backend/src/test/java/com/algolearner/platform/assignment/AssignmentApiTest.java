@@ -75,6 +75,7 @@ public class AssignmentApiTest extends com.algolearner.platform.support.Postgres
     }
 
     @Autowired private MockMvc mvc;
+    @Autowired private org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired private com.algolearner.platform.auth.AccountRepository accounts;
     @Autowired private TestAccounts testAccounts;
     @Autowired private ObjectMapper objectMapper;
@@ -164,16 +165,35 @@ public class AssignmentApiTest extends com.algolearner.platform.support.Postgres
                 .andExpect(jsonPath("$.data.status").value("GRADED"))
                 .andExpect(jsonPath("$.data.finalScore").value(org.hamcrest.Matchers.nullValue()));
 
+        // A transport retry returns the same official attempt and does not create another evaluation.
+        mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/attempts/{attId}/submit", classId, asgId, attId)
+                .with(actor(student))).andExpect(status().isOk());
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM tbl_assignment_evaluation WHERE attempt_id=?",Integer.class,UUID.fromString(attId))).isEqualTo(1);
+
         // Student cannot start another attempt because maxAttempts = 1
         mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/attempts", classId, asgId)
                         .with(actor(student)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("ATTEMPT_LIMIT_EXCEEDED"));
 
+        mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/students/{studentId}/attempt-grants",classId,asgId,student.getId())
+                .with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"extraAttempts\":1,\"reset\":false,\"reason\":\"Approved extra attempt\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/attempts",classId,asgId).with(actor(student)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.data.attemptNumber").value(2));
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "SELECT extra_attempts FROM tbl_assignment_participation WHERE assignment_id=? AND student_id=?",Integer.class,
+                UUID.fromString(asgId),student.getId())).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM tbl_audit_log WHERE actor_id=? AND action='GIVE_EXTRA_ATTEMPT'",Integer.class,teacher.getId())).isEqualTo(1);
+
         // Teacher views submissions
         mvc.perform(get("/api/v1/classrooms/{classId}/assignments/{asgId}/submissions", classId, asgId)
                         .with(actor(teacher)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
                 .andExpect(jsonPath("$.data[0].id").value(attId))
                 .andExpect(jsonPath("$.data[0].finalScore").value(10.0));
 
@@ -184,6 +204,18 @@ public class AssignmentApiTest extends com.algolearner.platform.support.Postgres
                         .with(actor(student)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.myBestScore").value(10.0));
+        mvc.perform(post("/api/v1/classrooms/{classId}/assignments/{asgId}/submissions/{attId}/override-grade", classId, asgId, attId)
+                .with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"overriddenScore\":7,\"reason\":\"Review adjustment\"}"))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/classrooms/{classId}/assignments/{asgId}",classId,asgId).with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.myBestScore").value(10.0));
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM tbl_assignment_evaluation WHERE attempt_id=?",Integer.class,UUID.fromString(attId))).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThat(jdbc.queryForObject(
+                "SELECT final_score FROM tbl_assignment_evaluation WHERE attempt_id=? AND kind='AUTO'",java.math.BigDecimal.class,UUID.fromString(attId)))
+                .isEqualByComparingTo(java.math.BigDecimal.TEN);
+
     }
 
     private AccountEntity account(String username, AccountRole role) {
@@ -194,6 +226,7 @@ public class AssignmentApiTest extends com.algolearner.platform.support.Postgres
         account.setEmail(username + UUID.randomUUID() + "@example.test");
         account.setRole(role);
         account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         AccountEntity saved = accounts.save(account);
         testAccounts.add(saved);
         return saved;

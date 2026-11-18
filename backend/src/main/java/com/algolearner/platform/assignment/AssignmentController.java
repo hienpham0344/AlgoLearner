@@ -24,6 +24,51 @@ public class AssignmentController {
 
     private final AssignmentService service;
 
+    @PatchMapping("/{assignmentId}/questions/{questionId}/code-case-weights")
+    @Operation(summary="Adjust working testcase weights as Teacher owner",description="Requires an active writable classroom and reason. Published and started snapshots remain unchanged.")
+    public ApiResponse<AssignmentDtos.CodeCaseWeightsView> codeCaseWeights(Authentication auth,@PathVariable UUID classId,
+            @PathVariable UUID assignmentId,@PathVariable UUID questionId,@Valid @RequestBody AssignmentDtos.CodeCaseWeightsRequest request) {
+        return ApiResponse.success(service.codeCaseWeights(actor(auth),classId,assignmentId,questionId,request));
+    }
+
+    @PostMapping("/{assignmentId}/students/{studentId}/attempt-grants")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Grant or reset attempt allowance without deleting submissions (Teacher owner only)")
+    public void grantAttempts(Authentication auth, @PathVariable UUID classId, @PathVariable UUID assignmentId,
+            @PathVariable UUID studentId, @Valid @RequestBody AssignmentDtos.AttemptGrantRequest request) {
+        service.grantAttempts(actor(auth), classId, assignmentId, studentId, request);
+    }
+
+    @PutMapping("/{assignmentId}/questions/{questionId}")
+    @Operation(summary = "Edit authoring content without changing existing attempt snapshots")
+    public ApiResponse<AssignmentDtos.QuestionView> updateQuestion(Authentication auth, @PathVariable UUID classId,
+            @PathVariable UUID assignmentId, @PathVariable UUID questionId, @Valid @RequestBody AssignmentDtos.AddQuestionRequest request) {
+        return ApiResponse.success(service.updateQuestion(actor(auth),classId,assignmentId,questionId,request));
+    }
+    @PutMapping("/{assignmentId}/question-order")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Set the complete question order (Teacher owner only)")
+    public void reorderQuestions(Authentication auth,@PathVariable UUID classId,@PathVariable UUID assignmentId,@RequestBody List<UUID> ids) {
+        service.reorderQuestions(actor(auth),classId,assignmentId,ids);
+    }
+
+    public record RunCodeRequest(@jakarta.validation.constraints.NotNull UUID questionId,
+            @jakarta.validation.constraints.NotBlank String source) { }
+    @PostMapping("/{assignmentId}/attempts/{attemptId}/runs")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    @Operation(summary = "Run sample cases only; does not create an official submission")
+    public ApiResponse<UUID> runCode(Authentication auth,@PathVariable UUID classId,@PathVariable UUID assignmentId,
+            @PathVariable UUID attemptId,@Valid @RequestBody RunCodeRequest request) {
+        return ApiResponse.success(service.runCode(actor(auth),classId,assignmentId,attemptId,request.questionId(),request.source()));
+    }
+
+    @GetMapping("/{assignmentId}/submissions/{attemptId}/evaluations")
+    @Operation(summary = "Read immutable evaluation generations (Teacher owner only)")
+    public ApiResponse<List<AssignmentEvaluationHistory.Evaluation>> evaluationHistory(Authentication auth,@PathVariable UUID classId,
+            @PathVariable UUID assignmentId,@PathVariable UUID attemptId) {
+        return ApiResponse.success(service.evaluationHistory(actor(auth),classId,assignmentId,attemptId));
+    }
+
     @GetMapping
     @Operation(summary = "List assignments in a classroom")
     public ApiResponse<List<AssignmentDtos.AssignmentSummaryView>> list(
@@ -152,6 +197,27 @@ public class AssignmentController {
             @PathVariable UUID assignmentId
     ) {
         return ApiResponse.success(service.startAttempt(actor(auth), classId, assignmentId));
+    }
+
+    @GetMapping("/{assignmentId}/attempts")
+    @Operation(summary = "Read caller's official submission history, including Closed assignments")
+    public ApiResponse<List<AssignmentDtos.AttemptView>> ownOfficialAttempts(Authentication auth, @PathVariable UUID classId,
+            @PathVariable UUID assignmentId) {
+        return ApiResponse.success(service.ownOfficialAttempts(actor(auth), classId, assignmentId));
+    }
+
+    @GetMapping("/{assignmentId}/attempts/{attemptId}")
+    @Operation(summary = "Read caller's immutable official submission under current answer and grade release policies")
+    public ApiResponse<AssignmentDtos.AttemptView> ownOfficialAttempt(Authentication auth, @PathVariable UUID classId,
+            @PathVariable UUID assignmentId, @PathVariable UUID attemptId) {
+        return ApiResponse.success(service.ownOfficialAttempt(actor(auth), classId, assignmentId, attemptId));
+    }
+
+    @GetMapping("/{assignmentId}/attempts/{attemptId}/jobs/{jobId}")
+    @Operation(summary = "Read own scoped sample RUN or published official code generation with configured feedback")
+    public ApiResponse<com.algolearner.platform.judge.JudgeGateway.EvaluationResult> codeResult(Authentication auth,
+            @PathVariable UUID classId, @PathVariable UUID assignmentId, @PathVariable UUID attemptId, @PathVariable UUID jobId) {
+        return ApiResponse.success(service.codeResult(actor(auth), classId, assignmentId, attemptId, jobId));
     }
 
     @GetMapping("/{assignmentId}/attempts/active")

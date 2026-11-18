@@ -17,6 +17,14 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AssignmentAnswerEntity extends BaseAuditableEntity {
 
+    @Column(name = "stored_file_id")
+    private UUID storedFileId;
+
+    @Column(name = "answer_version", nullable = false)
+    private long answerVersion;
+    @Column(name = "client_mutation_id")
+    private UUID clientMutationId;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
@@ -46,7 +54,7 @@ public class AssignmentAnswerEntity extends BaseAuditableEntity {
     @Builder.Default
     private boolean isDraft = true;
 
-    @Column(name = "score", precision = 6, scale = 2)
+    @Column(name = "score", precision = 30, scale = 16)
     private BigDecimal score;
 
     @Column(name = "feedback", columnDefinition = "TEXT")

@@ -14,6 +14,7 @@ import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ResourceNotFoundException;
 import com.algolearner.platform.common.exception.ErrorCode;
 import com.algolearner.platform.notification.NotificationService;
+import com.algolearner.platform.lesson.LessonLinkedItemRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,7 @@ class AssignmentServiceTest {
     private final ClassroomMembershipRepository memberships = mock(ClassroomMembershipRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
     private final NotificationService notifications = mock(NotificationService.class);
+    private final LessonLinkedItemRepository linkedItems = mock(LessonLinkedItemRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T12:00:00Z"), ZoneOffset.UTC);
 
     private AssignmentService service;
@@ -54,7 +56,7 @@ class AssignmentServiceTest {
     void setUp() {
         service = new AssignmentService(
                 assignments, questions, options, attempts, answers, rejudgeLogs,
-                classrooms, memberships, accounts, notifications, clock
+                classrooms, memberships, accounts, notifications, linkedItems, clock
         );
 
         teacher = new AccountEntity();
@@ -90,6 +92,7 @@ class AssignmentServiceTest {
                 .allowLateSubmission(false)
                 .latePenaltyPercent(BigDecimal.ZERO)
                 .build();
+        when(assignments.findForUpdate(assignment.getId(), classroom.getId())).thenReturn(Optional.of(assignment));
     }
 
     @Test
@@ -129,7 +132,8 @@ class AssignmentServiceTest {
 
         when(attempts.findFirstByAssignmentIdAndStudentIdAndStatus(assignment.getId(), student.getId(), AttemptStatus.IN_PROGRESS))
                 .thenReturn(Optional.empty());
-        when(attempts.countByAssignmentIdAndStudentId(assignment.getId(), student.getId())).thenReturn(1L);
+        when(attempts.findByAssignmentIdAndStudentIdOrderByAttemptNumberDesc(assignment.getId(), student.getId()))
+                .thenReturn(List.of(AssignmentAttemptEntity.builder().id(UUID.randomUUID()).submittedAt(clock.instant()).attemptNumber(1).build()));
 
         assertThatThrownBy(() -> service.startAttempt(student.getId(), classroom.getId(), assignment.getId()))
                 .isInstanceOf(ApiException.class)
@@ -162,6 +166,7 @@ class AssignmentServiceTest {
                 .thenReturn(Optional.of(membership));
 
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
         when(questions.findByIdAndAssignmentId(qId, assignment.getId())).thenReturn(Optional.of(q));
         when(answers.findByAttemptIdAndQuestionId(attempt.getId(), qId)).thenReturn(Optional.empty());
         when(answers.save(any(AssignmentAnswerEntity.class))).thenAnswer(i -> i.getArgument(0));
@@ -214,6 +219,7 @@ class AssignmentServiceTest {
                 .thenReturn(Optional.of(membership));
 
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
         when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(ans));
         when(options.findByQuestionIdOrderByDisplayOrderAsc(q.getId())).thenReturn(List.of(optCorrect));
         when(attempts.save(any(AssignmentAttemptEntity.class))).thenAnswer(i -> i.getArgument(0));
@@ -232,17 +238,23 @@ class AssignmentServiceTest {
                 .assignment(assignment)
                 .student(student)
                 .status(AttemptStatus.GRADED)
+                .submittedAt(clock.instant())
                 .autoScore(BigDecimal.valueOf(7.0))
                 .finalScore(BigDecimal.valueOf(7.0))
                 .build();
 
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
 
+        var question = AssignmentQuestionEntity.builder().id(UUID.randomUUID()).assignment(assignment).questionType(QuestionType.SINGLE_CHOICE).points(BigDecimal.TEN).build();
+        var answer = AssignmentAnswerEntity.builder().id(UUID.randomUUID()).question(question).score(BigDecimal.valueOf(7)).build();
+        when(questions.findByAssignmentIdOrderByDisplayOrderAsc(assignment.getId())).thenReturn(List.of(question));
+        when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(answer));
         var req = new AssignmentDtos.OverrideGradeRequest(BigDecimal.valueOf(9.5), "Bonus points for good explanation");
         service.overrideGrade(teacher.getId(), classroom.getId(), assignment.getId(), attempt.getId(), req);
 
-        verify(attempts).save(argThat(a ->
+        verify(attempts, atLeastOnce()).save(argThat(a ->
                 a.getAutoScore().compareTo(BigDecimal.valueOf(7.0)) == 0 &&
                 a.getOverriddenScore().compareTo(BigDecimal.valueOf(9.5)) == 0 &&
                 a.getFinalScore().compareTo(BigDecimal.valueOf(9.5)) == 0 &&
@@ -255,6 +267,7 @@ class AssignmentServiceTest {
         var targetClassroom = new ClassroomEntity();
         targetClassroom.setId(UUID.randomUUID());
         targetClassroom.setOwner(teacher);
+        targetClassroom.setStatus(ClassroomStatus.ACTIVE);
 
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(classrooms.findById(targetClassroom.getId())).thenReturn(Optional.of(targetClassroom));
@@ -334,6 +347,7 @@ class AssignmentServiceTest {
                 .thenReturn(Optional.of(membership));
 
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
         when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(ans));
         when(options.findByQuestionIdOrderByDisplayOrderAsc(q.getId())).thenReturn(List.of(opt1, opt2, opt3));
         when(attempts.save(any(AssignmentAttemptEntity.class))).thenAnswer(i -> i.getArgument(0));
@@ -346,7 +360,7 @@ class AssignmentServiceTest {
     }
 
     @Test
-    void submitAttempt_AppliesLatePenaltyPercent() {
+    void submitAttempt_PreservesEarnedScoreWithoutLatePenalty() {
         assignment.setGradePublished(true);
         assignment.setDeadline(clock.instant().minusSeconds(3600)); // 1 hour ago
         assignment.setAllowLateSubmission(true);
@@ -383,6 +397,7 @@ class AssignmentServiceTest {
                 .thenReturn(Optional.of(membership));
 
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
         when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(ans));
         when(options.findByQuestionIdOrderByDisplayOrderAsc(q.getId())).thenReturn(List.of(opt));
         when(attempts.save(any(AssignmentAttemptEntity.class))).thenAnswer(i -> i.getArgument(0));
@@ -390,9 +405,9 @@ class AssignmentServiceTest {
         var view = service.submitAttempt(student.getId(), classroom.getId(), assignment.getId(), attempt.getId());
 
         assertThat(view.isLate()).isTrue();
+        assertThat(view.submittedAt()).isEqualTo(clock.instant());
         assertThat(view.autoScore()).isEqualByComparingTo(BigDecimal.valueOf(10.0));
-        // 10.0 - 20% = 8.0
-        assertThat(view.finalScore()).isEqualByComparingTo(BigDecimal.valueOf(8.0));
+        assertThat(view.finalScore()).isEqualByComparingTo(BigDecimal.TEN);
     }
 
     @Test
@@ -405,7 +420,7 @@ class AssignmentServiceTest {
         var updateReq = new AssignmentDtos.UpdateAssignmentRequest(
                 "Updated Midterm", "New Description", AssignmentType.GRADED,
                 clock.instant(), clock.instant().plusSeconds(7200),
-                true, BigDecimal.valueOf(15.0),
+                true, BigDecimal.ZERO,
                 90, TimeExpiredAction.AUTO_SUBMIT,
                 3, ScoringPolicy.HIGHEST,
                 true, true,
@@ -435,7 +450,7 @@ class AssignmentServiceTest {
     }
 
     @Test
-    void deleteQuestion_RemovesQuestionAndOptions() {
+    void deleteQuestion_RetiresAuthoringQuestionAndPreservesHistoricalReferences() {
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         var qId = UUID.randomUUID();
         var q = AssignmentQuestionEntity.builder().id(qId).assignment(assignment).build();
@@ -444,8 +459,10 @@ class AssignmentServiceTest {
 
         service.deleteQuestion(teacher.getId(), classroom.getId(), assignment.getId(), qId);
 
-        verify(questions).delete(q);
-        verify(options).deleteAll(anyList());
+        assertThat(q.isRetired()).isTrue();
+        verify(questions).save(q);
+        verify(questions, never()).delete(any());
+        verify(options, never()).deleteAll(anyList());
     }
 
     @Test
@@ -524,7 +541,7 @@ class AssignmentServiceTest {
     }
 
     @Test
-    void rejudge_RecalculatesScoreAndLogsAndNotifies() {
+    void rejudge_RecalculatesScoreAndLogsWithoutPrematureNotification() {
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(assignments.findByIdAndClassroomId(assignment.getId(), classroom.getId()))
                 .thenReturn(Optional.of(assignment));
@@ -535,10 +552,14 @@ class AssignmentServiceTest {
                 .assignment(assignment)
                 .student(student)
                 .status(AttemptStatus.GRADED)
+                .submittedAt(clock.instant())
                 .autoScore(BigDecimal.valueOf(5.0))
                 .finalScore(BigDecimal.valueOf(5.0))
                 .build();
 
+        attempt.setRevisionSnapshot(AssignmentSnapshotPolicy.encode(new AssignmentSnapshotPolicy.Content(null,
+                TimeExpiredAction.AUTO_SUBMIT,false,false,List.of())));
+        attempt.setSnapshotProvenance("TRUSTED");
         when(attempts.findByAssignmentIdOrderByCreatedAtDesc(assignment.getId()))
                 .thenReturn(List.of(attempt));
         when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of());
@@ -547,15 +568,7 @@ class AssignmentServiceTest {
         service.rejudge(teacher.getId(), classroom.getId(), assignment.getId(), req);
 
         verify(rejudgeLogs).save(any(AssignmentRejudgeLogEntity.class));
-        verify(notifications).notifyStudent(
-                eq(student),
-                eq("ASSIGNMENT_REJUDGE"),
-                anyString(),
-                eq(assignment.getTitle()),
-                anyString(),
-                isNull(),
-                eq(assignment.getId())
-        );
+        verifyNoInteractions(notifications);
     }
 
     @Test
@@ -567,6 +580,7 @@ class AssignmentServiceTest {
                 .assignment(otherAssignment).student(student).status(AttemptStatus.GRADED).build();
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
 
         assertThatThrownBy(() -> service.overrideGrade(teacher.getId(), classroom.getId(),
                 assignment.getId(), attempt.getId(),
@@ -583,6 +597,7 @@ class AssignmentServiceTest {
                 .assignment(otherAssignment).student(student).status(AttemptStatus.IN_PROGRESS)
                 .startedAt(clock.instant()).build();
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
 
         assertThatThrownBy(() -> service.saveDraftAnswer(student.getId(), classroom.getId(),
                 assignment.getId(), attempt.getId(),
@@ -602,6 +617,7 @@ class AssignmentServiceTest {
         var answer = AssignmentAnswerEntity.builder().id(UUID.randomUUID())
                 .attempt(attempt).question(question).codeSubmission("print('hello')").build();
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
         when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(answer));
         when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));
 
@@ -626,6 +642,7 @@ class AssignmentServiceTest {
                 .attempt(attempt).question(question)
                 .selectedOptionIds("[\"" + option.getId() + "\"]").build();
         when(attempts.findById(attempt.getId())).thenReturn(Optional.of(attempt));
+        when(attempts.findForUpdateById(attempt.getId())).thenReturn(Optional.of(attempt));
         when(answers.findByAttemptId(attempt.getId())).thenReturn(List.of(answer));
         when(options.findByQuestionIdOrderByDisplayOrderAsc(question.getId())).thenReturn(List.of(option));
         when(attempts.save(any())).thenAnswer(i -> i.getArgument(0));

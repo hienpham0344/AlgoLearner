@@ -18,6 +18,20 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AssignmentQuestionEntity extends BaseAuditableEntity {
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "code_content_snapshot", columnDefinition = "jsonb")
+    private String codeContentSnapshot;
+
+    @Column(name = "question_weight", nullable = false, precision = 12, scale = 6)
+    @Builder.Default
+    private BigDecimal questionWeight = BigDecimal.ONE;
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "code_case_weights", columnDefinition = "jsonb")
+    private List<BigDecimal> codeCaseWeights;
+
+    @Column(name = "retired", nullable = false)
+    @Builder.Default private boolean retired=false;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;

@@ -20,6 +20,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AssignmentEntity extends BaseAuditableEntity {
 
+    @Column(name = "published_revision_id")
+    private UUID publishedRevisionId;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;

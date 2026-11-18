@@ -20,6 +20,21 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AssignmentAttemptEntity extends BaseAuditableEntity {
 
+    @Column(name = "revision_id", updatable = false)
+    private UUID revisionId;
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "revision_snapshot", columnDefinition = "jsonb", updatable = false)
+    private String revisionSnapshot;
+    @Column(name = "snapshot_provenance", nullable = false, length = 30, updatable = false)
+    @Builder.Default private String snapshotProvenance = "LEGACY_MISSING";
+    @Column(name = "base_expires_at", updatable = false)
+    private Instant baseExpiresAt;
+
+    @Column(name = "current_evaluation_id")
+    private UUID currentEvaluationId;
+    @Column(name = "published_evaluation_id")
+    private UUID publishedEvaluationId;
+
     @Id
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
