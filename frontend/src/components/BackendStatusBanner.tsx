@@ -1,7 +1,17 @@
 import { useEffect, useSyncExternalStore } from 'react';
-import { getApiSource, observeApiSource, subscribeApiSource } from '@/services/apiSource';
+import { getApiSource, observeApiSource, resolveDemoFlags, subscribeApiSource } from '@/services/apiSource';
 
 export const useApiSource = () => useSyncExternalStore(subscribeApiSource, getApiSource);
+
+function useDemoFlags() {
+  const source = useApiSource();
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('algolearner_token') : null;
+  return resolveDemoFlags({ source, mode: import.meta.env.MODE, token });
+}
+
+export const useIsDemoMode = (): boolean => useDemoFlags().isDemoMode;
+
+export const useIsPrototypeDemo = (): boolean => useDemoFlags().isPrototypeDemo;
 
 export function BackendStatusBanner() {
   const source = useApiSource();

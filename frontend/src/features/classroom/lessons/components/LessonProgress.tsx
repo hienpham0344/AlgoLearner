@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useIsPrototypeDemo } from '@/components/BackendStatusBanner';
 import { lessonApi, lessonError, lessonKeys } from '../api/lessonApi';
 import { lessonMockStore } from '../mock/lessonMockStore';
 import { lessonDate } from '../lessonRules';
 import { LessonPagination } from './LessonState';
 
-const IS_PROTOTYPE_DEMO = import.meta.env.MODE === 'auth-demo';
-
 export function LessonProgress({ userId, classId, lessonId }: { userId: string; classId: string; lessonId: string }) {
+  const isPrototypeDemo = useIsPrototypeDemo();
   const [page, setPage] = useState(0);
   const queryClient = useQueryClient();
   const query = useQuery({
-    queryKey: lessonKeys.progress(userId, classId, lessonId, page),
-    queryFn: () => IS_PROTOTYPE_DEMO ? Promise.resolve(lessonMockStore.progress(classId, lessonId, page)) : lessonApi.progress(classId, lessonId, page),
+    queryKey: [...lessonKeys.progress(userId, classId, lessonId, page), isPrototypeDemo],
+    queryFn: () => isPrototypeDemo ? Promise.resolve(lessonMockStore.progress(classId, lessonId, page)) : lessonApi.progress(classId, lessonId, page),
     retry: false,
   });
   const hasCompleted = Boolean(query.data?.items.some(student => student.completed));

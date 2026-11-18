@@ -1,4 +1,4 @@
-import { useApiSource } from '@/components/BackendStatusBanner';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { clearSession } from '@/services/apiClient';
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -117,7 +117,7 @@ const getSegmentState = (index: number, completed: number): 'completed' | 'curre
 };
 
 export const DashboardPage = () => {
-  const IS_DEMO = useApiSource() === 'mock' || import.meta.env.MODE === 'lessons-demo';
+  const IS_DEMO = useIsDemoMode();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 

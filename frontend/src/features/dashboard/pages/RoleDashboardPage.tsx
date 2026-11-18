@@ -5,7 +5,7 @@ import { isAxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useApiSource } from '@/components/BackendStatusBanner';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import {
   dashboardApi,
@@ -809,7 +809,7 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 
 export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
   const { user, logout } = useAuth();
-  const isDemo = useApiSource() === 'mock' || import.meta.env.MODE === 'lessons-demo';
+  const isDemo = useIsDemoMode();
   const navigate = useNavigate();
 
   const teacherQuery = useQuery({

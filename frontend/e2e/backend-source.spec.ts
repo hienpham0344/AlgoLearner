@@ -13,6 +13,10 @@ async function demoLogin(page: Page) {
 
 test('offline mock supports profile reload and classrooms with a visible notice', async ({ page }) => {
   await demoLogin(page);
+  const lessonsRegion = page.getByRole('region', { name: 'Class lessons', exact: true });
+  await expect(lessonsRegion).toBeVisible();
+  await expect(lessonsRegion.getByRole('alert')).toHaveCount(0);
+  await expect(lessonsRegion.getByRole('link', { name: /Data Structures & Advanced Algorithms/ })).toBeVisible();
   await page.goto(`${base}/profile`);
   await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Learner');
@@ -21,6 +25,12 @@ test('offline mock supports profile reload and classrooms with a visible notice'
   await page.goto(`${base}/student/classrooms`);
   await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading').first()).toBeVisible();
+  await page.goto(`${base}/dashboard`);
+  await lessonsRegion.getByRole('link', { name: /Data Structures & Advanced Algorithms/ }).click();
+  await expect(page).toHaveURL(/\/student\/classrooms\/cls-algo-2026\/lessons$/);
+  await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Asymptotic Complexity & Recursion Trees' })).toBeVisible();
 });
 
 test('backend recovery ends demo session and real login errors never fall back to demo', async ({ page }) => {
