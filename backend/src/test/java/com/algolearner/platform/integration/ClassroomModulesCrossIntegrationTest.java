@@ -291,6 +291,7 @@ public class ClassroomModulesCrossIntegrationTest extends com.algolearner.platfo
         account.setEmail(username + UUID.randomUUID() + "@example.test");
         account.setRole(role);
         account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         AccountEntity saved = accounts.save(account);
         testAccounts.add(saved);
         return saved;
