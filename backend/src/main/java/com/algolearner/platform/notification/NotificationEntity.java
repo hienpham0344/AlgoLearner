@@ -23,7 +23,8 @@ public class NotificationEntity extends BaseAuditableEntity {
     private UUID announcementId;
     @Column(name = "assignment_id")
     private UUID assignmentId;
-    @Column(name = "title")
+    @jakarta.validation.constraints.Size(max = 255)
+    @Column(name = "title", length = 255)
     private String title;
     @Column(name = "message")
     private String message;

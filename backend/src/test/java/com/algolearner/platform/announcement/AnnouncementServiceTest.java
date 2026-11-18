@@ -35,6 +35,7 @@ class AnnouncementServiceTest {
     private final NotificationService notifications = mock(NotificationService.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T12:00:00Z"), ZoneOffset.UTC);
 
+    private final ClassroomService classroomService = mock(ClassroomService.class);
     private AnnouncementService service;
 
     private AccountEntity teacher;
@@ -44,7 +45,7 @@ class AnnouncementServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AnnouncementService(announcements, classrooms, memberships, accounts, notifications, clock);
+        service = new AnnouncementService(announcements, classrooms, memberships, accounts, notifications, clock, classroomService);
 
         teacher = new AccountEntity();
         teacher.setId(UUID.randomUUID());
@@ -75,6 +76,38 @@ class AnnouncementServiceTest {
         classroom.setName("Algorithms 101");
         classroom.setOwner(teacher);
         classroom.setStatus(ClassroomStatus.ACTIVE);
+        when(classroomService.lockReadable(classroom.getId())).thenReturn(classroom);
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(accounts.findById(otherTeacher.getId())).thenReturn(Optional.of(otherTeacher));
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+    }
+
+    @Test
+    void inactiveOwnerCannotReadAnnouncements() {
+        teacher.setStatus(AccountStatus.SUSPENDED);
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        assertThatThrownBy(() -> service.list(teacher.getId(), classroom.getId(), PageRequest.of(0, 10)))
+                .isInstanceOf(AppException.class);
+        verifyNoInteractions(announcements);
+    }
+
+    @Test
+    void archivedClassroomRejectsAnnouncementMutation() {
+        classroom.setStatus(ClassroomStatus.ARCHIVED);
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        assertThatThrownBy(() -> service.create(teacher.getId(), classroom.getId(),
+                new AnnouncementDtos.CreateRequest("Title", "Content"))).isInstanceOf(AppException.class);
+        verifyNoInteractions(announcements, notifications);
+    }
+
+    @Test
+    void inactiveOwnerCannotMutateAnnouncements() {
+        teacher.setStatus(AccountStatus.SUSPENDED);
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        assertThatThrownBy(() -> service.create(teacher.getId(), classroom.getId(),
+                new AnnouncementDtos.CreateRequest("Title", "Content"))).isInstanceOf(AppException.class);
+        verifyNoInteractions(announcements, notifications);
     }
 
     @Test
@@ -103,7 +136,7 @@ class AnnouncementServiceTest {
         verify(notifications).notifyStudent(
                 eq(student),
                 eq("ANNOUNCEMENT"),
-                eq("New announcement: Final Exam Info"),
+                eq("Final Exam Info"),
                 eq("Final Exam Info"),
                 contains("/classrooms/" + classroom.getId() + "/announcements/"),
                 any(UUID.class),

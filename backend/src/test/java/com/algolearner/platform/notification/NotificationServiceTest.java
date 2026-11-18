@@ -86,6 +86,61 @@ class NotificationServiceTest {
         assertThat(notification.getReadAt()).isNull();
     }
 
+    @Test
+    void announcementInboxKeepsTypedContentAndIgnoresStoredExternalRoute() {
+        var student = account(AccountRole.STUDENT);
+        var notification = new NotificationEntity();
+        notification.setId(UUID.randomUUID()); notification.setRecipient(student);
+        notification.setType("ANNOUNCEMENT"); notification.setTitle("Exam"); notification.setMessage("Details");
+        notification.setAnnouncementId(UUID.randomUUID()); notification.setLinkUrl("https://untrusted.example/path");
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(notifications.findByRecipientId(eq(student.getId()), any())).thenReturn(new PageImpl<>(List.of(notification)));
+        var view = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(
+                service.myInvitations(student.getId(), PageRequest.of(0, 20)).getData().getItems().getFirst());
+        assertThat(view.path("title").asText()).isEqualTo("Exam");
+        assertThat(view.path("message").asText()).isEqualTo("Details");
+        assertThat(view.path("targetType").asText()).isEqualTo("ANNOUNCEMENT");
+        assertThat(view.path("targetId").asText()).isEqualTo(notification.getAnnouncementId().toString());
+        assertThat(view.path("actionUrl").isNull()).isTrue();
+    }
+
+    @Test
+    void inboxPaginationAlwaysHasStableCreatedAtAndIdOrdering() {
+        var student = account(AccountRole.STUDENT);
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(notifications.findByRecipientId(eq(student.getId()), any())).thenReturn(new PageImpl<>(List.of()));
+        service.myInvitations(student.getId(), PageRequest.of(2, 5));
+        var page = org.mockito.ArgumentCaptor.forClass(org.springframework.data.domain.Pageable.class);
+        verify(notifications).findByRecipientId(eq(student.getId()), page.capture());
+        assertThat(page.getValue().getPageNumber()).isEqualTo(2);
+        assertThat(page.getValue().getPageSize()).isEqualTo(5);
+        assertThat(page.getValue().getSort().getOrderFor("createdAt")).isNotNull();
+        assertThat(page.getValue().getSort().getOrderFor("id")).isNotNull();
+    }
+
+    @Test
+    void announcementHasClassroomAndServerGeneratedActionUrl() {
+        var student = account(AccountRole.STUDENT);
+        var classroom = new ClassroomEntity(); classroom.setId(UUID.randomUUID()); classroom.setName("Algorithms");
+        var announcement = new com.algolearner.platform.announcement.AnnouncementEntity();
+        announcement.setId(UUID.randomUUID()); announcement.setClassroom(classroom);
+        var notification = new NotificationEntity(); notification.setId(UUID.randomUUID());
+        notification.setType("ANNOUNCEMENT"); notification.setTitle("Exam");
+        notification.setAnnouncementId(announcement.getId());
+        var context = mock(NotificationRepository.ClassroomContext.class);
+        when(context.getNotificationId()).thenReturn(notification.getId());
+        when(context.getClassroomId()).thenReturn(classroom.getId());
+        when(context.getClassroomName()).thenReturn(classroom.getName());
+        when(notifications.findClassroomContexts(any())).thenReturn(List.of(context));
+        notification.setLinkUrl("https://untrusted.example/path");
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(notifications.findByRecipientId(eq(student.getId()), any())).thenReturn(new PageImpl<>(List.of(notification)));
+        var view = service.myInvitations(student.getId(), PageRequest.of(0, 20)).getData().getItems().getFirst();
+        assertThat(view.classroomId()).isEqualTo(classroom.getId());
+        assertThat(view.actionUrl()).isEqualTo("/classrooms/" + classroom.getId() + "/announcements/" + announcement.getId());
+        assertThat(view.invitationId()).isNull();
+    }
+
     private AccountEntity account(AccountRole role) {
         var account = new AccountEntity(); account.setId(UUID.randomUUID());
         account.setRole(role); account.setStatus(AccountStatus.ACTIVE); return account;

@@ -89,6 +89,69 @@ public class AnnouncementApiTest extends com.algolearner.platform.support.Postgr
         student = account("learner", AccountRole.STUDENT);
     }
 
+    @Autowired private org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate jdbc;
+
+    @Test
+    void maximumTitleCreatesTypedNotificationAndDashboardItem() throws Exception {
+        var result = mvc.perform(post("/api/v1/classrooms").with(actor(teacher))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Notification regression\",\"joinMode\":\"AUTO_JOIN\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        var classroom = objectMapper.readTree(result).path("data");
+        String classId = classroom.path("id").asText();
+        mvc.perform(post("/api/v1/classrooms/join").with(actor(student))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(java.util.Map.of("classCode", classroom.path("classCode").asText()))))
+                .andExpect(status().isOk());
+        String title = "A".repeat(255);
+        mvc.perform(post("/api/v1/classrooms/{id}/announcements", classId).with(actor(teacher))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(java.util.Map.of("title", title, "content", "Body"))))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/v1/notifications").with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].title").value(title))
+                .andExpect(jsonPath("$.data.items[0].type").value("ANNOUNCEMENT"))
+                .andExpect(jsonPath("$.data.items[0].classroomId").value(classId))
+                .andExpect(jsonPath("$.data.items[0].targetType").value("ANNOUNCEMENT"));
+        var preview = new com.algolearner.platform.profile.dashboard.JdbcDashboardRepository(jdbc)
+                .notifications(new DashboardRepository.Context(student.getId(), Instant.now(), Instant.now(), 10));
+        org.assertj.core.api.Assertions.assertThat(preview.totalElements()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(preview.items()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(preview.items().getFirst().title()).isEqualTo(title);
+    }
+
+    @Test
+    void dashboardIncludesSystemNotificationWithoutInvitation() {
+        accounts.flush();
+        jdbc.update("INSERT INTO tbl_notification (id,recipient_id,type,title,message) VALUES (:id,:recipient,'SYSTEM','System title','Message')",
+                java.util.Map.of("id", UUID.randomUUID(), "recipient", student.getId()));
+        var preview = new com.algolearner.platform.profile.dashboard.JdbcDashboardRepository(jdbc)
+                .notifications(new DashboardRepository.Context(student.getId(), Instant.now(), Instant.now(), 10));
+        org.assertj.core.api.Assertions.assertThat(preview.totalElements()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(preview.items()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(preview.items().getFirst().title()).isEqualTo("System title");
+    }
+
+    @Test
+    void dashboardNotificationPaginationScopesBeforeLimitAndUsesIdTieBreaker() {
+        accounts.flush();
+        UUID first = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        UUID second = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        for (UUID id : List.of(second, first)) {
+            jdbc.update("INSERT INTO tbl_notification (id,recipient_id,type,title,created_at) "
+                    + "VALUES (:id,:recipient,'SYSTEM','Update','2026-11-01T12:00:00Z')",
+                    java.util.Map.of("id", id, "recipient", student.getId()));
+        }
+        jdbc.update("INSERT INTO tbl_notification (id,recipient_id,type,title) VALUES (:id,:recipient,'SYSTEM','Private')",
+                java.util.Map.of("id", UUID.randomUUID(), "recipient", otherTeacher.getId()));
+        var preview = new com.algolearner.platform.profile.dashboard.JdbcDashboardRepository(jdbc)
+                .notifications(new DashboardRepository.Context(student.getId(), Instant.now(), Instant.now(), 1));
+        org.assertj.core.api.Assertions.assertThat(preview.totalElements()).isEqualTo(2);
+        org.assertj.core.api.Assertions.assertThat(preview.items()).hasSize(1);
+        org.assertj.core.api.Assertions.assertThat(preview.items().getFirst().notificationId()).isEqualTo(first);
+        org.assertj.core.api.Assertions.assertThat(preview.hasMore()).isTrue();
+    }
+
     @Test
     void announcementCrudAndPinningFlow() throws Exception {
         // Teacher creates classroom
@@ -181,6 +244,7 @@ public class AnnouncementApiTest extends com.algolearner.platform.support.Postgr
         account.setEmail(username + UUID.randomUUID() + "@example.test");
         account.setRole(role);
         account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         AccountEntity saved = accounts.save(account);
         testAccounts.add(saved);
         return saved;

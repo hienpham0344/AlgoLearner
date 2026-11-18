@@ -7,5 +7,6 @@ public final class NotificationDtos {
     private NotificationDtos() { }
 
     public record InvitationNotificationView(UUID id, UUID invitationId, UUID classroomId,
-            String classroomName, String status, Instant expiresAt, Instant createdAt, Instant readAt) { }
+            String classroomName, String status, Instant expiresAt, Instant createdAt, Instant readAt,
+            String type, String title, String message, String targetType, UUID targetId, String actionUrl) { }
 }

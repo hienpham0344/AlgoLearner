@@ -31,6 +31,7 @@ public class AnnouncementService {
     private final AccountRepository accounts;
     private final NotificationService notifications;
     private final Clock clock;
+    private final com.algolearner.platform.classroom.ClassroomService classroomService;
 
     public PageResponse<AnnouncementDtos.AnnouncementView> list(UUID accountId, UUID classroomId, Pageable pageable) {
         var classroom = requireClassroom(classroomId);
@@ -49,7 +50,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView create(UUID accountId, UUID classroomId, AnnouncementDtos.CreateRequest request) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var author = classroom.getOwner();
@@ -71,7 +72,7 @@ public class AnnouncementService {
             notifications.notifyStudent(
                     member.getStudent(),
                     "ANNOUNCEMENT",
-                    "New announcement: " + saved.getTitle(),
+                    saved.getTitle(),
                     saved.getTitle(),
                     "/classrooms/" + classroomId + "/announcements/" + saved.getId(),
                     saved.getId(),
@@ -84,7 +85,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView update(UUID accountId, UUID classroomId, UUID announcementId, AnnouncementDtos.UpdateRequest request) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -97,7 +98,7 @@ public class AnnouncementService {
 
     @Transactional
     public void delete(UUID accountId, UUID classroomId, UUID announcementId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -108,7 +109,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView pin(UUID accountId, UUID classroomId, UUID announcementId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -121,7 +122,7 @@ public class AnnouncementService {
 
     @Transactional
     public AnnouncementDtos.AnnouncementView unpin(UUID accountId, UUID classroomId, UUID announcementId) {
-        var classroom = requireClassroom(classroomId);
+        var classroom = classroomService.lockReadable(classroomId);
         requireOwner(classroom, accountId);
 
         var announcement = announcements.findByIdAndClassroomId(announcementId, classroomId)
@@ -138,12 +139,18 @@ public class AnnouncementService {
     }
 
     private void requireOwner(ClassroomEntity classroom, UUID accountId) {
-        if (!classroom.getOwner().getId().equals(accountId)) {
+        if (classroom.getStatus() != com.algolearner.platform.classroom.ClassroomStatus.ACTIVE
+                || classroom.getOwner().getStatus() != com.algolearner.platform.auth.AccountStatus.ACTIVE
+                || classroom.getOwner().getRole() != com.algolearner.platform.auth.AccountRole.TEACHER
+                || !classroom.getOwner().getId().equals(accountId)) {
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
         }
     }
 
     private void requireViewAccess(ClassroomEntity classroom, UUID accountId) {
+        accounts.findById(accountId)
+                .filter(account -> account.getStatus() == com.algolearner.platform.auth.AccountStatus.ACTIVE)
+                .orElseThrow(() -> new ApiException(ErrorCode.FORBIDDEN_OPERATION));
         if (classroom.getOwner().getId().equals(accountId)) {
             return;
         }

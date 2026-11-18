@@ -335,6 +335,7 @@ class ClassroomApiTest extends com.algolearner.platform.support.PostgresIntegrat
     private AccountEntity account(String username, AccountRole role) {
         var account = new AccountEntity(); account.setId(UUID.randomUUID()); account.setUsername(username + UUID.randomUUID());
         account.setEmail(username + UUID.randomUUID() + "@example.test"); account.setRole(role); account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         AccountEntity saved = accounts.save(account);
         testAccounts.add(saved);
         return saved;

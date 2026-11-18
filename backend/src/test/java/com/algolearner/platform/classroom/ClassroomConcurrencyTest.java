@@ -125,6 +125,7 @@ class ClassroomConcurrencyTest extends PostgresIntegrationTest {
         account.setEmail(account.getUsername() + "@example.test");
         account.setRole(role);
         account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         return accounts.saveAndFlush(account);
     }
 

@@ -24,7 +24,7 @@ class ClassroomServiceTest {
     private final ClassroomPairLock pairLock = mock(ClassroomPairLock.class);
     private final EntityManager entityManager = mock(EntityManager.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
-    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager);
+    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts));
 
     @Test
     void invitationCreatesNotificationForInvitedStudent() {
@@ -288,7 +288,7 @@ class ClassroomServiceTest {
         var request = new ClassroomJoinRequestEntity(); request.setId(UUID.randomUUID()); request.setClassroom(classroom);
         request.setStudent(student); request.setStatus(JoinRequestStatus.PENDING_APPROVAL);
         when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
-        when(accounts.findByUsernameIgnoreCase(student.getUsername())).thenReturn(Optional.of(student));
+        when(accounts.findForIdentityResolution(student.getUsername())).thenReturn(List.of(student));
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId())).thenReturn(Optional.empty());
         when(requests.findByClassroomIdAndStudentIdAndStatus(classroom.getId(), student.getId(), JoinRequestStatus.PENDING_APPROVAL))
@@ -347,7 +347,7 @@ class ClassroomServiceTest {
     }
 
     private AccountEntity account(AccountRole role) { var a = new AccountEntity(); a.setId(UUID.randomUUID()); a.setRole(role); a.setStatus(AccountStatus.ACTIVE); a.setUsername(UUID.randomUUID().toString()); a.setEmail(UUID.randomUUID()+"@example.test"); return a; }
-    private ClassroomEntity classroom(AccountEntity owner) { var c=new ClassroomEntity(); c.setId(UUID.randomUUID()); c.setOwner(owner); c.setName("A"); c.setStatus(ClassroomStatus.ACTIVE); c.setClassCode("ABCDEFGH"); c.setJoiningOpen(true); c.setJoinMode(JoinMode.AUTO_JOIN); return c; }
+    private ClassroomEntity classroom(AccountEntity owner) { var c=new ClassroomEntity(); c.setId(UUID.randomUUID()); c.setOwner(owner); c.setName("A"); c.setStatus(ClassroomStatus.ACTIVE); c.setClassCode("ABCDEFGH"); c.setJoiningOpen(true); c.setJoinMode(JoinMode.AUTO_JOIN); when(classrooms.findById(c.getId())).thenReturn(Optional.of(c)); return c; }
     private ClassroomInvitationEntity invitation(ClassroomEntity classroom, AccountEntity student, Instant expiry) {
         var invitation = new ClassroomInvitationEntity(); invitation.setId(UUID.randomUUID()); invitation.setClassroom(classroom);
         invitation.setStudent(student); invitation.setStatus(InvitationStatus.PENDING); invitation.setExpiresAt(expiry);

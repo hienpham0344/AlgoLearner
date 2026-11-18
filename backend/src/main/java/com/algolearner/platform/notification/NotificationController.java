@@ -21,7 +21,7 @@ import org.springframework.http.HttpStatus;
 @RestController
 @Profile("!mock")
 @RequestMapping("/api/v1/notifications")
-@Tag(name = "Notifications", description = "Invitation notifications for SRS 4.3")
+@Tag(name = "Notifications", description = "In-app notifications")
 @SecurityRequirement(name = "bearerAuth")
 public class NotificationController {
     private final NotificationService service;
@@ -29,7 +29,7 @@ public class NotificationController {
     public NotificationController(NotificationService service) { this.service = service; }
 
     @GetMapping
-    @Operation(summary = "List the current Student's classroom invitation notifications")
+    @Operation(summary = "List the current Student's notifications")
     public PageResponse<NotificationDtos.InvitationNotificationView> list(Authentication auth,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return service.myInvitations(UUID.fromString(auth.getName()), pageable);
@@ -37,7 +37,7 @@ public class NotificationController {
 
     @PostMapping("/{notificationId}/read")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    @Operation(summary = "Mark one of the current Student's invitation notifications as read")
+    @Operation(summary = "Mark one of the current Student's notifications as read")
     public void markRead(Authentication auth, @PathVariable UUID notificationId) {
         service.markRead(UUID.fromString(auth.getName()), notificationId);
     }

@@ -9,6 +9,8 @@ import java.time.Clock;
 import java.util.UUID;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,16 +29,35 @@ public class NotificationService {
 
     public PageResponse<NotificationDtos.InvitationNotificationView> myInvitations(UUID accountId, Pageable pageable) {
         requireStudent(accountId);
-        return PageResponse.fromPage(notifications.findByRecipientId(accountId, pageable).map(notification -> {
+        var page = notifications.findByRecipientId(accountId, PageRequest.of(pageable.getPageNumber(),
+                Math.min(pageable.getPageSize(), 100), Sort.by(Sort.Order.desc("createdAt"), Sort.Order.asc("id"))));
+        var contexts = page.isEmpty() ? java.util.Map.<UUID, NotificationRepository.ClassroomContext>of()
+                : notifications.findClassroomContexts(page.getContent().stream().map(NotificationEntity::getId).toList())
+                        .stream().collect(java.util.stream.Collectors.toMap(NotificationRepository.ClassroomContext::getNotificationId, item -> item));
+        return PageResponse.fromPage(page.map(notification -> {
             var invitation = notification.getInvitation();
+            var context = contexts.get(notification.getId());
             var classroom = invitation != null ? invitation.getClassroom() : null;
+            UUID classroomId = context != null ? context.getClassroomId() : classroom == null ? null : classroom.getId();
+            String classroomName = context != null ? context.getClassroomName() : classroom == null ? null : classroom.getName();
+            String targetType = invitation != null ? "CLASS_INVITATION"
+                    : notification.getAnnouncementId() != null ? "ANNOUNCEMENT"
+                    : notification.getAssignmentId() != null ? "ASSIGNMENT" : "SYSTEM";
+            UUID targetId = invitation != null ? invitation.getId()
+                    : notification.getAnnouncementId() != null ? notification.getAnnouncementId() : notification.getAssignmentId();
+            String actionUrl = classroomId == null ? null : "/classrooms/" + classroomId
+                    + ("ANNOUNCEMENT".equals(targetType) ? "/announcements/" + targetId
+                    : "ASSIGNMENT".equals(targetType) ? "/assignments/" + targetId : "");
+            String title = notification.getTitle() != null ? notification.getTitle()
+                    : invitation != null ? "Lời mời tham gia " + classroomName : notification.getType();
             return new NotificationDtos.InvitationNotificationView(notification.getId(),
                     invitation != null ? invitation.getId() : null,
-                    classroom != null ? classroom.getId() : null,
-                    classroom != null ? classroom.getName() : null,
+                    classroomId,
+                    classroomName,
                     invitation != null ? invitation.effectiveStatus(clock.instant()).name() : notification.getType(),
                     invitation != null ? invitation.getExpiresAt() : null,
-                    notification.getCreatedAt(), notification.getReadAt());
+                    notification.getCreatedAt(), notification.getReadAt(), notification.getType(), title,
+                    notification.getMessage(), targetType, targetId, actionUrl);
         }));
     }
 

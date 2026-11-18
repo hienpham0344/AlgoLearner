@@ -7,6 +7,8 @@ import com.algolearner.platform.common.exception.ResourceNotFoundException;
 import com.algolearner.platform.notification.NotificationEntity;
 import com.algolearner.platform.notification.NotificationRepository;
 import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
+import com.algolearner.platform.audit.AuditService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -35,15 +37,18 @@ public class ClassroomService {
     private final ClassroomPairLock pairLock;
     private final EntityManager entityManager;
     private final Clock clock;
+    private final AuditService audit;
+    private final AccountIdentityResolver identityResolver;
     private final SecureRandom random = new SecureRandom();
 
     public ClassroomService(ClassroomRepository classrooms, ClassroomMembershipRepository memberships,
                             ClassroomJoinRequestRepository requests, ClassroomInvitationRepository invitations,
                             NotificationRepository notifications, AccountRepository accounts, Clock clock,
-                            ClassroomPairLock pairLock, EntityManager entityManager) {
+                            ClassroomPairLock pairLock, EntityManager entityManager, AuditService audit, AccountIdentityResolver identityResolver) {
         this.classrooms = classrooms; this.memberships = memberships; this.requests = requests;
         this.invitations = invitations; this.notifications = notifications; this.accounts = accounts; this.clock = clock;
         this.pairLock = pairLock; this.entityManager = entityManager;
+        this.audit = audit; this.identityResolver = identityResolver;
     }
 
     public View get(UUID actorId, UUID classroomId) {
@@ -106,7 +111,7 @@ public class ClassroomService {
 
     @Transactional
     public View update(UUID actorId, UUID classroomId, Update input) {
-        var classroom = ownedOrAdmin(actorId, classroomId);
+        var classroom = ownedOrAdminWritable(actorId, classroomId);
         requireActiveClass(classroom);
         classroom.setName(clean(input.name())); classroom.setDescription(clean(input.description()));
         return view(classroom, true);
@@ -114,13 +119,13 @@ public class ClassroomService {
 
     @Transactional
     public void archive(UUID actorId, UUID classroomId) {
-        var classroom = ownedOrAdmin(actorId, classroomId);
+        var classroom = ownedOrAdminWritable(actorId, classroomId);
         classroom.setStatus(ClassroomStatus.ARCHIVED);
     }
 
     @Transactional
     public void delete(UUID actorId, UUID classroomId) {
-        var classroom = ownedOrAdmin(actorId, classroomId);
+        var classroom = ownedOrAdminWritable(actorId, classroomId);
         if (memberships.existsByClassroomId(classroomId) || requests.existsByClassroomId(classroomId)
                 || invitations.existsByClassroomId(classroomId)) {
             throw conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve related classroom data");
@@ -130,7 +135,7 @@ public class ClassroomService {
 
     @Transactional
     public View configureCode(UUID actorId, UUID classroomId, CodeConfig input) {
-        var classroom = owned(actorId, classroomId);
+        var classroom = ownedWritable(actorId, classroomId);
         requireActiveClass(classroom); validateExpiry(input.codeExpiresAt());
         classroom.setCodeExpiresAt(input.codeExpiresAt()); classroom.setCodeLocked(input.codeLocked());
         classroom.setJoiningOpen(input.joiningOpen()); classroom.setJoinMode(input.joinMode());
@@ -139,7 +144,7 @@ public class ClassroomService {
 
     @Transactional
     public View regenerateCode(UUID actorId, UUID classroomId) {
-        var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
         classroom.setClassCode(nextCode());
         return view(classroom, true);
     }
@@ -147,8 +152,13 @@ public class ClassroomService {
     @Transactional
     public JoinResult join(UUID studentId, JoinByCode input) {
         var student = activeStudent(studentId);
-        var classroom = classrooms.findByClassCode(input.classCode().strip().toUpperCase(Locale.ROOT))
+        String suppliedCode = input.classCode().strip().toUpperCase(Locale.ROOT);
+        UUID classroomId = classrooms.findByClassCode(suppliedCode)
+                .map(ClassroomEntity::getId)
                 .orElseThrow(() -> notFound("CLASS_CODE_NOT_FOUND", "Class code is invalid"));
+        var classroom = lockWritable(classroomId);
+        if (!classroom.getClassCode().equals(suppliedCode))
+            throw notFound("CLASS_CODE_NOT_FOUND", "Class code is invalid");
         pairLock.lock(classroom.getId(), studentId);
         requireJoinable(classroom);
         var membership = memberships.findByClassroomIdAndStudentId(classroom.getId(), studentId).orElse(null);
@@ -167,7 +177,7 @@ public class ClassroomService {
     @Transactional
     public void leave(UUID studentId, UUID classroomId) {
         activeStudent(studentId);
-        var classroom = classroom(classroomId);
+        var classroom = lockWritable(classroomId);
         requireActiveClass(classroom); requireOwnerActiveForWrite(classroom);
         pairLock.lock(classroomId, studentId);
         var membership = memberships.findByClassroomIdAndStudentId(classroomId, studentId)
@@ -178,8 +188,8 @@ public class ClassroomService {
 
     @Transactional
     public void directAdd(UUID actorId, UUID classroomId, DirectAdd input) {
-        var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
-        var student = accounts.findByUsernameIgnoreCase(input.usernameOrEmail()).or(() -> accounts.findByEmailIgnoreCase(input.usernameOrEmail()))
+        var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
+        var student = identityResolver.resolve(input.usernameOrEmail(), input.identityType())
                 .orElseThrow(() -> notFound("STUDENT_NOT_FOUND", "Registered Student not found"));
         if (student.getRole() != AccountRole.STUDENT || student.getStatus() != AccountStatus.ACTIVE) throw bad("INVALID_STUDENT", "Target must be an active Student");
         pairLock.lock(classroomId, student.getId());
@@ -190,7 +200,7 @@ public class ClassroomService {
 
     @Transactional
     public void removeStudent(UUID actorId, UUID classroomId, UUID studentId) {
-        var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
         pairLock.lock(classroomId, studentId);
         var membership = memberships.findByClassroomIdAndStudentId(classroomId, studentId)
                 .filter(m -> m.getStatus() == MembershipStatus.ACTIVE).orElseThrow(() -> notFound("MEMBERSHIP_NOT_FOUND", "Active membership not found"));
@@ -200,7 +210,7 @@ public class ClassroomService {
 
     @Transactional
     public void approve(UUID actorId, UUID classroomId, UUID requestId) {
-        var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
         if (!classroom.isJoiningOpen()) throw bad("JOINING_CLOSED", "Classroom is closed for joining");
         var request = requests.findById(requestId).filter(r -> r.getClassroom().getId().equals(classroomId) && r.getStatus() == JoinRequestStatus.PENDING_APPROVAL)
                 .orElseThrow(() -> notFound("JOIN_REQUEST_NOT_FOUND", "Pending join request not found"));
@@ -216,7 +226,7 @@ public class ClassroomService {
 
     @Transactional
     public UUID invite(UUID actorId, UUID classroomId, Invite input) {
-        var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
         var student = accounts.findByEmailIgnoreCase(input.email()).orElseThrow(() -> notFound("STUDENT_NOT_FOUND", "Registered Student not found"));
         if (student.getRole() != AccountRole.STUDENT || student.getStatus() != AccountStatus.ACTIVE) throw bad("INVALID_STUDENT", "Invitation target must be an active Student");
         pairLock.lock(classroomId, student.getId());
@@ -235,6 +245,7 @@ public class ClassroomService {
         var student = activeStudent(studentId);
         var invitation = invitations.findById(invitationId).filter(i -> i.getStudent().getId().equals(studentId))
                 .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Invitation not found"));
+        lock(invitation.getClassroom(), LockModeType.PESSIMISTIC_WRITE);
         pairLock.lock(invitation.getClassroom().getId(), studentId);
         entityManager.flush();
         entityManager.refresh(invitation);
@@ -254,6 +265,7 @@ public class ClassroomService {
         activeStudent(studentId);
         var invitation = invitations.findById(invitationId).filter(i -> i.getStudent().getId().equals(studentId))
                 .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Invitation not found"));
+        lock(invitation.getClassroom(), LockModeType.PESSIMISTIC_WRITE);
         pairLock.lock(invitation.getClassroom().getId(), studentId);
         entityManager.flush();
         entityManager.refresh(invitation);
@@ -266,7 +278,7 @@ public class ClassroomService {
 
     @Transactional
     public void revokeInvitation(UUID actorId, UUID classroomId, UUID invitationId) {
-        var classroom = owned(actorId, classroomId); requireActiveClass(classroom);
+        var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
         var invitation = invitations.findById(invitationId).filter(i -> i.getClassroom().getId().equals(classroomId))
                 .orElseThrow(() -> notFound("INVITATION_NOT_FOUND", "Invitation not found"));
         pairLock.lock(classroomId, invitation.getStudent().getId());
@@ -280,7 +292,13 @@ public class ClassroomService {
     @Transactional
     public void transferOwner(UUID adminId, UUID classroomId, UUID targetTeacherId) {
         if (!isAdmin(activeAccount(adminId))) throw forbidden("Only Admin may transfer ownership");
-        classroom(classroomId).setOwner(activeTeacher(targetTeacherId));
+        var classroom = lockWritable(classroomId);
+        var target = activeTeacher(targetTeacherId);
+        UUID previousOwner = classroom.getOwner().getId();
+        classroom.setOwner(target);
+        audit.record(adminId, AccountRole.ADMIN.name(), "CLASSROOM", classroomId.toString(),
+                "CLASSROOM_OWNER_TRANSFERRED", "{\"ownerId\":\"" + previousOwner + "\"}",
+                "{\"ownerId\":\"" + targetTeacherId + "\"}", null, null);
     }
 
     private void activateMembership(ClassroomEntity classroom, AccountEntity student, ClassroomMembershipEntity membership) {
@@ -307,6 +325,33 @@ public class ClassroomService {
         invitations.findByClassroomIdAndStudentIdAndStatus(classroomId, studentId, InvitationStatus.PENDING)
                 .stream().filter(invitation -> invitation.effectiveStatus(now) == InvitationStatus.PENDING)
                 .forEach(invitation -> invitation.setStatus(InvitationStatus.REVOKED));
+    }
+    /** Acquire before child resource locks; caller must hold a transaction. Refresh defeats stale persistence-context snapshots. */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public ClassroomEntity lockReadable(UUID classroomId) {
+        return lock(classroom(classroomId), LockModeType.PESSIMISTIC_READ);
+    }
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public ClassroomEntity lockWritable(UUID classroomId) {
+        return lock(classroom(classroomId), LockModeType.PESSIMISTIC_WRITE);
+    }
+    private ClassroomEntity lock(ClassroomEntity classroom, LockModeType mode) {
+        entityManager.flush();
+        entityManager.refresh(classroom, mode);
+        return classroom;
+    }
+    private ClassroomEntity ownedWritable(UUID actorId, UUID classroomId) {
+        activeAccount(actorId);
+        var classroom = lockWritable(classroomId);
+        if (!classroom.getOwner().getId().equals(actorId)) throw forbidden("Only the classroom owner may perform this operation");
+        return classroom;
+    }
+    private ClassroomEntity ownedOrAdminWritable(UUID actorId, UUID classroomId) {
+        var actor = activeAccount(actorId);
+        var classroom = lockWritable(classroomId);
+        if (!isAdmin(actor) && !classroom.getOwner().getId().equals(actorId))
+            throw forbidden("Only the classroom owner may perform this operation");
+        return classroom;
     }
     private ClassroomEntity owned(UUID actorId, UUID classroomId) { activeAccount(actorId); var c = classroom(classroomId); if (!c.getOwner().getId().equals(actorId)) throw forbidden("Only the classroom owner may perform this operation"); return c; }
     private ClassroomEntity ownedOrAdmin(UUID actorId, UUID classroomId) { var a = activeAccount(actorId); return isAdmin(a) ? classroom(classroomId) : owned(actorId, classroomId); }

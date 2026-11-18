@@ -13,7 +13,9 @@ public final class ClassroomDtos {
     public record CodeConfig(Instant codeExpiresAt, @NotNull Boolean codeLocked,
                              @NotNull Boolean joiningOpen, @NotNull JoinMode joinMode) { }
     public record Invite(@NotBlank @Email String email, @NotNull @Future Instant expiresAt) { }
-    public record DirectAdd(@NotBlank String usernameOrEmail) { }
+    public record DirectAdd(@NotBlank String usernameOrEmail, com.algolearner.platform.auth.IdentityType identityType) {
+        public DirectAdd(String usernameOrEmail) { this(usernameOrEmail, null); }
+    }
     public record TransferOwner(@NotNull UUID targetTeacherId) { }
     public record View(UUID id, String name, String description, String status, String classCode,
                        Instant codeExpiresAt, boolean codeLocked, boolean joiningOpen, JoinMode joinMode,
