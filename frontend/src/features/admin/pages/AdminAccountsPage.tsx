@@ -3,7 +3,7 @@ import { Link, Navigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { useAuth } from '@/hooks/useAuth';
-import { useApiSource } from '@/components/BackendStatusBanner';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import type { ApiErrorResponse } from '@/types/api';
 import { adminAccountKeys, adminAccountsApi, type AdminAccountView } from '../api/adminAccountsApi';
 
@@ -64,14 +64,14 @@ function AccountRow({ account, currentId, pending, onAction }: {
 
 export function AdminAccountsPage() {
   const { user, isLoading } = useAuth();
-  const source = useApiSource();
+  const isDemoMode = useIsDemoMode();
   const client = useQueryClient();
   const [page, setPage] = useState(0);
   const [notice, setNotice] = useState('');
   const accounts = useQuery({
     queryKey: adminAccountKeys.list(page),
     queryFn: () => adminAccountsApi.list(page),
-    enabled: user?.role === 'ADMIN' && source === 'backend', retry: false,
+    enabled: user?.role === 'ADMIN' && !isDemoMode, retry: false,
   });
   const update = useMutation({
     mutationFn: (action: Action) => action.kind === 'suspend'
@@ -91,7 +91,7 @@ export function AdminAccountsPage() {
     <Link to="/dashboard" className="text-sm underline">← Dashboard</Link>
     <h1 className="mt-5 text-3xl font-bold">Quản lý tài khoản</h1>
     <p className="mt-2 text-sm text-slate-600">Đình chỉ, gỡ đình chỉ hoặc kích hoạt lại tài khoản.</p>
-    {source !== 'backend' ? <p role="status" className="mt-6">Cần kết nối backend để quản lý tài khoản.</p>
+    {isDemoMode ? <p role="status" className="mt-6">Cần kết nối backend để quản lý tài khoản.</p>
       : accounts.isPending ? <p role="status" className="mt-6">Đang tải danh sách…</p>
         : accounts.isError ? <p role="alert" className="mt-6">{errorMessage(accounts.error)} <button onClick={() => void accounts.refetch()} className="underline">Thử lại</button></p>
           : <><ul className="mt-6 space-y-4">{accounts.data.items.map(account => <AccountRow key={account.id}

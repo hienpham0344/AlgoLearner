@@ -79,7 +79,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const currentUser = await authApi.getCurrentUser();
           setUser(currentUser);
-          setToken(savedToken);
+          setToken(localStorage.getItem('algolearner_token') || savedToken);
           localStorage.setItem('algolearner_user', JSON.stringify(currentUser));
         } catch {
           clearSession();
@@ -97,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(newUser);
     localStorage.setItem('algolearner_token', newToken);
     localStorage.setItem('algolearner_user', JSON.stringify(newUser));
+    window.dispatchEvent(new Event(SESSION_REFRESHED_EVENT));
   };
 
   const login = async (credentials: LoginRequest) => {

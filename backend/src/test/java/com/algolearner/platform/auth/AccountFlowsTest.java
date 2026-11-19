@@ -331,6 +331,40 @@ class AccountFlowsTest extends com.algolearner.platform.support.PostgresIntegrat
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void statusEndpointReturnsBackendSourceHeaderAndPayload() throws Exception {
+        mvc.perform(get("/api/v1/status"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Algolearner-Source", "backend"))
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.source").value("backend"));
+    }
+
+    @Test
+    void loginWithForwardedHttpsProtoSetsSecureRefreshCookie() throws Exception {
+        var account = account();
+        var proxied = mvc.perform(post("/api/v1/auth/login")
+                        .header("X-Forwarded-Proto", "https")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(java.util.Map.of(
+                                "usernameOrEmail", account.getEmail(),
+                                "password", "ExamplePass123!",
+                                "rememberMe", false))))
+                .andExpect(status().isOk())
+                .andReturn();
+        String setCookie = proxied.getResponse().getHeader("Set-Cookie");
+        assertNotNull(setCookie);
+        assertTrue(setCookie.contains("algolearner_refresh="));
+        assertTrue(setCookie.contains("Secure"));
+        assertTrue(setCookie.contains("HttpOnly"));
+        assertTrue(setCookie.contains("SameSite=Strict"));
+
+        var plainHttp = login(account, false);
+        String plainCookie = plainHttp.getResponse().getHeader("Set-Cookie");
+        assertNotNull(plainCookie);
+        assertFalse(plainCookie.contains("Secure"));
+    }
+
     private MvcResult verifyCode(AccountEntity account, String code, String purpose, int statusCode) throws Exception {
         return mvc.perform(post("/api/v1/auth/verify-otp").contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(java.util.Map.of("email", account.getEmail(), "code", code, "purpose", purpose))))

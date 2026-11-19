@@ -1,11 +1,37 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { getApiSource, observeApiSource, resolveDemoFlags, subscribeApiSource } from '@/services/apiSource';
+import { SESSION_REFRESHED_EVENT, UNAUTHORIZED_EVENT } from '@/services/apiClient';
 
-export const useApiSource = () => useSyncExternalStore(subscribeApiSource, getApiSource);
+export const useApiSource = () => useSyncExternalStore(subscribeApiSource, getApiSource, getApiSource);
+
+function getStoredToken(): string | null {
+  try {
+    if (typeof localStorage !== 'undefined') return localStorage.getItem('algolearner_token');
+    if (typeof window !== 'undefined') return window.localStorage.getItem('algolearner_token');
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function subscribeStoredToken(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handleStorage = (event: Event) => {
+    if (!('key' in event) || event.key === null || event.key === 'algolearner_token') listener();
+  };
+  window.addEventListener(UNAUTHORIZED_EVENT, listener);
+  window.addEventListener(SESSION_REFRESHED_EVENT, listener);
+  window.addEventListener('storage', handleStorage);
+  return () => {
+    window.removeEventListener(UNAUTHORIZED_EVENT, listener);
+    window.removeEventListener(SESSION_REFRESHED_EVENT, listener);
+    window.removeEventListener('storage', handleStorage);
+  };
+}
 
 function useDemoFlags() {
   const source = useApiSource();
-  const token = typeof window !== 'undefined' ? window.localStorage.getItem('algolearner_token') : null;
+  const token = useSyncExternalStore(subscribeStoredToken, getStoredToken, getStoredToken);
   return resolveDemoFlags({ source, mode: import.meta.env.MODE, token });
 }
 
@@ -20,7 +46,13 @@ export function BackendStatusBanner() {
     const check = async () => {
       try {
         const response = await fetch('/api/v1/status', { signal: controller.signal, cache: 'no-store' });
-        observeApiSource(response.headers.get('X-Algolearner-Source'));
+        const headerSource = response.headers.get('X-Algolearner-Source');
+        if (headerSource) {
+          observeApiSource(headerSource);
+        } else if (response.ok) {
+          const body = (await response.json().catch(() => null)) as { data?: { source?: string } } | null;
+          observeApiSource(body?.data?.source);
+        }
       } catch { /* Connection errors do not authorize mock data; only the local proxy does. */ }
     };
     void check();

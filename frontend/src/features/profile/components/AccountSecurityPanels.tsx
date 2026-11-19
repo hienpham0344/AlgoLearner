@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { authApi } from '@/features/auth/api/authApi';
-import { useApiSource } from '@/components/BackendStatusBanner';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { clearSession } from '@/services/apiClient';
 import type { ApiErrorResponse } from '@/types/api';
 
@@ -16,7 +16,7 @@ const message = (error: unknown) => isAxiosError<ApiErrorResponse>(error)
   : 'Không thể kết nối với máy chủ.';
 
 export function SessionManager() {
-  const source = useApiSource();
+  const isDemoMode = useIsDemoMode();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -24,7 +24,7 @@ export function SessionManager() {
   const sessions = useQuery({
     queryKey: sessionKeys.all,
     queryFn: authApi.sessions,
-    enabled: source === 'backend',
+    enabled: !isDemoMode,
     retry: false,
   });
 
@@ -52,7 +52,7 @@ export function SessionManager() {
       <strong className="folder-row-title">Thiết bị đăng nhập</strong>
       <p className="folder-row-desc">Xem và thu hồi các phiên của tài khoản này.</p>
     </div></div>
-    {source !== 'backend' ? <p role="status">Cần kết nối backend để quản lý phiên.</p>
+    {isDemoMode ? <p role="status">Cần kết nối backend để quản lý phiên.</p>
       : sessions.isPending ? <p role="status">Đang tải phiên đăng nhập…</p>
         : sessions.isError ? <p role="alert">{message(sessions.error)}</p>
           : sessions.data.length === 0 ? <p>Không có phiên đang hoạt động.</p>
@@ -62,7 +62,7 @@ export function SessionManager() {
               {!session.current && <button type="button" className="folder-action-pill" disabled={busyId !== null}
                 onClick={() => void revoke(session.id)}>Đăng xuất thiết bị này</button>}
             </li>)}</ul>}
-    {source === 'backend' && sessions.data && sessions.data.length > 0 &&
+    {!isDemoMode && sessions.data && sessions.data.length > 0 &&
       <button type="button" className="folder-action-pill" disabled={busyId !== null}
         onClick={() => void logoutAll()}>Đăng xuất tất cả thiết bị</button>}
     {feedback && <p role={feedback.error ? 'alert' : 'status'}>{feedback.text}</p>}
@@ -70,7 +70,7 @@ export function SessionManager() {
 }
 
 export function DeactivateAccountForm() {
-  const source = useApiSource();
+  const isDemoMode = useIsDemoMode();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
   const [confirmed, setConfirmed] = useState(false);
@@ -95,12 +95,12 @@ export function DeactivateAccountForm() {
     </div></div>
     <label htmlFor="deactivate-password">Mật khẩu hiện tại</label>
     <input id="deactivate-password" className="folder-input" type="password" autoComplete="current-password"
-      value={password} onChange={event => setPassword(event.target.value)} disabled={pending || source !== 'backend'} required />
+      value={password} onChange={event => setPassword(event.target.value)} disabled={pending || isDemoMode} required />
     <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed}
-      onChange={event => setConfirmed(event.target.checked)} disabled={pending || source !== 'backend'} />
+      onChange={event => setConfirmed(event.target.checked)} disabled={pending || isDemoMode} />
       Tôi xác nhận muốn vô hiệu hóa tài khoản.</label>
-    <button className="folder-action-pill" type="submit" disabled={pending || !confirmed || !password || source !== 'backend'}>Vô hiệu hóa</button>
-    {source !== 'backend' && <p role="status">Cần kết nối backend để vô hiệu hóa tài khoản.</p>}
+    <button className="folder-action-pill" type="submit" disabled={pending || !confirmed || !password || isDemoMode}>Vô hiệu hóa</button>
+    {isDemoMode && <p role="status">Cần kết nối backend để vô hiệu hóa tài khoản.</p>}
     {error && <p role="alert">{error}</p>}
   </form>;
 }
