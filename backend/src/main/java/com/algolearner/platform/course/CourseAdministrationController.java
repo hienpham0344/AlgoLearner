@@ -26,9 +26,9 @@ public class CourseAdministrationController {
 
     @GetMapping
     @Operation(summary = "List course review queue", description = "Admin only; paginated real contributions, default PENDING_REVIEW.")
-    public ApiResponse<PageResponse<CourseDtos.Summary>> queue(Authentication authentication,
+    public PageResponse<CourseDtos.Summary> queue(Authentication authentication,
             @RequestParam(defaultValue = "PENDING_REVIEW") String status, Pageable pageable) {
-        return ApiResponse.success(courses.list(actor(authentication),status,false,true,pageable));
+        return courses.list(actor(authentication),status,false,true,pageable);
     }
 
     @GetMapping("/{courseId}")

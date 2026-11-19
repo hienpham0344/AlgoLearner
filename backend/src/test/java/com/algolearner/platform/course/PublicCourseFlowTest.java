@@ -44,10 +44,29 @@ class PublicCourseFlowTest extends PostgresIntegrationTest {
         String unit = mapper.readTree(lessonResponse.getResponse().getContentAsString()).at("/data/id").asText();
         http.perform(get("/api/v1/courses/{id}",course).with(identity(student))).andExpect(status().isNotFound());
         http.perform(post("/api/v1/courses/{id}/review-requests",course).with(identity(teacher))).andExpect(status().isOk());
+        http.perform(get("/api/v1/courses/contributions").with(identity(teacher)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.pagination.totalElements").value(1))
+                .andExpect(jsonPath("$.data.data").doesNotExist());
+        http.perform(get("/api/v1/admin/courses").with(identity(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.pagination").exists())
+                .andExpect(jsonPath("$.data.data").doesNotExist());
         http.perform(post("/api/v1/admin/courses/{id}/reviews",course).with(identity(teacher)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"approved\":true}")).andExpect(status().isForbidden());
         http.perform(post("/api/v1/admin/courses/{id}/reviews",course).with(identity(admin)).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"approved\":true}")).andExpect(status().isOk());
+        http.perform(get("/api/v1/courses").with(identity(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.pagination").exists())
+                .andExpect(jsonPath("$.data.data").doesNotExist());
         http.perform(get("/api/v1/courses/{id}",course).with(identity(admin))).andExpect(status().isForbidden());
         http.perform(post("/api/v1/courses/{id}/enrollments",course).with(identity(student))).andExpect(status().isOk());
         http.perform(post("/api/v1/courses/{id}/lessons/{unit}/completion",course,unit).with(identity(student)))

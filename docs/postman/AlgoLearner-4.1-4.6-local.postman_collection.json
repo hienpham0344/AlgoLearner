@@ -889,7 +889,7 @@
             "exec": [
               "pm.test(\"HTTP 200\", function () { pm.response.to.have.status(200); });",
               "pm.test(\"success envelope\", function () { pm.expect(pm.response.json().success).to.eql(true); });",
-              "pm.test(\"nested page\", function () { pm.expect(pm.response.json().data.data.items).to.be.an(\"array\"); });"
+              "pm.test(\"page items\", function () { pm.expect(pm.response.json().data.items).to.be.an(\"array\"); });"
             ]
           }
         }

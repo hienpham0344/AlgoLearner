@@ -210,10 +210,10 @@ public class LessonController {
 
     @GetMapping("/{lessonId}/progress")
     @Operation(summary = "Page student lesson progress (Teacher owner only)")
-    public ApiResponse<com.algolearner.platform.common.dto.PageResponse<LessonDtos.StudentProgressView>> progress(
+    public com.algolearner.platform.common.dto.PageResponse<LessonDtos.StudentProgressView> progress(
             Authentication auth, @PathVariable UUID classId, @PathVariable UUID lessonId,
             org.springframework.data.domain.Pageable pageable) {
-        return ApiResponse.success(service.studentProgress(actor(auth), classId, lessonId, pageable));
+        return service.studentProgress(actor(auth), classId, lessonId, pageable);
     }
 
     private UUID actor(Authentication auth) {

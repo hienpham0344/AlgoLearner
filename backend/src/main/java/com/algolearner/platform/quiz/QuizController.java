@@ -36,7 +36,7 @@ public class QuizController {
     @PostMapping("/{quizId}/attempts") @ResponseStatus(HttpStatus.CREATED) @Operation(summary="Start or resume a frozen quiz attempt (Student)")
     public ApiResponse<QuizDtos.AttemptView> start(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId){return ApiResponse.success(quizzes.start(actor(auth),classId,quizId));}
     @GetMapping("/{quizId}/attempts") @Operation(summary="Page own attempt history, or classroom history for Teacher owner")
-    public ApiResponse<PageResponse<QuizDtos.AttemptView>> history(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@RequestParam(required=false) UUID studentId,Pageable page){return ApiResponse.success(quizzes.history(actor(auth),classId,quizId,studentId,page));}
+    public PageResponse<QuizDtos.AttemptView> history(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@RequestParam(required=false) UUID studentId,Pageable page){return quizzes.history(actor(auth),classId,quizId,studentId,page);}
     @GetMapping("/{quizId}/attempts/{attemptId}") @Operation(summary="Resume saved answers and the original server cutoff")
     public ApiResponse<QuizDtos.AttemptView> resume(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@PathVariable UUID attemptId){return ApiResponse.success(quizzes.resume(actor(auth),classId,quizId,attemptId));}
     @PutMapping("/{quizId}/attempts/{attemptId}/answers") @Operation(summary="Autosave one typed answer with per-question version and idempotency key")

@@ -25,15 +25,15 @@ public class PublicCourseController {
 
     @GetMapping
     @Operation(summary = "Browse published courses", description = "Student and Teacher access; stable pagination, maximum page size 100.")
-    public ApiResponse<PageResponse<CourseDtos.Summary>> list(Authentication authentication, Pageable pageable) {
-        return ApiResponse.success(courses.list(actor(authentication),"PUBLISHED",false,false,pageable));
+    public PageResponse<CourseDtos.Summary> list(Authentication authentication, Pageable pageable) {
+        return courses.list(actor(authentication),"PUBLISHED",false,false,pageable);
     }
 
     @GetMapping("/contributions")
     @Operation(summary = "List own course contributions", description = "Teacher only; includes only the current author's contributions in the requested state.")
-    public ApiResponse<PageResponse<CourseDtos.Summary>> contributions(Authentication authentication,
+    public PageResponse<CourseDtos.Summary> contributions(Authentication authentication,
             @RequestParam(defaultValue = "PENDING_REVIEW") String status, Pageable pageable) {
-        return ApiResponse.success(courses.list(actor(authentication),status,true,false,pageable));
+        return courses.list(actor(authentication),status,true,false,pageable);
     }
 
     @PostMapping

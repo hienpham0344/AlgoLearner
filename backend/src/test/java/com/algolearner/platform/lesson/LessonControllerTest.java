@@ -128,5 +128,15 @@ class LessonControllerTest {
 
         controller.complete(auth, classId, lessonId);
         verify(service).completeLesson(actorId, classId, lessonId);
+
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        var row = new LessonDtos.StudentProgressView(UUID.randomUUID(), "student1", true, Instant.now());
+        var expectedPage = com.algolearner.platform.common.dto.PageResponse.fromPage(
+                new org.springframework.data.domain.PageImpl<>(List.of(row), pageable, 1));
+        when(service.studentProgress(actorId, classId, lessonId, pageable)).thenReturn(expectedPage);
+        var progressRes = controller.progress(auth, classId, lessonId, pageable);
+        assertThat(progressRes.isSuccess()).isTrue();
+        assertThat(progressRes.getData().getItems()).containsExactly(row);
+        assertThat(progressRes.getData().getPagination().getTotalElements()).isEqualTo(1);
     }
 }
