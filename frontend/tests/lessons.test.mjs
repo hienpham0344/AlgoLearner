@@ -185,6 +185,9 @@ test('LESSON contract: create/update serialize fields, sequence items + completi
     if (config.url === '/classrooms/class-a/lessons/lesson-1/items' && config.method === 'post') {
       return ok({ id: 'link-a1', itemType: 'ASSIGNMENT', itemId: 'a1', displayOrder: 1, title: 'Assign 1', available: true }, 201);
     }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/completion-rule' && config.method === 'get') {
+      return ok({ version: 0, rule: null });
+    }
     if (config.url === '/classrooms/class-a/lessons/lesson-1/completion-rule' && config.method === 'put') {
       lessonDetail = { ...lessonDetail, completionMode: 'AUTO_ITEMS', requiredItemIds: ['a1'] };
       return ok(null);
@@ -238,7 +241,7 @@ test('LESSON contract: create/update serialize fields, sequence items + completi
     conditions: [{ itemType: 'QUIZ', itemId: 'q1', requirement: 'SUBMITTED', scorePercent: null }],
   });
 
-  // Update published lesson: MANUAL on PUT first, link a1, update completion-rule BEFORE unlinking q1
+  // Update published lesson: fetch existing rule, link a1, update completion-rule, PUT lesson (AUTO_ITEMS), then unlink q1
   calls.length = 0;
   const updated = await lessonApi.update('class-a', 'lesson-1', {
     ...input,
@@ -250,14 +253,15 @@ test('LESSON contract: create/update serialize fields, sequence items + completi
   assert.equal(updated.completionMode, 'CONDITION_BASED');
   assert.deepEqual(calls.map(c => `${c.method} ${c.url}`), [
     'GET /classrooms/class-a/lessons/lesson-1',
-    'PUT /classrooms/class-a/lessons/lesson-1',
+    'GET /classrooms/class-a/lessons/lesson-1/completion-rule',
     'POST /classrooms/class-a/lessons/lesson-1/items',
     'PUT /classrooms/class-a/lessons/lesson-1/completion-rule',
+    'PUT /classrooms/class-a/lessons/lesson-1',
     'DELETE /classrooms/class-a/lessons/lesson-1/items/q1',
     'GET /classrooms/class-a/lessons/lesson-1',
   ]);
-  assert.equal(calls[1].data.completionMode, 'MANUAL');
-  assert.equal(calls[1].data.codeExample, '');
+  assert.equal(calls[4].data.completionMode, 'AUTO_ITEMS');
+  assert.equal(calls[4].data.codeExample, '');
 
   // Transition 'draft' -> PATCH .../unpublish
   const drafted = await lessonApi.transition('class-a', 'lesson-1', 'draft');

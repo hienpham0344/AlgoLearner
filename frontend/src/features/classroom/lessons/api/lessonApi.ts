@@ -34,6 +34,7 @@ interface BackendLinkedItemView {
   displayOrder?: number;
   title?: string | null;
   available?: boolean | null;
+  completed?: boolean | null;
 }
 
 interface BackendLessonRaw {
@@ -49,6 +50,7 @@ interface BackendLessonRaw {
   displayOrder?: number;
   materials?: BackendMaterialView[];
   attachments?: LessonAttachment[];
+  materialCount?: number | null;
   linkedItems?: BackendLinkedItemView[];
   activities?: LessonActivity[];
   requiredItemIds?: string[];
@@ -107,6 +109,11 @@ interface BackendCompletionRuleRequest {
     requirement: 'SUBMITTED' | 'SCORE_AT_LEAST';
     scorePercent: number | null;
   }>;
+}
+
+interface BackendCompletionRuleView {
+  version: number;
+  rule: BackendCompletionRuleRequest | null;
 }
 
 const PAGE_SIZE = 20;
@@ -224,7 +231,7 @@ function toActivity(item: BackendLinkedItemView, lessonId: string): LessonActivi
     linkedLessonId: lessonId,
     available: item.available ?? true,
     path: null,
-    completed: false,
+    completed: Boolean(item.completed),
   };
 }
 
@@ -258,6 +265,7 @@ function toLesson(raw: BackendLessonRaw): Lesson {
     previousStatus: raw.previousStatus ?? null,
     activities,
     attachments,
+    materialCount: raw.materialCount ?? attachments.length,
     progress,
     canDelete: raw.canDelete ?? false,
     createdAt: raw.createdAt,
@@ -265,7 +273,10 @@ function toLesson(raw: BackendLessonRaw): Lesson {
   };
 }
 
-function toBackendRequest(input: LessonInput, forceManualForRuleSetup: boolean): BackendLessonRequest {
+function toBackendRequest(
+  input: Pick<LessonInput, 'title' | 'content' | 'codeExample' | 'externalLinks' | 'completionMode'>,
+  forceManualForRuleSetup: boolean,
+): BackendLessonRequest {
   return {
     title: input.title,
     content: input.content,
@@ -299,25 +310,65 @@ async function resolveActivityTypes(
   return typeMap;
 }
 
+function validateRequiredActivityTypes(
+  requiredIds: string[],
+  typeMap: Map<string, LessonActivity['type']>,
+): void {
+  for (const itemId of requiredIds) {
+    const itemType = typeMap.get(itemId);
+    if (!itemType || itemType === 'PRACTICE') {
+      throw new Error('Choose at least one linked assignment or quiz as a completion requirement.');
+    }
+  }
+}
+
 function buildCompletionRule(
   requiredIds: string[],
   typeMap: Map<string, LessonActivity['type']>,
+  existingRule?: BackendCompletionRuleRequest | null,
 ): BackendCompletionRuleRequest {
-  return {
-    operator: 'ALL',
-    conditions: requiredIds.map(itemId => {
-      const itemType = typeMap.get(itemId);
-      if (!itemType || itemType === 'PRACTICE') {
-        throw new Error('Choose at least one linked assignment or quiz as a completion requirement.');
-      }
-      return {
+  validateRequiredActivityTypes(requiredIds, typeMap);
+  const conditions: BackendCompletionRuleRequest['conditions'] = [];
+  for (const itemId of requiredIds) {
+    const itemType = typeMap.get(itemId);
+    if (!itemType || itemType === 'PRACTICE') {
+      throw new Error('Choose at least one linked assignment or quiz as a completion requirement.');
+    }
+    const existingMatches = existingRule?.conditions?.filter(
+      condition => condition.itemType === itemType && condition.itemId === itemId,
+    );
+    if (existingMatches && existingMatches.length > 0) {
+      conditions.push(...existingMatches.map(condition => ({ ...condition })));
+    } else {
+      conditions.push({
         itemType,
         itemId,
-        requirement: 'SUBMITTED' as const,
+        requirement: 'SUBMITTED',
         scorePercent: null,
-      };
-    }),
+      });
+    }
+  }
+  return {
+    operator: existingRule?.operator ?? 'ALL',
+    conditions,
   };
+}
+
+async function fetchExistingCompletionRule(
+  classId: string,
+  lessonId: string,
+): Promise<BackendCompletionRuleRequest | null> {
+  try {
+    const view = unwrap(
+      await apiClient.get<ApiResponse<BackendCompletionRuleView>>(
+        `${resource(classId, lessonId)}/completion-rule`,
+      ),
+    );
+    return view?.rule ?? null;
+  } catch (error) {
+    if (isAxiosError(error) && error.response?.status === 404) return null;
+    throw error;
+  }
 }
 
 export const lessonKeys = {
@@ -426,30 +477,91 @@ export const lessonApi = {
         throw new Error(`Activity type is unavailable for item ${itemId}.`);
       }
     }
-    const rule = ruleChanged ? buildCompletionRule(input.requiredActivityIds, typeMap) : null;
+    if (ruleChanged) {
+      validateRequiredActivityTypes(input.requiredActivityIds, typeMap);
+    }
 
-    const forceManualForRuleSetup =
-      needsRuleSetup && current.status === 'PUBLISHED' && current.requiredActivityIds.length === 0;
-    const updated = unwrap(
-      await apiClient.put<ApiResponse<BackendLessonRaw>>(
-        resource(classId, lessonId),
-        toBackendRequest(input, forceManualForRuleSetup),
-      ),
+    const previousRule = ruleChanged ? await fetchExistingCompletionRule(classId, lessonId) : null;
+    const rule = ruleChanged ? buildCompletionRule(input.requiredActivityIds, typeMap, previousRule) : null;
+
+    const removedTypeMap = new Map<string, LessonActivity['type']>(
+      current.activities.map(activity => [activity.id, activity.type]),
     );
+    const linkedAddedIds: string[] = [];
+    const unlinkedRemovedIds: string[] = [];
+    let ruleUpdated = false;
+    let lessonUpdated = false;
+    let updated: BackendLessonRaw;
+
+    try {
+      for (const itemId of addedIds) {
+        const itemType = typeMap.get(itemId)!;
+        await apiClient.post(`${resource(classId, lessonId)}/items`, { itemType, itemId });
+        linkedAddedIds.push(itemId);
+      }
+
+      if (rule !== null) {
+        await apiClient.put<ApiResponse<null>>(`${resource(classId, lessonId)}/completion-rule`, rule);
+        ruleUpdated = true;
+      }
+
+      updated = unwrap(
+        await apiClient.put<ApiResponse<BackendLessonRaw>>(
+          resource(classId, lessonId),
+          toBackendRequest(input, false),
+        ),
+      );
+      lessonUpdated = true;
+
+      for (const itemId of removedIds) {
+        await apiClient.delete(`${resource(classId, lessonId)}/items/${encodeURIComponent(itemId)}`);
+        unlinkedRemovedIds.push(itemId);
+      }
+    } catch (error) {
+      for (const itemId of [...unlinkedRemovedIds].reverse()) {
+        const itemType = removedTypeMap.get(itemId);
+        if (!itemType) continue;
+        try {
+          await apiClient.post(`${resource(classId, lessonId)}/items`, { itemType, itemId });
+        } catch {
+          // Best-effort rollback of unlinked items.
+        }
+      }
+
+      const shouldRestoreLesson = lessonUpdated || (ruleUpdated && current.completionMode === 'MANUAL');
+      if (shouldRestoreLesson) {
+        const restoreForceManual = current.completionMode === 'CONDITION_BASED' && previousRule !== null;
+        try {
+          await apiClient.put<ApiResponse<BackendLessonRaw>>(
+            resource(classId, lessonId),
+            toBackendRequest(current, restoreForceManual),
+          );
+        } catch {
+          // Best-effort rollback of lesson fields.
+        }
+      }
+
+      if (ruleUpdated && previousRule !== null && current.completionMode === 'CONDITION_BASED') {
+        try {
+          await apiClient.put<ApiResponse<null>>(`${resource(classId, lessonId)}/completion-rule`, previousRule);
+        } catch {
+          // Best-effort rollback of completion rule.
+        }
+      }
+
+      for (const itemId of [...linkedAddedIds].reverse()) {
+        try {
+          await apiClient.delete(`${resource(classId, lessonId)}/items/${encodeURIComponent(itemId)}`);
+        } catch {
+          // Best-effort rollback of newly linked items.
+        }
+      }
+
+      throw error;
+    }
 
     if (addedIds.length === 0 && removedIds.length === 0 && !rule) {
       return toLesson(updated);
-    }
-
-    for (const itemId of addedIds) {
-      const itemType = typeMap.get(itemId)!;
-      await apiClient.post(`${resource(classId, lessonId)}/items`, { itemType, itemId });
-    }
-    if (rule) {
-      await apiClient.put<ApiResponse<null>>(`${resource(classId, lessonId)}/completion-rule`, rule);
-    }
-    for (const itemId of removedIds) {
-      await apiClient.delete(`${resource(classId, lessonId)}/items/${encodeURIComponent(itemId)}`);
     }
     return lessonApi.get(classId, lessonId);
   },
@@ -497,18 +609,17 @@ export const lessonApi = {
     return normalized;
   },
   progress: async (classId: string, lessonId: string, page = 0): Promise<PaginatedData<StudentLessonProgress>> => {
-    const unwrapped = unwrap(
-      await apiClient.get<ApiResponse<PageResponse<BackendStudentProgressRow> | PaginatedData<BackendStudentProgressRow>>>(
-        `${resource(classId, lessonId)}/progress`,
-        { params: { page, size: PAGE_SIZE } },
-      ),
-    );
-    const data =
-      'data' in unwrapped && unwrapped.data && 'items' in unwrapped.data
-        ? unwrapped.data
-        : 'items' in unwrapped
-          ? unwrapped
-          : unwrap({ data: unwrapped });
+    const response = await apiClient.get<
+      ApiResponse<PaginatedData<BackendStudentProgressRow> | PageResponse<BackendStudentProgressRow>> | PaginatedData<BackendStudentProgressRow>
+    >(`${resource(classId, lessonId)}/progress`, { params: { page, size: PAGE_SIZE } });
+    const body = response.data;
+    let data: PaginatedData<BackendStudentProgressRow>;
+    if ('items' in body) {
+      data = body;
+    } else {
+      const unwrapped = unwrap({ data: body });
+      data = 'items' in unwrapped ? unwrapped : unwrap({ data: unwrapped });
+    }
     return {
       items: data.items.map(row => ({
         studentId: row.studentId,
@@ -528,12 +639,17 @@ export const lessonApi = {
         headers: { 'Content-Type': undefined },
       }),
     );
-    const material = unwrap(
-      await apiClient.post<ApiResponse<BackendMaterialView>>(`${resource(classId, lessonId)}/materials`, {
-        fileId: uploaded.id,
-      }),
-    );
-    return toAttachment(classId, lessonId, material);
+    try {
+      const material = unwrap(
+        await apiClient.post<ApiResponse<BackendMaterialView>>(`${resource(classId, lessonId)}/materials`, {
+          fileId: uploaded.id,
+        }),
+      );
+      return toAttachment(classId, lessonId, material);
+    } catch (error) {
+      await apiClient.delete(`/files/${encodeURIComponent(uploaded.id)}`).catch(() => undefined);
+      throw error;
+    }
   },
   removeAttachment: async (classId: string, lessonId: string, attachmentId: string): Promise<void> => {
     await apiClient.delete<ApiResponse<null> | undefined>(

@@ -309,7 +309,7 @@ function LessonList({
                             </span>
                           </div>
                           <h3>{lesson.title}</h3>
-                          <p>{lesson.completionMode === 'MANUAL' ? 'Mark complete when you are ready' : 'Complete linked assignments or quizzes'} · {lesson.attachments.length} materials</p>
+                          <p>{lesson.completionMode === 'MANUAL' ? 'Mark complete when you are ready' : 'Complete linked assignments or quizzes'} · {lesson.materialCount ?? lesson.attachments.length} materials</p>
                           <small>Updated {lessonDate(lesson.updatedAt)} · UTC+7</small>
                         </div>
                         <span className="lesson-list-cta" aria-hidden="true">

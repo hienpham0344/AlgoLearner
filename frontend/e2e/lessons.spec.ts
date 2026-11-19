@@ -47,6 +47,9 @@ const toSummary = (lesson: Lesson) => ({
   completedAt: lesson.progress ? lesson.progress.completedAt : null,
   createdAt: lesson.createdAt,
   updatedAt: lesson.updatedAt,
+  content: lesson.content,
+  codeExample: lesson.codeExample ? JSON.stringify(lesson.codeExample) : '',
+  materialCount: lesson.attachments.length,
 });
 const toDetail = (lesson: Lesson) => ({
   id: lesson.id,
@@ -73,6 +76,7 @@ const toDetail = (lesson: Lesson) => ({
     displayOrder: idx,
     title: act.title,
     available: act.available,
+    completed: act.completed,
   })),
   isCompleted: lesson.progress ? lesson.progress.completed : null,
   completedAt: lesson.progress ? lesson.progress.completedAt : null,
@@ -161,11 +165,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       state.lessons = state.lessons.filter(item => item.id !== lesson.id); return route.fulfill({ status: 204 });
     }
     if (parts[1] === 'progress' && method === 'GET') {
-      return ok({
-        success: true,
-        data: pageData([{ studentId: 'student-a', username: 'Student A', completed: true, completedAt: time }]),
-        timestamp: time,
-      });
+      return ok(pageData([{ studentId: 'student-a', username: 'Student A', completed: true, completedAt: time }]));
     }
     if (parts[1] === 'complete' && method === 'POST') {
       if (state.completionFails) return fail(503);

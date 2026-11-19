@@ -338,6 +338,9 @@ export function lessonsDemoPlugin(): Plugin {
             completedAt: p ? p.completedAt : null,
             createdAt: item.createdAt,
             updatedAt: item.updatedAt,
+            content: item.content,
+            codeExample: item.codeExample,
+            materialCount: item.materials.length,
           };
         };
 
@@ -430,11 +433,7 @@ export function lessonsDemoPlugin(): Plugin {
             return respond(
               response,
               isTeacher ? 200 : 403,
-              {
-                success: true,
-                data: page([{ studentId: STUDENT, username: 'Demo Student', ...(progress.get(lesson.id) || { completed: false, completedAt: null }) }], pageIndex),
-                timestamp: timestamp(),
-              },
+              page([{ studentId: STUDENT, username: 'Demo Student', ...(progress.get(lesson.id) || { completed: false, completedAt: null }) }], pageIndex),
             );
           }
           if (parts[3] === 'complete' && method === 'POST') {
