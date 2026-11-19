@@ -1,0 +1,6 @@
+# Code Owners for AlgoLearner
+# GitHub automatically requests reviews from listed owners on matching paths.
+*                  @hienpham0344 @quackii00
+/.github/          @hienpham0344 @quackii00
+/backend/          @hienpham0344 @quackii00
+/frontend/         @hienpham0344 @quackii00
