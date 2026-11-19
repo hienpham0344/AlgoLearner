@@ -102,7 +102,7 @@ public class ClassroomService {
     @Transactional
     public void delete(UUID actorId, UUID classroomId) {
         var classroom = ownedOrAdmin(actorId, classroomId);
-        if (memberships.existsByClassroomId(classroomId) || requests.existsByClassroomId(classroomId)
+        if (classrooms.hasQuizData(classroomId) || memberships.existsByClassroomId(classroomId) || requests.existsByClassroomId(classroomId)
                 || invitations.existsByClassroomId(classroomId)) {
             throw conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve related classroom data");
         }
