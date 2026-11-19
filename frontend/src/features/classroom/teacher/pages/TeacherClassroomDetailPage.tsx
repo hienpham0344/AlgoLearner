@@ -220,6 +220,15 @@ export const TeacherClassroomDetailPage: React.FC = () => {
           </span>
         </Link>
 
+        <Link
+          to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/assignments`}
+          className="classroom-subnav-link"
+          role="tab"
+        >
+          <FileCode size={16} aria-hidden="true" />
+          <span>Class assignments</span>
+        </Link>
+
         <button
           type="button"
           className="classroom-subnav-link"
