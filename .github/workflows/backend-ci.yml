@@ -2,22 +2,71 @@ name: Backend CI
 
 on:
   pull_request:
+    branches: [main]
   push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   verify:
     name: Maven clean verify (Java 21)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: algolearner_test
+          POSTGRES_USER: algolearner
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U algolearner -d algolearner_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DB_URL: jdbc:postgresql://127.0.0.1:5432/algolearner_test
+      TEST_DB_USERNAME: algolearner
+      TEST_DB_PASSWORD: ''
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: '0'
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: '4'
     defaults:
       run:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'pull_request' && 2 || 1 }}
+      - name: Detect backend changes
+        id: changes
+        working-directory: .
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git rev-parse --verify HEAD^1 >/dev/null 2>&1; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          CHANGED=$(git diff --name-only HEAD^1 HEAD)
+          if printf '%s\n' "$CHANGED" | grep -Eq '^(backend/|\.github/workflows/backend-ci\.yml$)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No backend or Backend CI changes detected; skipping Maven verify."
+          fi
       - name: Set up Java 21
+        if: steps.changes.outputs.run == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,9 +74,10 @@ jobs:
           cache: maven
           cache-dependency-path: backend/pom.xml
       - name: Build and test
-        run: mvn --batch-mode --no-transfer-progress clean verify
+        if: steps.changes.outputs.run == 'true'
+        run: mvn --batch-mode --no-transfer-progress -Dspring.test.context.cache.maxSize=8 clean verify
       - name: Upload test reports
-        if: always()
+        if: always() && steps.changes.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: backend-test-reports
