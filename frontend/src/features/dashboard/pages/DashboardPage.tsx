@@ -1,3 +1,5 @@
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
+import { clearSession } from '@/services/apiClient';
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
@@ -16,11 +18,11 @@ import { InteractiveCourseBackground } from '../components/InteractiveCourseBack
 import { PracticePulse } from '../components/PracticePulse';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
 import { getClassroomLessonSummary } from '@/features/classroom/lessons/mock/lessonMockStore';
+import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 
-const IS_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
-const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 const EMPTY_DASHBOARD_DATA: StudentDashboardData = {
   courses: [],
@@ -68,13 +70,13 @@ const todayFormatter = new Intl.DateTimeFormat('en', {
 type DeadlineUrgency = 'Overdue' | 'Due today' | 'Upcoming';
 type DashboardLoadState = 'ready' | 'loading' | 'restricted' | 'unavailable';
 
-const toBangkokDateKey = (date: Date) =>
-  new Date(date.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (date: Date) =>
+  new Date(date.getTime() + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 const getDeadlineUrgency = (dueAt: string): DeadlineUrgency => {
   const due = new Date(dueAt);
   if (due.getTime() < Date.now()) return 'Overdue';
-  return toBangkokDateKey(due) === toBangkokDateKey(new Date()) ? 'Due today' : 'Upcoming';
+  return toVietnamDateKey(due) === toVietnamDateKey(new Date()) ? 'Due today' : 'Upcoming';
 };
 
 const formatDayNumber = (iso: string) => dayNumberFormatter.format(new Date(iso));
@@ -90,7 +92,6 @@ const formatNotificationTimestamp = (iso: string): string => {
 };
 
 const resolveLoadState = (isPending: boolean, isError: boolean, error: unknown): DashboardLoadState => {
-  if (IS_DEMO) return 'ready';
   if (isPending) return 'loading';
   if (!isError) return 'ready';
   return isAxiosError(error) && error.response?.status === 403 ? 'restricted' : 'unavailable';
@@ -116,6 +117,7 @@ const getSegmentState = (index: number, completed: number): 'completed' | 'curre
 };
 
 export const DashboardPage = () => {
+  const IS_DEMO = useIsDemoMode();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -140,7 +142,7 @@ export const DashboardPage = () => {
       error => isAxiosError(error) && error.response?.status === 401,
     );
     if (isUnauthorized) {
-      logout();
+      clearSession();
       navigate('/login', { replace: true });
     }
   }, [profileQuery.error, dashboardQuery.error, logout, navigate]);
@@ -227,7 +229,7 @@ export const DashboardPage = () => {
       : EMPTY_DASHBOARD_DATA;
 
   const practice: PracticeStats = data.practice;
-  const loadState = resolveLoadState(dashboardQuery.isPending, dashboardQuery.isError, dashboardQuery.error);
+  const loadState = IS_DEMO ? 'ready' : resolveLoadState(dashboardQuery.isPending, dashboardQuery.isError, dashboardQuery.error);
 
   const rawDisplayName = profileQuery.data?.fullName || user.fullName || user.username;
   const displayName = rawDisplayName?.replace(/^Demo\s+/i, '') || user.username;
@@ -337,10 +339,11 @@ export const DashboardPage = () => {
                         <div className="dashboard-learning-content">
                           <span className="dashboard-learning-label">YOUR NEXT CHAPTER</span>
                           <h3>Your next chapter starts here.</h3>
-                          <p>Choose a topic that interests you and start learning at your pace.</p>
-                          <Link className="dashboard-learning-action" to="/student/courses">
+                          <p>{IS_DEMO ? 'Choose a topic that interests you and start learning at your pace.'
+                            : 'Public courses will appear here once this module is connected.'}</p>
+                          {IS_DEMO && <Link className="dashboard-learning-action" to="/student/courses">
                             Explore courses <ArrowRight size={16} aria-hidden="true" />
-                          </Link>
+                          </Link>}
                         </div>
                         <img className="dashboard-learning-mascot" src={byteMascot} alt="" width="280" height="280" />
                       </>
@@ -427,7 +430,9 @@ export const DashboardPage = () => {
                       <div>
                         <strong>No deadlines to show yet.</strong>
                         <p>
-                          Assignments and quizzes from your enrolled classes will appear here in chronological order.
+                          {IS_DEMO
+                            ? 'Assignments and quizzes from your enrolled classes will appear here in chronological order.'
+                            : 'Assignments and quizzes will appear here once their classroom modules are connected.'}
                         </p>
                       </div>
                     </div>
@@ -615,6 +620,7 @@ export const DashboardPage = () => {
               </aside>
             </div>
           )}
+          <DashboardLessonLinks role="STUDENT" />
     </WorkspaceLayout>
   );
 };

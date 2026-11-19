@@ -51,4 +51,26 @@ class ApiExceptionHandlerTest {
         assertThat(response.getBody().getErrorCode()).isEqualTo("INTERNAL_SERVER_ERROR");
         assertThat(response.getBody().getMessage()).isEqualTo("Request could not be completed");
     }
+
+    @Test void unexpectedExceptionDetailsAreNotWrittenToApplicationLogs() {
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ApiExceptionHandler.class);
+        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        appender.start();logger.addAppender(appender);
+        try {
+            handler.unexpected(new RuntimeException("private-provider-credential"),request);
+            assertThat(appender.list).allSatisfy(event -> {
+                assertThat(event.getFormattedMessage()).doesNotContain("private-provider-credential");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        } finally {
+            logger.detachAppender(appender);appender.stop();
+        }
+    }
+
+    @Test void learningFileMultipartLimitUsesFileErrorCode() {
+        var upload = new MockHttpServletRequest("POST","/api/v1/classrooms/00000000-0000-0000-0000-000000000001/files");
+        var response = handler.tooLarge(new org.springframework.web.multipart.MaxUploadSizeExceededException(20L*1024*1024),upload);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(response.getBody().getErrorCode()).isEqualTo("FILE_TOO_LARGE");
+    }
 }

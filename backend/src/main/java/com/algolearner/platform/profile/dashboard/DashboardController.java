@@ -50,7 +50,7 @@ public class DashboardController {
     @GetMapping("/api/v1/admin/dashboard")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary="Admin dashboard",description="FR-PRO-005. from/to are UTC instants, [from,to); interval=day|week|month. "
-            +"Range affects charts only; totals cover all retained source records, including inactive, archived and draft records. "
+            +"Range affects charts only; account/class totals include retained inactive and archived records; public catalog totals include published content only. Official submission totals count submitted assignment/quiz attempts and public/class practice submissions once. "
             +"Default chart range: trailing 30 days. All chart boundaries use UTC+7; weekly buckets start Monday.")
     @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode="200",description="Admin summary")
     public ApiResponse<DashboardResponse.Admin> admin(Authentication authentication,

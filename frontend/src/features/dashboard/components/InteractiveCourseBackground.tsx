@@ -90,6 +90,7 @@ export function InteractiveCourseBackground() {
     let visible = false;
     let frame = 0;
     let previousTime = 0;
+    let lastPaintTime = 0;
     let elapsed = 0;
 
     const buildScene = () => {
@@ -259,6 +260,10 @@ export function InteractiveCourseBackground() {
       frame = 0;
       if (!visible || document.hidden || motionPreference.matches) return;
       frame = window.requestAnimationFrame(animate);
+      // The slow ambient drift does not need a full refresh rate. Keep pointer
+      // interactions responsive while reducing idle canvas work.
+      if (!pointer.active && pointer.strength < 0.02 && lastPaintTime && time - lastPaintTime < 50) return;
+      lastPaintTime = time;
 
       const rawDelta = previousTime ? time - previousTime : 16.67;
       previousTime = time;
@@ -332,6 +337,7 @@ export function InteractiveCourseBackground() {
     const start = () => {
       if (frame || !visible || document.hidden || motionPreference.matches) return;
       previousTime = performance.now();
+      lastPaintTime = 0;
       frame = window.requestAnimationFrame(animate);
     };
 

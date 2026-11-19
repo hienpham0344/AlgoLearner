@@ -103,4 +103,3 @@ test('lessons sync directly with current classroom store including dynamically c
     /archived/i,
   );
 });
-

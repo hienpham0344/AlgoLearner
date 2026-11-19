@@ -32,6 +32,7 @@ export interface Lesson extends Omit<LessonInput, 'activityIds'> {
   previousStatus: Exclude<LessonStatus, 'ARCHIVED'> | null;
   activities: LessonActivity[];
   attachments: LessonAttachment[];
+  materialCount?: number;
   progress: LessonProgress | null;
   canDelete: boolean;
   createdAt: string;

@@ -1,14 +1,92 @@
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import type { Lesson, LessonActivity, LessonInput } from '../src/features/classroom/lessons/types';
+import type { CodeExample, ExternalLink, Lesson, LessonActivity } from '../src/features/classroom/lessons/types';
 
-// These tests exercise the FE against the proposed contract, not the #12 backend.
+// These tests exercise the FE against the confirmed #12 backend LessonController contract.
 const base = 'http://127.0.0.1:3101';
 const classId = 'class-a';
 const teacherId = 'teacher-a';
 const time = '2026-11-11T00:00:00Z';
 const lessonPath = (role = 'teacher', id = '') => `${base}/${role}/classrooms/${classId}/lessons${id ? `/${id}` : ''}`;
 const pageData = <T,>(items: T[], page = 0, totalPages = 1) => ({ items, pagination: { page, size: 20, totalElements: items.length, totalPages, isFirst: page === 0, isLast: page + 1 >= totalPages } });
+const toBackendMode = (mode: Lesson['completionMode']) => (mode === 'CONDITION_BASED' ? 'AUTO_ITEMS' : 'MANUAL');
+const fileTypeFromName = (name: string): 'PDF' | 'DOCX' | 'PPTX' | 'ZIP' | 'IMAGE' => {
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext === 'docx') return 'DOCX';
+  if (ext === 'pptx') return 'PPTX';
+  if (ext === 'zip') return 'ZIP';
+  if (ext === 'png' || ext === 'jpg' || ext === 'jpeg' || ext === 'gif' || ext === 'webp') return 'IMAGE';
+  return 'PDF';
+};
+const parseCodeExample = (raw: string | null | undefined): CodeExample | null => {
+  if (!raw?.trim()) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<CodeExample>;
+    return parsed.code ? { language: parsed.language || 'text', code: parsed.code } : null;
+  } catch {
+    return { language: 'text', code: raw };
+  }
+};
+const parseExternalLinks = (raw: string | null | undefined): ExternalLink[] => {
+  if (!raw?.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed as ExternalLink[] : [];
+  } catch {
+    return [];
+  }
+};
+const toSummary = (lesson: Lesson) => ({
+  id: lesson.id,
+  classroomId: lesson.classroomId,
+  title: lesson.title,
+  status: lesson.status,
+  completionMode: toBackendMode(lesson.completionMode),
+  displayOrder: 0,
+  isCompleted: lesson.progress ? lesson.progress.completed : null,
+  completedAt: lesson.progress ? lesson.progress.completedAt : null,
+  createdAt: lesson.createdAt,
+  updatedAt: lesson.updatedAt,
+  content: lesson.content,
+  codeExample: lesson.codeExample ? JSON.stringify(lesson.codeExample) : '',
+  materialCount: lesson.attachments.length,
+});
+const toDetail = (lesson: Lesson) => ({
+  id: lesson.id,
+  classroomId: lesson.classroomId,
+  title: lesson.title,
+  content: lesson.content,
+  codeExample: lesson.codeExample ? JSON.stringify(lesson.codeExample) : '',
+  externalLinks: JSON.stringify(lesson.externalLinks),
+  status: lesson.status,
+  completionMode: toBackendMode(lesson.completionMode),
+  displayOrder: 0,
+  materials: lesson.attachments.map(att => ({
+    id: att.id,
+    fileName: att.name,
+    fileUrl: `/api/v1/files/stored-${att.id}/content`,
+    fileType: fileTypeFromName(att.name),
+    fileSize: att.size,
+    createdAt: time,
+  })),
+  linkedItems: lesson.activities.map((act, idx) => ({
+    id: `link-${act.id}`,
+    itemType: act.type,
+    itemId: act.id,
+    displayOrder: idx,
+    title: act.title,
+    available: act.available,
+    completed: act.completed,
+  })),
+  isCompleted: lesson.progress ? lesson.progress.completed : null,
+  completedAt: lesson.progress ? lesson.progress.completedAt : null,
+  createdAt: lesson.createdAt,
+  updatedAt: lesson.updatedAt,
+  previousStatus: lesson.previousStatus,
+  canDelete: lesson.canDelete,
+  requiredItemIds: lesson.requiredActivityIds,
+});
+
 const activity: LessonActivity = { id: 'quiz-a', title: 'Recursion quiz', type: 'QUIZ', linkedLessonId: null, available: true, path: null, completed: false };
 const seed = (overrides: Partial<Lesson> = {}): Lesson => ({
   id: 'lesson-a', classroomId: classId, title: 'Understanding recursion', content: '# The recursive idea\nOne step at a time.\n<script>window.lessonXss = true</script>\n<img src=x onerror="window.lessonXss=true">',
@@ -23,7 +101,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
   const role = options.role || 'TEACHER';
   const user = { id: role === 'TEACHER' ? teacherId : 'student-a', username: role.toLowerCase(), fullName: `Lesson ${role.toLowerCase()}`, email: 'lesson@example.test', role, lifecycleStatus: 'ACTIVE' };
   const state = { lessons: options.lessons || [seed()], calls: [] as string[], completionFails: false, downloadFails: false, uploadFails: false,
-    denied: false, deleteFails: false, updateFails: false, unconfirmedCompletion: false, activityOptions: [activity,
+    denied: false, deleteFails: false, updateFails: false, linkItemFails: false, unconfirmedCompletion: false, activityOptions: [activity,
       { ...activity, id: 'assignment-a', type: 'ASSIGNMENT' as const, title: 'Recursion assignment' },
       { ...activity, id: 'practice-a', type: 'PRACTICE' as const, title: 'Recursion practice' },
       { ...activity, id: 'quiz-b', title: 'Already linked quiz', linkedLessonId: 'lesson-other' }] };
@@ -35,51 +113,99 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
     const fail = (status: number, message = 'Fixture request denied') => route.fulfill({ status, json: { success: false, errorCode: 'TEST_FAILURE', message, timestamp: time, path } });
     if (path === '/auth/me') return ok(user);
     if (path === `/classrooms/${classId}`) return options.membershipDenied || state.denied ? fail(403) : ok({ id: classId, name: 'Algorithms · Autumn 2026', status: 'ACTIVE', ownerId: options.ownerId || teacherId });
-    if (path.endsWith('/lesson-capabilities')) return options.policyAvailable === false ? fail(503) : ok({ uploadsAvailable: true, activityLinkingAvailable: true, maxFileSizeBytes: 1024 * 1024, allowedExtensions: ['pdf', 'docx', 'pptx', 'zip', 'png'] });
-    if (path.endsWith('/lesson-activities')) return ok(state.activityOptions);
+    const root = `/classrooms/${classId}/lessons`;
+    if (path === `${root}/capabilities` && method === 'GET') return options.policyAvailable === false ? fail(503) : ok({ uploadsAvailable: true, activityLinkingAvailable: true, maxFileSizeBytes: 1024 * 1024, allowedExtensions: ['pdf', 'docx', 'pptx', 'zip', 'png'] });
+    if (path === `${root}/activities` && method === 'GET') return ok(state.activityOptions.map(({ id, type, title, linkedLessonId, available }) => ({ id, type, title, linkedLessonId, available })));
     if (state.denied) return fail(403);
     if (options.apiStatus) return fail(options.apiStatus);
-    const root = `/classrooms/${classId}/lessons`;
-    if (path === root && method === 'GET') return ok(pageData(state.lessons));
-    if (path === root && method === 'POST') {
-      const input = request.postDataJSON() as LessonInput;
-      const created = seed({ ...input, id: 'created-lesson', activities: state.activityOptions.filter(option => input.activityIds.includes(option.id)), attachments: [], canDelete: true });
-      state.lessons.push(created); return ok(created, 201);
+    if (path === `/classrooms/${classId}/files` && method === 'POST') {
+      if (state.uploadFails) return fail(503, 'Storage unavailable');
+      return ok({ id: 'stored-new-file', name: 'notes.pdf', mediaType: 'application/pdf', kind: 'PDF', size: 10, purpose: 'LESSON_MATERIAL', state: 'READY', sha256: 'fixture', createdAt: time }, 201);
     }
+    if (path.startsWith('/files/') && path.endsWith('/content') && method === 'GET') {
+      return state.downloadFails ? fail(503, 'Storage timeout') : route.fulfill({ status: 200, contentType: 'application/pdf', body: 'PDF fixture content' });
+    }
+    if (path === root && method === 'GET') return ok(state.lessons.map(toSummary));
+    if (path === root && method === 'POST') {
+      const payload = request.postDataJSON() as { title: string; content: string; codeExample: string; externalLinks: string; completionMode: 'MANUAL' | 'AUTO_ITEMS' | 'NONE' };
+      const created = seed({
+        id: 'created-lesson',
+        title: payload.title,
+        content: payload.content,
+        codeExample: parseCodeExample(payload.codeExample),
+        externalLinks: parseExternalLinks(payload.externalLinks),
+        completionMode: payload.completionMode === 'AUTO_ITEMS' ? 'CONDITION_BASED' : 'MANUAL',
+        requiredActivityIds: [],
+        activities: [],
+        attachments: [],
+        canDelete: true,
+      });
+      state.lessons.push(created); return ok(toDetail(created), 201);
+    }
+    if (!path.startsWith(`${root}/`)) return fail(404);
     const parts = path.slice(root.length + 1).split('/');
     const lesson = state.lessons.find(item => item.id === parts[0]);
     if (!lesson) return fail(404);
     if (role === 'STUDENT' && lesson.status !== 'PUBLISHED') return fail(403);
-    if (parts.length === 1 && method === 'GET') return ok(lesson);
+    if (parts.length === 1 && method === 'GET') return ok(toDetail(lesson));
     if (parts.length === 1 && method === 'PUT') {
       if (state.updateFails) return fail(409, 'This quiz already belongs to another lesson.');
-      const input = request.postDataJSON() as LessonInput;
-      Object.assign(lesson, input, { activities: state.activityOptions.filter(option => input.activityIds.includes(option.id)) }); return ok(lesson);
+      const payload = request.postDataJSON() as { title: string; content: string; codeExample: string; externalLinks: string; completionMode: 'MANUAL' | 'AUTO_ITEMS' | 'NONE' };
+      Object.assign(lesson, {
+        title: payload.title,
+        content: payload.content,
+        codeExample: parseCodeExample(payload.codeExample),
+        externalLinks: parseExternalLinks(payload.externalLinks),
+        completionMode: payload.completionMode === 'AUTO_ITEMS' ? 'CONDITION_BASED' : 'MANUAL',
+      });
+      return ok(toDetail(lesson));
     }
     if (parts.length === 1 && method === 'DELETE') {
       if (!lesson.canDelete || state.deleteFails) return fail(409, 'Related data must be preserved. Archive this lesson.');
       state.lessons = state.lessons.filter(item => item.id !== lesson.id); return route.fulfill({ status: 204 });
     }
-    if (parts[1] === 'progress') return ok(pageData([{ studentId: 'student-a', displayName: 'Student A', completed: true, completedAt: time }]));
-    if (parts[1] === 'completion') {
-      if (state.completionFails) return fail(503);
-      if (state.unconfirmedCompletion) return ok(lesson);
-      lesson.progress = { completed: true, completedAt: time }; return ok(lesson);
+    if (parts[1] === 'progress' && method === 'GET') {
+      return ok(pageData([{ studentId: 'student-a', username: 'Student A', completed: true, completedAt: time }]));
     }
-    if (parts[1] === 'attachments') {
-      if (parts[3] === 'download') return state.downloadFails ? fail(503, 'Storage timeout') : route.fulfill({ status: 200, contentType: 'application/pdf', body: 'PDF fixture content' });
+    if (parts[1] === 'complete' && method === 'POST') {
+      if (state.completionFails) return fail(503);
+      if (!state.unconfirmedCompletion) {
+        lesson.progress = { completed: true, completedAt: time };
+      }
+      return route.fulfill({ status: 204 });
+    }
+    if (parts[1] === 'materials') {
       if (method === 'POST') {
         if (state.uploadFails) return fail(503, 'Storage unavailable');
-        const file = { id: 'new-file', name: 'notes.pdf', size: 10, contentType: 'application/pdf' }; lesson.attachments.push(file); return ok(file, 201);
+        const file = { id: 'new-file', name: 'notes.pdf', size: 10, contentType: 'application/pdf' };
+        lesson.attachments.push(file);
+        return ok({ id: file.id, fileName: file.name, fileUrl: '/api/v1/files/stored-new-file/content', fileType: 'PDF', fileSize: file.size, createdAt: time }, 201);
       }
       if (method === 'DELETE') { lesson.attachments = lesson.attachments.filter(file => file.id !== parts[2]); return route.fulfill({ status: 204 }); }
     }
-    if (parts[1] === 'publish') lesson.status = 'PUBLISHED';
-    else if (parts[1] === 'draft') lesson.status = 'DRAFT';
-    else if (parts[1] === 'archive') { lesson.previousStatus = lesson.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT'; lesson.status = 'ARCHIVED'; }
-    else if (parts[1] === 'restore') lesson.status = lesson.previousStatus || 'DRAFT';
+    if (parts[1] === 'items') {
+      if (method === 'POST') {
+        if (state.linkItemFails) return fail(409, 'This quiz already belongs to another lesson.');
+        const { itemId } = request.postDataJSON() as { itemType: LessonActivity['type']; itemId: string };
+        const option = state.activityOptions.find(opt => opt.id === itemId);
+        if (!option) return fail(404);
+        if (!lesson.activities.some(act => act.id === itemId)) lesson.activities.push(option);
+        return ok({ id: `link-${option.id}`, itemType: option.type, itemId: option.id, displayOrder: lesson.activities.length - 1, title: option.title, available: option.available }, 201);
+      }
+      if (method === 'DELETE') { lesson.activities = lesson.activities.filter(act => act.id !== parts[2]); return route.fulfill({ status: 204 }); }
+    }
+    if (parts[1] === 'completion-rule' && method === 'PUT') {
+      const rule = request.postDataJSON() as { operator: 'ALL' | 'ANY'; conditions: Array<{ itemId: string }> };
+      lesson.completionMode = 'CONDITION_BASED';
+      lesson.requiredActivityIds = rule.conditions.map(c => c.itemId);
+      return ok(null);
+    }
+    if (method === 'PATCH' && parts[1] === 'publish') lesson.status = 'PUBLISHED';
+    else if (method === 'PATCH' && parts[1] === 'unpublish') lesson.status = 'DRAFT';
+    else if (method === 'PATCH' && parts[1] === 'archive') { lesson.previousStatus = lesson.status === 'PUBLISHED' ? 'PUBLISHED' : 'DRAFT'; lesson.status = 'ARCHIVED'; }
+    else if (method === 'PATCH' && parts[1] === 'restore') lesson.status = lesson.previousStatus || 'DRAFT';
     else return fail(404);
-    return ok(lesson);
+    return ok(toDetail(lesson));
   });
   return state;
 }
@@ -191,7 +317,7 @@ test('LES-10-09 / LES-01-07: file validation, storage errors and retry preserve 
   await expect(page.getByLabel('Attach a document or image')).toBeEnabled();
   await page.getByLabel('Attach a document or image').setInputFiles({ name: 'bad.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('bad') });
   await expect(page.getByRole('alert')).toContainText('not allowed');
-  expect(state.calls.filter(call => call.startsWith('POST') && call.endsWith('/attachments'))).toHaveLength(0);
+  expect(state.calls.filter(call => call.startsWith('POST') && (call.endsWith('/files') || call.endsWith('/materials')))).toHaveLength(0);
   state.uploadFails = true;
   await page.getByLabel('Attach a document or image').setInputFiles({ name: 'notes.pdf', mimeType: 'application/pdf', buffer: Buffer.from('notes') });
   await expect(page.getByRole('alert')).toContainText('Upload failed');
@@ -242,6 +368,19 @@ test('LES-10-11: rejected save keeps edited content and existing quiz links', as
   await expect(page.getByRole('alert')).toContainText('quiz already belongs');
   await expect(page.getByLabel('Lesson title')).toHaveValue('Do not lose this edit');
   expect(state.lessons[0].title).toBe('Understanding recursion');
+});
+
+test('LES-10-11: 409 conflict on POST .../items keeps edits and rolls back orphan draft', async ({ page }) => {
+  const state = await fixture(page, { lessons: [] });
+  state.linkItemFails = true;
+  await page.goto(lessonPath('teacher', 'new'));
+  await page.getByLabel('Lesson title').fill('Do not lose this draft');
+  await page.getByRole('checkbox', { name: /Recursion quiz/ }).check();
+  await page.getByRole('button', { name: 'Save draft' }).click();
+  await expect(page.getByRole('alert')).toContainText('quiz already belongs');
+  await expect(page.getByLabel('Lesson title')).toHaveValue('Do not lose this draft');
+  await expect(page.getByRole('checkbox', { name: /Recursion quiz/ })).toBeChecked();
+  expect(state.lessons).toHaveLength(0);
 });
 
 test('completion success requires an explicit completed result from the server', async ({ page }) => {

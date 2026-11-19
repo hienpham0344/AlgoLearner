@@ -81,6 +81,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   const activeRole: WorkspaceRole = propRole || (user?.role as WorkspaceRole) || 'STUDENT';
   const navItems = getWorkspaceNavItems(activeRole, location.pathname);
@@ -89,9 +90,14 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   const displayName = rawDisplayName.replace(/^Demo\s+/i, '') || activeRole;
   const firstName = displayName.split(' ')[0] || 'Learner';
 
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
+  const signOut = async () => {
+    setSignOutError(null);
+    try {
+      await logout();
+      navigate('/login', { replace: true });
+    } catch {
+      setSignOutError('Could not sign out. Check your connection and try again.');
+    }
   };
 
   const navLabel =
@@ -224,7 +230,10 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
           </div>
         </header>
 
-        <main className={mainClassName}>{children}</main>
+        <main className={mainClassName}>
+          {signOutError && <p role="alert">{signOutError}</p>}
+          {children}
+        </main>
 
         <footer className="dashboard-footer">
           <span>© {new Date().getFullYear()} AlgoLearn</span>

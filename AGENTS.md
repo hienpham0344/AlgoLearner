@@ -53,7 +53,7 @@ Mọi code backend và frontend phải được đặt đúng package/feature t�
 
 | Phân hệ SRS | Tên Module & Chức năng cốt lõi | Package Backend (`com.algolearner.platform.`) | Feature Frontend (`src/features/`) |
 | :--- | :--- | :--- | :--- |
-| **4.1** | **Quản lý tài khoản & Xác thực**: Đăng ký, đăng nhập, JWT, xác thực OTP qua email (hết hạn 5 phút). | `auth/` | `auth/` |
+| **4.1** | **Quản lý tài khoản & Xác thực**: Đăng ký, đăng nhập, JWT, xác thực OTP qua email (hết hạn 10 phút). | `auth/` | `auth/` |
 | **4.2** | **Hồ sơ cá nhân & Dashboard**: Thông tin người dùng, cài đặt riêng tư, dashboard theo role. | `user/`, `profile/` | `dashboard/` |
 | **4.3** | **Quản lý lớp học**: Tạo lớp, Class Code, quản lý thành viên, duyệt tham gia, chuyển quyền sở hữu. | `classroom/` | `classroom/` |
 | **4.4** | **Thông báo lớp học**: Đăng thông báo trong lớp, ghim bài viết, phát thông báo. | `announcement/` | `classroom/announcements/` |
@@ -96,7 +96,7 @@ Hệ thống tích hợp **22 Subagents** chuyên biệt định nghĩa tại [`
     1. Xác minh rằng mã nguồn Java/Python của người dùng **không bao giờ** chạy trực tiếp trên máy chủ chủ (host).
     2. Cờ thực thi sandbox bắt buộc: `--network none`, `--memory 256m`, `--cpus 1.0`, `--pids-limit 32`, `--cap-drop=ALL`.
     3. Kiểm tra lỗ hổng IDOR trên mọi API quản lý lớp học: xác minh `teacher_id` của lớp học khớp với người dùng đang đăng nhập trước khi cho phép sửa/xóa.
-    4. Xác minh rằng mã OTP có hạn dùng chính xác 5 phút và bị vô hiệu hóa ngay sau khi sử dụng.
+    4. Xác minh rằng mã OTP có hạn dùng chính xác 10 phút và bị vô hiệu hóa ngay sau khi sử dụng.
 
 ### 3.3. Nhóm Frontend & UI/UX
 * **`frontend_architect` & `frontend_developer`**:

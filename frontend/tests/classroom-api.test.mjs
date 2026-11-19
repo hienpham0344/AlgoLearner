@@ -28,7 +28,7 @@ test('classroom API uses backend routes and nested page envelope', async () => {
     const calls = [];
     apiClient.defaults.adapter = async config => {
       calls.push({ method: config.method, url: config.url, params: config.params, body: config.data ? JSON.parse(config.data) : null });
-      const data = config.method === 'get' && (config.url?.endsWith('/members') || config.url?.endsWith('/join-requests') || config.url === '/classrooms')
+      const data = config.method === 'get' && (config.url?.endsWith('/members') || config.url?.endsWith('/join-requests') || config.url?.endsWith('/invitations') || config.url === '/classrooms/invitations/me' || config.url === '/notifications' || config.url === '/classrooms')
         ? { items: [], pagination: { page: 0, size: 20, totalElements: 0, totalPages: 0, isFirst: true, isLast: true } }
         : config.url === '/classrooms/join'
           ? { outcome: 'PENDING_APPROVAL', classroomId: 'class-1', requestId: 'request-1' }
@@ -71,6 +71,10 @@ test('classroom API uses backend routes and nested page envelope', async () => {
     await classroomApi.acceptInvitation('invitation-1');
     await classroomApi.declineInvitation('invitation-1');
     await classroomApi.transferOwner('class-1', 'teacher-2');
+    await classroomApi.invitations('class-1', 2);
+    await classroomApi.myInvitations(1);
+    await classroomApi.notifications(0);
+    await classroomApi.markNotificationRead('notification-1');
 
     assert.deepEqual(calls.map(({ method, url }) => `${method.toUpperCase()} ${url}`), [
       'GET /classrooms', 'POST /classrooms', 'POST /classrooms/join',
@@ -83,15 +87,20 @@ test('classroom API uses backend routes and nested page envelope', async () => {
       'POST /classrooms/class-1/invitations', 'POST /classrooms/class-1/invitations/invitation-1/revoke',
       'POST /classrooms/invitations/invitation-1/accept', 'POST /classrooms/invitations/invitation-1/decline',
       'POST /classrooms/class-1/transfer-owner',
+      'GET /classrooms/class-1/invitations', 'GET /classrooms/invitations/me', 'GET /notifications',
+      'POST /notifications/notification-1/read',
     ]);
     assert.deepEqual(calls[8].body, { codeExpiresAt: null, codeLocked: true, joiningOpen: false, joinMode: 'REQUIRE_APPROVAL' });
     assert.deepEqual(calls[11].body, { usernameOrEmail: 'student@example.test' });
     assert.deepEqual(calls[15].body, { email: 'student@example.test', expiresAt: '2026-11-10T00:00:00Z' });
     assert.deepEqual(calls[19].body, { targetTeacherId: 'teacher-2' });
+    assert.deepEqual(calls[20].params, { page: 2, size: 20 });
+    assert.deepEqual(calls[21].params, { page: 1, size: 20 });
     assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 401 } }), false);
     assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 403 } }), false);
-    assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 404 } }), true);
+    assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 404 } }), false);
     assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 500, data: { message: 'Database error' } } }), false);
-    assert.equal(classroomApiUnavailable({ isAxiosError: true }), true);
+    assert.equal(classroomApiUnavailable({ isAxiosError: true }), false);
+    assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 503, headers: { 'x-algolearner-source': 'mock' }, data: { errorCode: 'OFFLINE_MOCK' } } }), true);
   }
 });

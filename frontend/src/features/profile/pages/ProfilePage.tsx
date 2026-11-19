@@ -1,7 +1,10 @@
+import { clearSession } from '@/services/apiClient';
+import { ChangePasswordForm } from '../components/ChangePasswordForm';
+import { DeactivateAccountForm, SessionManager } from '../components/AccountSecurityPanels';
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowUpRight, Camera, Check, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { profileApi, type OwnerProfile } from '../api/profileApi';
@@ -12,7 +15,7 @@ import { FolderTabShape } from '../components/FolderTabShape';
 import { LiveProfilePreview } from '../components/LiveProfilePreview';
 import '../styles/profile.css';
 
-const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
 const joinedDateFormatter = new Intl.DateTimeFormat('en', {
   dateStyle: 'long',
@@ -50,13 +53,15 @@ const MAX_BIO_LENGTH = 200;
 
 function ProfileFolder({ profile }: { profile: OwnerProfile }) {
   const { token } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialTab = FOLDER_TABS.find(tab => tab.id === searchParams.get('tab'))?.id ?? 'profile';
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tabRefs = useRef<Map<FolderTabId, HTMLButtonElement>>(new Map());
 
   // Layered sheet transition state
-  const [activeTab, setActiveTab] = useState<FolderTabId>('profile');
-  const [displayTab, setDisplayTab] = useState<FolderTabId>('profile');
+  const [activeTab, setActiveTab] = useState<FolderTabId>(initialTab);
+  const [displayTab, setDisplayTab] = useState<FolderTabId>(initialTab);
   const [recedingTab, setRecedingTab] = useState<FolderTabId | null>(null);
   const [enteringTab, setEnteringTab] = useState<FolderTabId | null>(null);
   const [viewportHeight, setViewportHeight] = useState<number | null>(null);
@@ -717,16 +722,20 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
                       </p>
                     </div>
 
+                    <ChangePasswordForm />
+                    <SessionManager />
+
                     <div className="folder-settings-list">
                       <div className="folder-editorial-row">
                         <div className="folder-row-info">
                           <strong className="folder-row-title">Account password</strong>
                           <p className="folder-row-desc">
-                            Change your password, review signed-in devices and deactivate your account.
+                            Password reset codes are sent to your verified email address ({profile.email})
+                            and expire after 10 minutes.
                           </p>
                         </div>
-                        <Link to="/account/security" className="folder-action-pill">
-                          <span>Manage security</span>
+                        <Link to="/forgot-password" className="folder-action-pill">
+                          <span>Reset password</span>
                           <ArrowUpRight size={13} aria-hidden="true" />
                         </Link>
                       </div>
@@ -799,6 +808,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
                       Username, registered email address, and role permissions are managed at the organization level
                       and cannot be altered directly from this folder.
                     </p>
+                    <DeactivateAccountForm />
                   </div>
                 </div>
               </div>
@@ -825,7 +835,7 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
 }
 
 export function ProfilePage() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const query = useQuery({
     queryKey: profileKeys.own(),
@@ -836,9 +846,9 @@ export function ProfilePage() {
 
   useEffect(() => {
     if (isAxiosError(query.error) && query.error.response?.status === 401) {
-      logout();
+      clearSession();
     }
-  }, [query.error, logout]);
+  }, [query.error]);
 
   if (!user) return <Navigate to="/login" replace />;
 

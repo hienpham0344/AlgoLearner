@@ -25,13 +25,15 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'node node_modules/vite/bin/vite.js --mode auth-demo --host 127.0.0.1 --port 3100 --strictPort',
+      command: 'npm run dev:auth-demo -- --host 127.0.0.1 --port 3100 --strictPort',
+      env: { ALGOLEARN_API_TARGET: process.env.ALGOLEARN_API_TARGET || 'http://127.0.0.1:19999' },
       url: 'http://127.0.0.1:3100/login',
       reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command: 'node node_modules/vite/bin/vite.js --mode backend-mock --host 127.0.0.1 --port 3101 --strictPort',
+      command: 'npm run dev:backend-mock -- --host 127.0.0.1 --port 3101 --strictPort',
+      env: { ALGOLEARN_API_TARGET: process.env.ALGOLEARN_API_TARGET || 'http://127.0.0.1:19999' },
       url: 'http://127.0.0.1:3101/login',
       reuseExistingServer: false,
       timeout: 30_000,

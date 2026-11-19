@@ -1,3 +1,4 @@
+import { isOfflineRequest } from './backendFirstPlugin';
 import type { ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 
@@ -28,6 +29,7 @@ export function dashboardDemoPlugin(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
+        if (!isOfflineRequest(request)) { next(); return; }
         const route = request.url?.split('?')[0];
         if (
           request.method !== 'GET'

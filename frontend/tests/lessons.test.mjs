@@ -24,7 +24,8 @@ const module = { exports: {} };
 new Function('module', 'exports', 'require', compiled.outputFiles[0].text)(module, module.exports, createRequire(import.meta.url));
 const { validateLesson, validateAttachment, safeExternalUrl, visibleLessons, canCompleteLesson,
   extractLessonOutline, estimateReadingMinutes,
-  activitySelectable, activityPath, lessonDate, lessonKeys, lessonApi, apiClient, LessonContent, renderLessonMarkdown } = module.exports;
+  activitySelectable, activityPath, lessonDate, lessonKeys, lessonApi, lessonError, apiClient, LessonContent, renderLessonMarkdown } = module.exports;
+const { AxiosError } = createRequire(import.meta.url)('axios');
 const input = { title: 'Recursion', content: '# Recursion', codeExample: null, externalLinks: [],
   completionMode: 'MANUAL', requiredActivityIds: [], activityIds: [] };
 
@@ -76,27 +77,440 @@ test('LES security: sanitize HTML, SVG, event handlers, dangerous schemes and ex
   assert.match(fragment.querySelector('a[href]')?.getAttribute('rel'), /noopener/);
 });
 
-test('LESSON contract: class-scoped routes, envelope, pagination, multipart and server-authoritative completion', async () => {
+test('LESSON contract: list array normalization, detail parsing, and completionMode mapping', async () => {
+  const calls = [];
+  const summaryRows = Array.from({ length: 25 }, (_, idx) => ({
+    id: `lesson-${idx}`,
+    classroomId: 'class-a',
+    title: `Lesson ${idx}`,
+    status: 'PUBLISHED',
+    completionMode: idx % 2 === 0 ? 'AUTO_ITEMS' : 'MANUAL',
+    displayOrder: idx,
+    isCompleted: idx === 0 ? true : null,
+    completedAt: idx === 0 ? '2026-11-11T00:00:00Z' : null,
+    createdAt: '2026-11-11T00:00:00Z',
+    updatedAt: '2026-11-11T00:00:00Z',
+  }));
+  apiClient.defaults.adapter = async config => {
+    calls.push(config);
+    if (config.url === '/classrooms/class-a/lessons') {
+      return { config, status: 200, statusText: 'OK', headers: {}, data: { success: true, timestamp: '2026-11-11T00:00:00Z', data: summaryRows } };
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-0') {
+      return {
+        config, status: 200, statusText: 'OK', headers: {},
+        data: {
+          success: true, timestamp: '2026-11-11T00:00:00Z',
+          data: {
+            id: 'lesson-0', classroomId: 'class-a', title: 'Lesson 0', content: '# Title',
+            codeExample: JSON.stringify({ language: 'python', code: 'print(1)' }),
+            externalLinks: JSON.stringify([{ label: 'Docs', url: 'https://example.test/docs' }]),
+            status: 'PUBLISHED', completionMode: 'AUTO_ITEMS', displayOrder: 0,
+            materials: [{ id: 'mat-1', fileName: 'guide.pdf', fileUrl: '/api/v1/files/stored-1/content', fileType: 'PDF', fileSize: 512, createdAt: '2026-11-11T00:00:00Z' }],
+            linkedItems: [{ id: 'link-1', itemType: 'QUIZ', itemId: 'quiz-1', displayOrder: 0, title: 'Quiz 1', available: true }],
+            isCompleted: false, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+            previousStatus: 'DRAFT', canDelete: false, requiredItemIds: ['quiz-1'],
+          },
+        },
+      };
+    }
+    throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+  };
+
+  const page1 = await lessonApi.list('class-a', 1);
+  assert.equal(calls[0].url, '/classrooms/class-a/lessons');
+  assert.equal(page1.items.length, 5);
+  assert.deepEqual(page1.pagination, { page: 1, size: 20, totalElements: 25, totalPages: 2, isFirst: false, isLast: true });
+  assert.equal(page1.items[0].completionMode, 'CONDITION_BASED');
+  assert.equal(page1.items[0].content, '');
+  assert.deepEqual(page1.items[0].attachments, []);
+
+  const page0 = await lessonApi.list('class-a', 0);
+  assert.deepEqual(page0.items[0].progress, { completed: true, completedAt: '2026-11-11T00:00:00Z' });
+  assert.equal(page0.items[1].progress, null);
+
+  const detail = await lessonApi.get('class-a', 'lesson-0');
+  assert.deepEqual(detail.codeExample, { language: 'python', code: 'print(1)' });
+  assert.deepEqual(detail.externalLinks, [{ label: 'Docs', url: 'https://example.test/docs' }]);
+  assert.equal(detail.completionMode, 'CONDITION_BASED');
+  assert.deepEqual(detail.requiredActivityIds, ['quiz-1']);
+  assert.deepEqual(detail.attachments, [{ id: 'mat-1', name: 'guide.pdf', size: 512, contentType: 'application/pdf' }]);
+  assert.deepEqual(detail.activities, [{ id: 'quiz-1', type: 'QUIZ', title: 'Quiz 1', linkedLessonId: 'lesson-0', available: true, path: null, completed: false }]);
+  assert.deepEqual(detail.progress, { completed: false, completedAt: null });
+  assert.equal(detail.previousStatus, 'DRAFT');
+  assert.equal(detail.canDelete, false);
+  assert.notDeepEqual(lessonKeys.root('student-a', 'class-a'), lessonKeys.root('student-b', 'class-a'));
+});
+
+test('LESSON contract: create/update serialize fields, sequence items + completion-rule, and handle unpublish/complete/progress', async () => {
+  const calls = [];
+  let lessonDetail = {
+    id: 'lesson-1', classroomId: 'class-a', title: 'Recursion', content: '# Recursion',
+    codeExample: '{"language":"java","code":"int f(){}"}', externalLinks: '[]',
+    status: 'PUBLISHED', completionMode: 'MANUAL', displayOrder: 0,
+    materials: [], linkedItems: [{ id: 'link-q1', itemType: 'QUIZ', itemId: 'q1', displayOrder: 0, title: 'Quiz 1', available: true }],
+    isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+    previousStatus: null, canDelete: false, requiredItemIds: [],
+  };
+  apiClient.defaults.adapter = async config => {
+    calls.push({ method: config.method?.toUpperCase(), url: config.url, params: config.params, data: config.data ? JSON.parse(config.data) : undefined });
+    const ok = (data, status = 200) => ({ config, status, statusText: 'OK', headers: {}, data: { success: true, timestamp: '2026-11-11T00:00:00Z', data } });
+    if (config.url === '/classrooms/class-a/lessons/activities' && config.method === 'get') {
+      return ok([
+        { id: 'q1', type: 'QUIZ', title: 'Quiz 1', linkedLessonId: null, available: true },
+        { id: 'a1', type: 'ASSIGNMENT', title: 'Assign 1', linkedLessonId: null, available: true },
+      ]);
+    }
+    if (config.url === '/classrooms/class-a/lessons/capabilities' && config.method === 'get') {
+      return ok({ uploadsAvailable: true, activityLinkingAvailable: true, maxFileSizeBytes: 1024, allowedExtensions: ['pdf'] });
+    }
+    if (config.url === '/classrooms/class-a/lessons' && config.method === 'post') {
+      return ok({ ...lessonDetail, id: 'created-1', status: 'DRAFT', linkedItems: [], requiredItemIds: [] }, 201);
+    }
+    if (config.url === '/classrooms/class-a/lessons/created-1/items' && config.method === 'post') {
+      return ok({ id: 'link-new', itemType: 'QUIZ', itemId: 'q1', displayOrder: 0, title: 'Quiz 1', available: true }, 201);
+    }
+    if (config.url === '/classrooms/class-a/lessons/created-1/completion-rule' && config.method === 'put') {
+      return ok(null);
+    }
+    if (config.url === '/classrooms/class-a/lessons/created-1' && config.method === 'get') {
+      return ok({ ...lessonDetail, id: 'created-1', status: 'DRAFT', completionMode: 'AUTO_ITEMS', requiredItemIds: ['q1'] });
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1' && config.method === 'get') {
+      return ok(lessonDetail);
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1' && config.method === 'put') {
+      return ok(lessonDetail);
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/items' && config.method === 'post') {
+      return ok({ id: 'link-a1', itemType: 'ASSIGNMENT', itemId: 'a1', displayOrder: 1, title: 'Assign 1', available: true }, 201);
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/completion-rule' && config.method === 'get') {
+      return ok({ version: 0, rule: null });
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/completion-rule' && config.method === 'put') {
+      lessonDetail = { ...lessonDetail, completionMode: 'AUTO_ITEMS', requiredItemIds: ['a1'] };
+      return ok(null);
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/items/q1' && config.method === 'delete') {
+      lessonDetail = { ...lessonDetail, linkedItems: [{ id: 'link-a1', itemType: 'ASSIGNMENT', itemId: 'a1', displayOrder: 0, title: 'Assign 1', available: true }] };
+      return { config, status: 204, statusText: 'No Content', headers: {}, data: '' };
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/unpublish' && config.method === 'patch') {
+      return ok({ ...lessonDetail, status: 'DRAFT' });
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/complete' && config.method === 'post') {
+      lessonDetail = { ...lessonDetail, isCompleted: true, completedAt: '2026-11-11T01:00:00Z' };
+      return { config, status: 204, statusText: 'No Content', headers: {}, data: '' };
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-1/progress' && config.method === 'get') {
+      return ok({
+        success: true,
+        data: {
+          items: [{ studentId: 'student-1', username: 'alice', completed: true, completedAt: '2026-11-11T01:00:00Z' }],
+          pagination: { page: 0, size: 20, totalElements: 1, totalPages: 1, isFirst: true, isLast: true },
+        },
+        timestamp: '2026-11-11T00:00:00Z',
+      });
+    }
+    throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+  };
+
+  // Conditional create: resolves activities first, sends MANUAL, links items, sets completion-rule, then fetches detail
+  const created = await lessonApi.create('class-a', {
+    ...input,
+    completionMode: 'CONDITION_BASED',
+    activityIds: ['q1', 'a1'],
+    requiredActivityIds: ['q1'],
+  });
+  assert.equal(created.completionMode, 'CONDITION_BASED');
+  assert.deepEqual(created.requiredActivityIds, ['q1']);
+  assert.deepEqual(calls.map(c => `${c.method} ${c.url}`), [
+    'GET /classrooms/class-a/lessons/activities',
+    'POST /classrooms/class-a/lessons',
+    'POST /classrooms/class-a/lessons/created-1/items',
+    'POST /classrooms/class-a/lessons/created-1/items',
+    'PUT /classrooms/class-a/lessons/created-1/completion-rule',
+    'GET /classrooms/class-a/lessons/created-1',
+  ]);
+  assert.equal(calls[1].data.completionMode, 'MANUAL');
+  assert.equal(calls[1].data.codeExample, '');
+  assert.equal(calls[1].data.externalLinks, '[]');
+  assert.deepEqual(calls[4].data, {
+    operator: 'ALL',
+    conditions: [{ itemType: 'QUIZ', itemId: 'q1', requirement: 'SUBMITTED', scorePercent: null }],
+  });
+
+  // Update published lesson: fetch existing rule, link a1, update completion-rule, PUT lesson (AUTO_ITEMS), then unlink q1
+  calls.length = 0;
+  const updated = await lessonApi.update('class-a', 'lesson-1', {
+    ...input,
+    codeExample: null,
+    completionMode: 'CONDITION_BASED',
+    activityIds: ['a1'],
+    requiredActivityIds: ['a1'],
+  });
+  assert.equal(updated.completionMode, 'CONDITION_BASED');
+  assert.deepEqual(calls.map(c => `${c.method} ${c.url}`), [
+    'GET /classrooms/class-a/lessons/lesson-1',
+    'GET /classrooms/class-a/lessons/lesson-1/completion-rule',
+    'POST /classrooms/class-a/lessons/lesson-1/items',
+    'PUT /classrooms/class-a/lessons/lesson-1/completion-rule',
+    'PUT /classrooms/class-a/lessons/lesson-1',
+    'DELETE /classrooms/class-a/lessons/lesson-1/items/q1',
+    'GET /classrooms/class-a/lessons/lesson-1',
+  ]);
+  assert.equal(calls[4].data.completionMode, 'AUTO_ITEMS');
+  assert.equal(calls[4].data.codeExample, '');
+
+  // Transition 'draft' -> PATCH .../unpublish
+  const drafted = await lessonApi.transition('class-a', 'lesson-1', 'draft');
+  assert.equal(drafted.status, 'DRAFT');
+
+  // Complete: 204 No Content triggers GET detail
+  const completed = await lessonApi.complete('class-a', 'lesson-1');
+  assert.equal(completed.progress?.completed, true);
+
+  // Capabilities, activities, and progress username -> displayName
+  const caps = await lessonApi.capabilities('class-a');
+  assert.equal(caps.uploadsAvailable, true);
+  const acts = await lessonApi.activities('class-a');
+  assert.deepEqual(acts[0], { id: 'q1', type: 'QUIZ', title: 'Quiz 1', linkedLessonId: null, available: true, path: null, completed: false });
+  const prog = await lessonApi.progress('class-a', 'lesson-1', 0);
+  assert.equal(prog.items[0].displayName, 'alice');
+});
+
+test('LESSON contract: two-step files+materials upload, material removal, and cached/uncached file download', async () => {
   const calls = [];
   apiClient.defaults.adapter = async config => {
     calls.push(config);
-    return { config, status: 200, statusText: 'OK', headers: {}, data: { success: true,
-      timestamp: '2026-11-11T00:00:00Z', data: config.url.endsWith('/completion') ? { ...input, progress: { completed: true } }
-        : { items: [], pagination: { page: 2, totalPages: 3 } } } };
+    const ok = (data, status = 200) => ({ config, status, statusText: 'OK', headers: {}, data: { success: true, timestamp: '2026-11-11T00:00:00Z', data } });
+    if (config.url === '/classrooms/class-a/files' && config.method === 'post') {
+      return ok({ id: 'stored-file-1', name: 'notes.pdf', mediaType: 'application/pdf', kind: 'PDF', size: 5, purpose: 'LESSON_MATERIAL', state: 'READY', sha256: 'abc', createdAt: '2026-11-11T00:00:00Z' }, 201);
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-a/materials' && config.method === 'post') {
+      return ok({ id: 'mat-1', fileName: 'notes.pdf', fileUrl: '/api/v1/files/stored-file-1/content', fileType: 'PDF', fileSize: 5, createdAt: '2026-11-11T00:00:00Z' }, 201);
+    }
+    if (config.url === '/files/stored-file-1/content' && config.method === 'get') {
+      return { config, status: 200, statusText: 'OK', headers: {}, data: new Blob(['PDF'], { type: 'application/pdf' }) };
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-a' && config.method === 'get') {
+      return ok({
+        id: 'lesson-a', classroomId: 'class-a', title: 'Lesson A', content: '', codeExample: '', externalLinks: '[]',
+        status: 'PUBLISHED', completionMode: 'MANUAL', displayOrder: 0,
+        materials: [{ id: 'mat-uncached', fileName: 'slides.pptx', fileUrl: '/api/v1/files/stored-uncached/content', fileType: 'PPTX', fileSize: 12, createdAt: '2026-11-11T00:00:00Z' }],
+        linkedItems: [], isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+        previousStatus: null, canDelete: false, requiredItemIds: [],
+      });
+    }
+    if (config.url === '/files/stored-uncached/content' && config.method === 'get') {
+      return { config, status: 200, statusText: 'OK', headers: {}, data: new Blob(['PPTX']) };
+    }
+    if (config.url === '/classrooms/class-a/lessons/lesson-a/materials/mat-1' && config.method === 'delete') {
+      return { config, status: 204, statusText: 'No Content', headers: {}, data: '' };
+    }
+    throw new Error(`Unexpected request: ${config.method} ${config.url}`);
   };
-  assert.deepEqual((await lessonApi.list('class-a', 2)).items, []);
-  assert.equal(calls[0].url, '/classrooms/class-a/lessons');
-  assert.equal(calls[0].params.page, 2);
-  await lessonApi.create('class-a', input);
-  assert.equal(JSON.parse(calls[1].data).title, 'Recursion');
-  const result = await lessonApi.complete('class-a', 'lesson-a');
-  assert.equal(result.progress.completed, true);
-  assert.equal(calls[2].url, '/classrooms/class-a/lessons/lesson-a/completion');
-  await lessonApi.upload('class-a', 'lesson-a', new File(['hello'], 'notes.pdf', { type: 'application/pdf' }));
-  assert.equal(calls[3].data instanceof FormData, true);
-  assert.equal(calls[3].data.get('file').name, 'notes.pdf');
-  assert.notEqual(calls[3].headers.get('Content-Type'), 'application/json');
-  assert.notDeepEqual(lessonKeys.root('student-a', 'class-a'), lessonKeys.root('student-b', 'class-a'));
+
+  const uploaded = await lessonApi.upload('class-a', 'lesson-a', new File(['hello'], 'notes.pdf', { type: 'application/pdf' }));
+  assert.equal(calls[0].url, '/classrooms/class-a/files');
+  assert.equal(calls[0].params.purpose, 'LESSON_MATERIAL');
+  assert.equal(calls[0].data instanceof FormData, true);
+  assert.equal(calls[0].data.get('file').name, 'notes.pdf');
+  assert.notEqual(calls[0].headers.get('Content-Type'), 'application/json');
+  assert.equal(calls[1].url, '/classrooms/class-a/lessons/lesson-a/materials');
+  assert.deepEqual(JSON.parse(calls[1].data), { fileId: 'stored-file-1' });
+  assert.deepEqual(uploaded, { id: 'mat-1', name: 'notes.pdf', size: 5, contentType: 'application/pdf' });
+
+  const cachedBlob = await lessonApi.download('class-a', 'lesson-a', 'mat-1');
+  assert.equal(cachedBlob instanceof Blob, true);
+  assert.equal(calls[2].url, '/files/stored-file-1/content');
+
+  const uncachedBlob = await lessonApi.download('class-a', 'lesson-a', 'mat-uncached');
+  assert.equal(uncachedBlob instanceof Blob, true);
+  assert.equal(calls[3].url, '/classrooms/class-a/lessons/lesson-a');
+  assert.equal(calls[4].url, '/files/stored-uncached/content');
+
+  await lessonApi.removeAttachment('class-a', 'lesson-a', 'mat-1');
+  assert.equal(calls[5].method, 'delete');
+  assert.equal(calls[5].url, '/classrooms/class-a/lessons/lesson-a/materials/mat-1');
+});
+
+test('LESSON contract: update CONDITION_BASED -> MANUAL unlinks required quiz cleanly', async () => {
+  const calls = [];
+  let detail = {
+    id: 'lesson-manual', classroomId: 'class-switch', title: 'Conditional', content: '', codeExample: '', externalLinks: '[]',
+    status: 'PUBLISHED', completionMode: 'AUTO_ITEMS', displayOrder: 0, materials: [],
+    linkedItems: [{ id: 'link-q1', itemType: 'QUIZ', itemId: 'q1', displayOrder: 0, title: 'Quiz 1', available: true }],
+    isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+    previousStatus: null, canDelete: false, requiredItemIds: ['q1'],
+  };
+  apiClient.defaults.adapter = async config => {
+    calls.push({ method: config.method?.toUpperCase(), url: config.url, data: config.data ? JSON.parse(config.data) : undefined });
+    const ok = (data, status = 200) => ({ config, status, statusText: 'OK', headers: {}, data: { success: true, timestamp: '2026-11-11T00:00:00Z', data } });
+    if (config.url === '/classrooms/class-switch/lessons/lesson-manual' && config.method === 'get') return ok(detail);
+    if (config.url === '/classrooms/class-switch/lessons/lesson-manual' && config.method === 'put') {
+      detail = { ...detail, completionMode: 'MANUAL', requiredItemIds: [] };
+      return ok(detail);
+    }
+    if (config.url === '/classrooms/class-switch/lessons/lesson-manual/items/q1' && config.method === 'delete') {
+      detail = { ...detail, linkedItems: [] };
+      return { config, status: 204, statusText: 'No Content', headers: {}, data: '' };
+    }
+    throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+  };
+
+  const result = await lessonApi.update('class-switch', 'lesson-manual', {
+    ...input,
+    completionMode: 'MANUAL',
+    activityIds: [],
+    requiredActivityIds: [],
+  });
+  assert.equal(result.completionMode, 'MANUAL');
+  assert.deepEqual(result.activities, []);
+  assert.deepEqual(result.requiredActivityIds, []);
+  assert.deepEqual(calls.map(c => `${c.method} ${c.url}`), [
+    'GET /classrooms/class-switch/lessons/lesson-manual',
+    'PUT /classrooms/class-switch/lessons/lesson-manual',
+    'DELETE /classrooms/class-switch/lessons/lesson-manual/items/q1',
+    'GET /classrooms/class-switch/lessons/lesson-manual',
+  ]);
+  assert.equal(calls[1].data.completionMode, 'MANUAL');
+});
+
+test('LESSON contract: create rolls back partial item failure and update validates before PUT', async () => {
+  const calls = [];
+  apiClient.defaults.adapter = async config => {
+    calls.push(`${config.method?.toUpperCase()} ${config.url}`);
+    const ok = (data, status = 200) => ({ config, status, statusText: 'OK', headers: {}, data: { success: true, timestamp: '2026-11-11T00:00:00Z', data } });
+    if (config.url === '/classrooms/class-rb/lessons/activities' && config.method === 'get') {
+      return ok([
+        { id: 'a-ok', type: 'ASSIGNMENT', title: 'Assign', linkedLessonId: null, available: true },
+        { id: 'q-taken', type: 'QUIZ', title: 'Taken quiz', linkedLessonId: 'other', available: true },
+      ]);
+    }
+    if (config.url === '/classrooms/class-rb/lessons' && config.method === 'post') {
+      return ok({
+        id: 'draft-rb', classroomId: 'class-rb', title: 'Draft', content: '', codeExample: '', externalLinks: '[]',
+        status: 'DRAFT', completionMode: 'MANUAL', displayOrder: 0, materials: [], linkedItems: [],
+        isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+        previousStatus: null, canDelete: true, requiredItemIds: [],
+      }, 201);
+    }
+    if (config.url === '/classrooms/class-rb/lessons/draft-rb/items' && config.method === 'post') {
+      const payload = JSON.parse(config.data);
+      if (payload.itemId === 'q-taken') {
+        throw new AxiosError('Conflict', 'ERR_BAD_REQUEST', config, undefined, {
+          status: 409, statusText: 'Conflict', headers: {}, config,
+          data: { success: false, errorCode: 'QUIZ_ALREADY_LINKED', message: 'Quiz is already linked to another lesson', path: config.url, timestamp: '2026-11-11T00:00:00Z' },
+        });
+      }
+      return ok({ id: 'link-1', itemType: 'ASSIGNMENT', itemId: 'a-ok', displayOrder: 0, title: 'Assign', available: true }, 201);
+    }
+    if (config.url === '/classrooms/class-rb/lessons/draft-rb/items/a-ok' && config.method === 'delete') {
+      return { config, status: 204, statusText: 'No Content', headers: {}, data: '' };
+    }
+    if (config.url === '/classrooms/class-rb/lessons/draft-rb' && config.method === 'delete') {
+      return { config, status: 204, statusText: 'No Content', headers: {}, data: '' };
+    }
+    if (config.url === '/classrooms/class-val/lessons/lesson-val' && config.method === 'get') {
+      return ok({
+        id: 'lesson-val', classroomId: 'class-val', title: 'Draft', content: '', codeExample: '', externalLinks: '[]',
+        status: 'DRAFT', completionMode: 'MANUAL', displayOrder: 0, materials: [], linkedItems: [],
+        isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+        previousStatus: null, canDelete: true, requiredItemIds: [],
+      });
+    }
+    if (config.url === '/classrooms/class-val/lessons/activities' && config.method === 'get') {
+      return ok([{ id: 'p-only', type: 'PRACTICE', title: 'Practice', linkedLessonId: null, available: true }]);
+    }
+    throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+  };
+
+  await assert.rejects(
+    lessonApi.create('class-rb', { ...input, completionMode: 'CONDITION_BASED', activityIds: ['a-ok', 'q-taken'], requiredActivityIds: ['q-taken'] }),
+    err => lessonError(err).includes('Quiz is already linked'),
+  );
+  assert.deepEqual(calls, [
+    'GET /classrooms/class-rb/lessons/activities',
+    'POST /classrooms/class-rb/lessons',
+    'POST /classrooms/class-rb/lessons/draft-rb/items',
+    'POST /classrooms/class-rb/lessons/draft-rb/items',
+    'DELETE /classrooms/class-rb/lessons/draft-rb/items/a-ok',
+    'DELETE /classrooms/class-rb/lessons/draft-rb',
+  ]);
+
+  calls.length = 0;
+  await assert.rejects(
+    lessonApi.update('class-val', 'lesson-val', { ...input, completionMode: 'CONDITION_BASED', activityIds: ['p-only'], requiredActivityIds: ['p-only'] }),
+    /assignment or quiz/i,
+  );
+  assert.deepEqual(calls, [
+    'GET /classrooms/class-val/lessons/lesson-val',
+    'GET /classrooms/class-val/lessons/activities',
+  ]);
+});
+
+test('LESSON contract: download scopes cache by class/lesson, blocks unsafe URLs, and unwraps JSON-Blob errors', async () => {
+  const requestedUrls = [];
+  apiClient.defaults.adapter = async config => {
+    requestedUrls.push(config.url);
+    const ok = (data, status = 200) => ({ config, status, statusText: 'OK', headers: {}, data: { success: true, timestamp: '2026-11-11T00:00:00Z', data } });
+    if (config.url === '/classrooms/class-1/lessons/lesson-1' && config.method === 'get') {
+      return ok({
+        id: 'lesson-1', classroomId: 'class-1', title: 'L1', content: '', codeExample: '', externalLinks: '[]',
+        status: 'PUBLISHED', completionMode: 'MANUAL', displayOrder: 0,
+        materials: [{ id: 'shared-mat', fileName: 'one.pdf', fileUrl: '/api/v1/files/stored-one/content', fileType: 'PDF', fileSize: 10 }],
+        linkedItems: [], isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+        previousStatus: null, canDelete: false, requiredItemIds: [],
+      });
+    }
+    if (config.url === '/classrooms/class-2/lessons/lesson-2' && config.method === 'get') {
+      return ok({
+        id: 'lesson-2', classroomId: 'class-2', title: 'L2', content: '', codeExample: '', externalLinks: '[]',
+        status: 'PUBLISHED', completionMode: 'MANUAL', displayOrder: 0,
+        materials: [{ id: 'shared-mat', fileName: 'two.pdf', fileUrl: '/api/v1/files/stored-two/content', fileType: 'PDF', fileSize: 10 }],
+        linkedItems: [], isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+        previousStatus: null, canDelete: false, requiredItemIds: [],
+      });
+    }
+    if (config.url === '/classrooms/class-evil/lessons/lesson-evil' && config.method === 'get') {
+      return ok({
+        id: 'lesson-evil', classroomId: 'class-evil', title: 'Evil', content: '', codeExample: '', externalLinks: '[]',
+        status: 'PUBLISHED', completionMode: 'MANUAL', displayOrder: 0,
+        materials: [
+          { id: 'mat-https', fileName: 'a.pdf', fileUrl: 'https://evil.test/steal', fileType: 'PDF', fileSize: 10 },
+          { id: 'mat-proto', fileName: 'b.pdf', fileUrl: '//evil.test/steal', fileType: 'PDF', fileSize: 10 },
+        ],
+        linkedItems: [], isCompleted: null, completedAt: null, createdAt: '2026-11-11T00:00:00Z', updatedAt: '2026-11-11T00:00:00Z',
+        previousStatus: null, canDelete: false, requiredItemIds: [],
+      });
+    }
+    if (config.url === '/files/stored-one/content' || config.url === '/files/mat-https/content') {
+      return { config, status: 200, statusText: 'OK', headers: {}, data: new Blob(['OK']) };
+    }
+    if (config.url === '/files/mat-proto/content') {
+      const blob = new Blob([JSON.stringify({ success: false, errorCode: 'FILE_NOT_READY', message: 'File is still scanning' })], { type: 'application/json' });
+      throw new AxiosError('Conflict', 'ERR_BAD_REQUEST', config, undefined, { status: 409, statusText: 'Conflict', headers: {}, config, data: blob });
+    }
+    throw new Error(`Unexpected request: ${config.method} ${config.url}`);
+  };
+
+  await lessonApi.get('class-1', 'lesson-1');
+  await lessonApi.get('class-2', 'lesson-2');
+  await lessonApi.download('class-1', 'lesson-1', 'shared-mat');
+  assert.equal(requestedUrls.at(-1), '/files/stored-one/content');
+
+  await lessonApi.get('class-evil', 'lesson-evil');
+  await lessonApi.download('class-evil', 'lesson-evil', 'mat-https');
+  assert.equal(requestedUrls.some(url => url.includes('evil.test')), false);
+  assert.equal(requestedUrls.at(-1), '/files/mat-https/content');
+
+  await assert.rejects(
+    lessonApi.download('class-evil', 'lesson-evil', 'mat-proto'),
+    err => lessonError(err) === 'File is still scanning',
+  );
+  assert.equal(requestedUrls.some(url => url.includes('evil.test')), false);
 });
 
 test('lesson content component escapes source code and keeps safe reading links', () => {
