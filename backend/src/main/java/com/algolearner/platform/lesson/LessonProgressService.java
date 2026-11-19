@@ -55,6 +55,45 @@ public class LessonProgressService {
         var now = Timestamp.from(clock.instant());
         jdbc.update("insert into tbl_lesson_rule_history(lesson_id,rule_version,rule_json,created_at,updated_at) values(?,?,?,?,?)",
                 lessonId, lesson.getRuleVersion(), json, now, now);
+        recomputeAllActiveStudents(classroomId, lesson);
+    }
+
+    @Transactional(readOnly = true)
+    public void validateActiveRule(UUID classroomId, LessonEntity lesson) {
+        if (lesson == null || lesson.getRuleVersion() <= 0) invalidActiveRule();
+        var stored = currentRule(lesson);
+        if (stored == null) invalidActiveRule();
+        final LessonCompletionRule rule;
+        try {
+            rule = mapper.readValue(stored, LessonCompletionRule.class);
+        } catch (JsonProcessingException error) {
+            throw invalidActiveRuleException();
+        }
+        if (rule == null || rule.operator() == null || rule.conditions() == null || rule.conditions().isEmpty()) {
+            invalidActiveRule();
+        }
+        for (var condition : rule.conditions()) {
+            if (condition == null || condition.itemType() == null || condition.itemType() == LinkedItemType.PRACTICE
+                    || condition.itemId() == null || condition.requirement() == null) {
+                invalidActiveRule();
+            }
+            if (condition.requirement() == LessonCompletionRule.Requirement.SCORE_AT_LEAST
+                    && (condition.scorePercent() == null || condition.scorePercent().signum() < 0
+                    || condition.scorePercent().compareTo(java.math.BigDecimal.valueOf(100)) > 0)) {
+                invalidActiveRule();
+            }
+            if (!links.existsByLessonIdAndItemTypeAndItemId(lesson.getId(), condition.itemType(), condition.itemId())) {
+                invalidActiveRule();
+            }
+            var provider = provider(condition.itemType());
+            if (provider == null || !provider.existsInClassroom(condition.itemId(), classroomId)) {
+                invalidActiveRule();
+            }
+        }
+    }
+
+    @Transactional
+    public void recomputeAllActiveStudents(UUID classroomId, LessonEntity lesson) {
         jdbc.queryForList("select student_id from tbl_classroom_membership where classroom_id=? and status='ACTIVE'", UUID.class, classroomId)
                 .forEach(student -> recompute(lesson, student));
     }
@@ -137,4 +176,9 @@ public class LessonProgressService {
         catch(NoSuchAlgorithmException error) { throw new IllegalStateException(error); }
     }
     private static void invalid() { throw new ApiException(ErrorCode.VALIDATION_FAILED,"Invalid lesson completion rule"); }
+    private static void invalidActiveRule() { throw invalidActiveRuleException(); }
+    private static ApiException invalidActiveRuleException() {
+        return new ApiException(ErrorCode.VALIDATION_FAILED,
+                "Configure completion conditions with currently linked classroom items before enabling automatic completion");
+    }
 }

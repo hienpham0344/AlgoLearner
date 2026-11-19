@@ -13,18 +13,20 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.*;
 
 @SpringBootTest(properties = {"logging.level.root=WARN", "debug=false",
+        "spring.jpa.properties.hibernate.generate_statistics=true",
         "app.security.jwt-secret=lesson-safety-test-only-secret-at-least-32-bytes", "app.mail.from=sender@example.test"})
 @ActiveProfiles({"internal-auth", "test"})
 @EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = "jdbc:postgresql:.*")
 class LessonSafetyTest extends PostgresIntegrationTest {
     static final java.util.concurrent.atomic.AtomicReference<LessonProgressSource> SOURCE = new java.util.concurrent.atomic.AtomicReference<>();
+    static final java.util.Set<UUID> MISSING_ITEMS = java.util.concurrent.ConcurrentHashMap.newKeySet();
     @org.springframework.boot.test.context.TestConfiguration
     static class Sources {
         @org.springframework.context.annotation.Bean
         @org.springframework.core.annotation.Order(org.springframework.core.Ordered.HIGHEST_PRECEDENCE)
         LessonProgressProvider testQuizSource() { return new LessonProgressProvider() {
             public LinkedItemType itemType() { return LinkedItemType.QUIZ; }
-            public boolean existsInClassroom(UUID itemId, UUID classroomId) { return true; }
+            public boolean existsInClassroom(UUID itemId, UUID classroomId) { return !MISSING_ITEMS.contains(itemId); }
             public LessonProgressSource progress(UUID itemId, UUID classroomId, UUID studentId) { return SOURCE.get(); }
         }; }
     }
@@ -33,6 +35,7 @@ class LessonSafetyTest extends PostgresIntegrationTest {
     @Autowired LessonService service;
     @Autowired ClassroomService classroomService;
     @Autowired AccountRepository accounts;
+    @Autowired jakarta.persistence.EntityManagerFactory entityManagerFactory;
 
     @Test
     void restoreDraftNeverPublishesUnreviewedLesson() {
@@ -167,6 +170,147 @@ class LessonSafetyTest extends PostgresIntegrationTest {
         assertThat(afterUnlink.canDelete()).isFalse();
         assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.id(), lesson.id()))
                 .isInstanceOf(AppException.class);
+    }
+
+    @Test
+    void reEnablingAutoItemsValidatesActiveRuleAndRecomputesAllActiveStudents() {
+        var teacher = account(AccountRole.TEACHER);
+        var student = account(AccountRole.STUDENT);
+        var classroom = classroomService.create(teacher.getId(), new ClassroomDtos.Create("Reenable", null, JoinMode.AUTO_JOIN, null, null));
+        classroomService.directAdd(teacher.getId(), classroom.id(), new ClassroomDtos.DirectAdd(student.getUsername()));
+        var lesson = service.create(teacher.getId(), classroom.id(), new LessonDtos.CreateLessonRequest("Auto", null, null, null, CompletionMode.AUTO_ITEMS));
+        UUID quiz = UUID.randomUUID();
+        service.linkItem(teacher.getId(), classroom.id(), lesson.id(), new LessonDtos.LinkItemRequest(LinkedItemType.QUIZ, quiz));
+        SOURCE.set(new LessonProgressSource(false, false, null, null, "before"));
+        service.configureCompletionRule(teacher.getId(), classroom.id(), lesson.id(),
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL,
+                        java.util.List.of(new LessonCompletionRule.Condition(
+                                LinkedItemType.QUIZ, quiz, LessonCompletionRule.Requirement.SUBMITTED, null))));
+        assertThat(completed(lesson.id(), student.getId())).isFalse();
+
+        // Switch to MANUAL and unlink the quiz so the old rule becomes stale
+        service.update(teacher.getId(), classroom.id(), lesson.id(),
+                new LessonDtos.UpdateLessonRequest("Auto", null, null, null, CompletionMode.MANUAL));
+        service.unlinkItem(teacher.getId(), classroom.id(), lesson.id(), quiz);
+
+        // Switching back to AUTO_ITEMS with unlinked item must fail VALIDATION_FAILED
+        assertThatThrownBy(() -> service.update(teacher.getId(), classroom.id(), lesson.id(),
+                new LessonDtos.UpdateLessonRequest("Auto", null, null, null, CompletionMode.AUTO_ITEMS)))
+                .isInstanceOf(com.algolearner.platform.common.exception.ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", com.algolearner.platform.common.exception.ErrorCode.VALIDATION_FAILED.getCode())
+                .hasMessageContaining("Configure completion conditions with currently linked classroom items before enabling automatic completion");
+
+        // Re-link the quiz, mark student submitted, and switch back to AUTO_ITEMS -> succeeds and recomputes!
+        service.linkItem(teacher.getId(), classroom.id(), lesson.id(), new LessonDtos.LinkItemRequest(LinkedItemType.QUIZ, quiz));
+        SOURCE.set(new LessonProgressSource(true, true, java.math.BigDecimal.valueOf(100), UUID.randomUUID(), "submitted-while-manual"));
+        var reenabled = service.update(teacher.getId(), classroom.id(), lesson.id(),
+                new LessonDtos.UpdateLessonRequest("Auto", null, null, null, CompletionMode.AUTO_ITEMS));
+        assertThat(reenabled.completionMode()).isEqualTo(CompletionMode.AUTO_ITEMS);
+        assertThat(completed(lesson.id(), student.getId())).isTrue();
+    }
+
+    @Test
+    void publishAndRestoreRejectAutoItemsWithStaleRuleItem() {
+        var teacher = account(AccountRole.TEACHER);
+        var classroom = classroomService.create(teacher.getId(), new ClassroomDtos.Create("StalePublishRestore", null, JoinMode.AUTO_JOIN, null, null));
+        var draftLesson = service.create(teacher.getId(), classroom.id(), new LessonDtos.CreateLessonRequest("DraftAuto", null, null, null, CompletionMode.AUTO_ITEMS));
+        UUID draftQuiz = UUID.randomUUID();
+        service.linkItem(teacher.getId(), classroom.id(), draftLesson.id(), new LessonDtos.LinkItemRequest(LinkedItemType.QUIZ, draftQuiz));
+        SOURCE.set(new LessonProgressSource(false, false, null, null, "empty"));
+        service.configureCompletionRule(teacher.getId(), classroom.id(), draftLesson.id(),
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL,
+                        java.util.List.of(new LessonCompletionRule.Condition(
+                                LinkedItemType.QUIZ, draftQuiz, LessonCompletionRule.Requirement.SUBMITTED, null))));
+
+        var archivedLesson = service.create(teacher.getId(), classroom.id(), new LessonDtos.CreateLessonRequest("PublishedAuto", null, null, null, CompletionMode.AUTO_ITEMS));
+        UUID archivedQuiz = UUID.randomUUID();
+        service.linkItem(teacher.getId(), classroom.id(), archivedLesson.id(), new LessonDtos.LinkItemRequest(LinkedItemType.QUIZ, archivedQuiz));
+        service.configureCompletionRule(teacher.getId(), classroom.id(), archivedLesson.id(),
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL,
+                        java.util.List.of(new LessonCompletionRule.Condition(
+                                LinkedItemType.QUIZ, archivedQuiz, LessonCompletionRule.Requirement.SUBMITTED, null))));
+        service.publish(teacher.getId(), classroom.id(), archivedLesson.id());
+        service.archive(teacher.getId(), classroom.id(), archivedLesson.id());
+
+        MISSING_ITEMS.add(draftQuiz);
+        MISSING_ITEMS.add(archivedQuiz);
+        try {
+            assertThatThrownBy(() -> service.publish(teacher.getId(), classroom.id(), draftLesson.id()))
+                    .isInstanceOf(com.algolearner.platform.common.exception.ApiException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", com.algolearner.platform.common.exception.ErrorCode.VALIDATION_FAILED.getCode());
+            assertThatThrownBy(() -> service.restore(teacher.getId(), classroom.id(), archivedLesson.id()))
+                    .isInstanceOf(com.algolearner.platform.common.exception.ApiException.class)
+                    .hasFieldOrPropertyWithValue("errorCode", com.algolearner.platform.common.exception.ErrorCode.VALIDATION_FAILED.getCode());
+        } finally {
+            MISSING_ITEMS.remove(draftQuiz);
+            MISSING_ITEMS.remove(archivedQuiz);
+        }
+    }
+
+    @Test
+    void concurrentManualCompleteLessonIsIdempotentUnderDoubleClick() throws Exception {
+        var teacher = account(AccountRole.TEACHER);
+        var student = account(AccountRole.STUDENT);
+        var classroom = classroomService.create(teacher.getId(), new ClassroomDtos.Create("ConcurrentComplete", null, JoinMode.AUTO_JOIN, null, null));
+        classroomService.directAdd(teacher.getId(), classroom.id(), new ClassroomDtos.DirectAdd(student.getUsername()));
+        var lesson = service.create(teacher.getId(), classroom.id(), new LessonDtos.CreateLessonRequest("Manual", null, null, null, CompletionMode.MANUAL));
+        service.publish(teacher.getId(), classroom.id(), lesson.id());
+
+        var gate = new java.util.concurrent.CyclicBarrier(2);
+        try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<Void> task = () -> {
+                gate.await(10, java.util.concurrent.TimeUnit.SECONDS);
+                service.completeLesson(student.getId(), classroom.id(), lesson.id());
+                return null;
+            };
+            var first = pool.submit(task);
+            var second = pool.submit(task);
+            first.get(15, java.util.concurrent.TimeUnit.SECONDS);
+            second.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        }
+        assertThat(jdbc.queryForObject("select count(*) from tbl_lesson_completion where lesson_id=? and student_id=? and is_completed=true",
+                Integer.class, lesson.id(), student.getId())).isEqualTo(1);
+        assertThat(history(lesson.id())).isEqualTo(1);
+    }
+
+    @Test
+    void listAndStudentProgressDoNotExecutePerRowCompletionQueries() {
+        var teacher = account(AccountRole.TEACHER);
+        var singleClass = classroomService.create(teacher.getId(), new ClassroomDtos.Create("OneLesson", null, JoinMode.AUTO_JOIN, null, null));
+        var manyClass = classroomService.create(teacher.getId(), new ClassroomDtos.Create("ManyLessons", null, JoinMode.AUTO_JOIN, null, null));
+        var s1 = account(AccountRole.STUDENT);
+        classroomService.directAdd(teacher.getId(), singleClass.id(), new ClassroomDtos.DirectAdd(s1.getUsername()));
+        classroomService.directAdd(teacher.getId(), manyClass.id(), new ClassroomDtos.DirectAdd(s1.getUsername()));
+
+        var oneLesson = service.create(teacher.getId(), singleClass.id(), new LessonDtos.CreateLessonRequest("L0", "Body", "Code", null, CompletionMode.MANUAL));
+        service.publish(teacher.getId(), singleClass.id(), oneLesson.id());
+        service.completeLesson(s1.getId(), singleClass.id(), oneLesson.id());
+
+        UUID trackedLesson = null;
+        for (int i = 0; i < 15; i++) {
+            var created = service.create(teacher.getId(), manyClass.id(), new LessonDtos.CreateLessonRequest("L" + i, "Body " + i, "Code " + i, null, CompletionMode.MANUAL));
+            service.publish(teacher.getId(), manyClass.id(), created.id());
+            if (i == 0) trackedLesson = created.id();
+            var st = account(AccountRole.STUDENT);
+            classroomService.directAdd(teacher.getId(), manyClass.id(), new ClassroomDtos.DirectAdd(st.getUsername()));
+            service.completeLesson(st.getId(), manyClass.id(), trackedLesson);
+        }
+
+        long oneListQueries = statementCount(() -> service.list(s1.getId(), singleClass.id()));
+        long manyListQueries = statementCount(() -> service.list(s1.getId(), manyClass.id()));
+        assertThat(manyListQueries).as("15 lessons should not add per-lesson queries").isLessThanOrEqualTo(oneListQueries + 2);
+
+        UUID progressLessonId = trackedLesson;
+        long oneProgressQueries = statementCount(() -> service.studentProgress(teacher.getId(), manyClass.id(), progressLessonId, org.springframework.data.domain.PageRequest.of(0, 1)));
+        long manyProgressQueries = statementCount(() -> service.studentProgress(teacher.getId(), manyClass.id(), progressLessonId, org.springframework.data.domain.PageRequest.of(0, 20)));
+        assertThat(manyProgressQueries).as("16 students should not add per-student completion queries").isLessThanOrEqualTo(oneProgressQueries + 2);
+    }
+
+    private long statementCount(Runnable action) {
+        var statistics = entityManagerFactory.unwrap(org.hibernate.SessionFactory.class).getStatistics();
+        statistics.clear();
+        action.run();
+        return statistics.getPrepareStatementCount();
     }
 
     private boolean completed(UUID lesson,UUID student) { return jdbc.queryForObject("select is_completed from tbl_lesson_completion where lesson_id=? and student_id=?", Boolean.class,lesson,student); }

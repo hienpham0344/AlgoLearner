@@ -56,5 +56,12 @@ public class FileController {
                 .body(output -> files.download(actor, fileId, output));
     }
 
+    @DeleteMapping("/api/v1/files/{fileId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Delete an unreferenced private file", description = "Deletes an unreferenced file uploaded by the caller; returns 403 for non-uploaders, 404 for unknown IDs, and 409 if still referenced.")
+    public void delete(Authentication authentication, @PathVariable UUID fileId) {
+        files.deleteUnreferenced(actor(authentication), fileId);
+    }
+
     private UUID actor(Authentication authentication) { return UUID.fromString(authentication.getName()); }
 }

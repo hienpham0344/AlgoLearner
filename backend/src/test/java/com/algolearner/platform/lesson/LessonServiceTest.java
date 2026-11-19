@@ -570,4 +570,157 @@ class LessonServiceTest {
                 .isInstanceOf(ApiException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.FORBIDDEN_OPERATION.getCode());
     }
+
+    @Test
+    void autoItemsUpdatePublishAndRestoreValidateActiveRuleAndRecomputeOnReenable() {
+        lesson.setStatus(LessonStatus.DRAFT);
+        lesson.setCompletionMode(CompletionMode.MANUAL);
+        lesson.setRuleVersion(1L);
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        when(lessons.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        doThrow(new ApiException(ErrorCode.VALIDATION_FAILED, "Stale rule"))
+                .when(progressService).validateActiveRule(classroom.getId(), lesson);
+
+        var enableAuto = new LessonDtos.UpdateLessonRequest("Updated", "Body", null, "[]", CompletionMode.AUTO_ITEMS);
+        assertThatThrownBy(() -> service.update(teacher.getId(), classroom.getId(), lesson.getId(), enableAuto))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED.getCode());
+
+        lesson.setCompletionMode(CompletionMode.AUTO_ITEMS);
+        assertThatThrownBy(() -> service.publish(teacher.getId(), classroom.getId(), lesson.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED.getCode());
+
+        lesson.setStatus(LessonStatus.ARCHIVED);
+        lesson.setArchivedFromStatus(LessonStatus.PUBLISHED);
+        assertThatThrownBy(() -> service.restore(teacher.getId(), classroom.getId(), lesson.getId()))
+                .isInstanceOf(ApiException.class)
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.VALIDATION_FAILED.getCode());
+
+        // When rule is valid and mode switches MANUAL -> AUTO_ITEMS, active students are recomputed
+        reset(progressService);
+        lesson.setStatus(LessonStatus.DRAFT);
+        lesson.setArchivedFromStatus(null);
+        lesson.setCompletionMode(CompletionMode.MANUAL);
+        when(materials.findByLessonId(lesson.getId())).thenReturn(List.of());
+        when(linkedItems.findByLessonIdOrderByDisplayOrderAsc(lesson.getId())).thenReturn(List.of());
+
+        var updated = service.update(teacher.getId(), classroom.getId(), lesson.getId(), enableAuto);
+        assertThat(updated.completionMode()).isEqualTo(CompletionMode.AUTO_ITEMS);
+        verify(progressService).validateActiveRule(classroom.getId(), lesson);
+        verify(progressService).recomputeAllActiveStudents(classroom.getId(), lesson);
+    }
+
+    @Test
+    void listAndDetailPopulateMaterialCountContentAndLinkedItemCompleted() {
+        lesson.setStatus(LessonStatus.PUBLISHED);
+        lesson.setContent("Detailed lesson notes");
+        lesson.setCodeExample("{\"language\":\"java\",\"code\":\"int x = 1;\"}");
+        lesson.setCompletionMode(CompletionMode.AUTO_ITEMS);
+        lesson.setRuleVersion(1L);
+
+        var readyMaterial = LessonMaterialEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(lesson)
+                .fileName("slides.pdf")
+                .fileUrl("/api/v1/files/1/content")
+                .fileType(MaterialFileType.PDF)
+                .fileSize(1024L)
+                .storedFileId(UUID.randomUUID())
+                .materialState("READY")
+                .build();
+        var pendingMaterial = LessonMaterialEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(lesson)
+                .fileName("pending.pdf")
+                .fileUrl("/api/v1/files/2/content")
+                .fileType(MaterialFileType.PDF)
+                .fileSize(512L)
+                .storedFileId(UUID.randomUUID())
+                .materialState("PENDING")
+                .build();
+        var membership = new ClassroomMembershipEntity();
+        membership.setClassroom(classroom);
+        membership.setStudent(student);
+        membership.setStatus(MembershipStatus.ACTIVE);
+
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId())).thenReturn(Optional.of(membership));
+        when(lessons.findByClassroomIdAndStatusInOrderByDisplayOrderAsc(classroom.getId(), List.of(LessonStatus.PUBLISHED)))
+                .thenReturn(List.of(lesson));
+        when(completions.findByLessonIdInAndStudentId(List.of(lesson.getId()), student.getId())).thenReturn(List.of());
+        when(materials.findByLessonIdIn(List.of(lesson.getId()))).thenReturn(List.of(readyMaterial, pendingMaterial));
+
+        var summaries = service.list(student.getId(), classroom.getId());
+        assertThat(summaries).hasSize(1);
+        assertThat(summaries.getFirst().content()).isEqualTo("Detailed lesson notes");
+        assertThat(summaries.getFirst().codeExample()).isEqualTo("{\"language\":\"java\",\"code\":\"int x = 1;\"}");
+        assertThat(summaries.getFirst().materialCount()).isEqualTo(1);
+        verify(completions, never()).findByLessonIdAndStudentId(any(), any());
+
+        UUID quizId = UUID.randomUUID();
+        var quizLink = LessonLinkedItemEntity.builder()
+                .id(UUID.randomUUID())
+                .lesson(lesson)
+                .itemType(LinkedItemType.QUIZ)
+                .itemId(quizId)
+                .displayOrder(0)
+                .build();
+        var provider = mock(LessonProgressProvider.class);
+        when(provider.itemType()).thenReturn(LinkedItemType.QUIZ);
+        when(provider.availableToStudent(quizId, classroom.getId(), student.getId())).thenReturn(true);
+        when(provider.classroomItems(classroom.getId())).thenReturn(List.of(
+                new LessonProgressProvider.ClassroomItemSummary(quizId, "Quiz 1", true)));
+        when(provider.progress(quizId, classroom.getId(), student.getId()))
+                .thenReturn(new LessonProgressSource(true, true, java.math.BigDecimal.valueOf(85), UUID.randomUUID(), "ok"));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        when(materials.findByLessonId(lesson.getId())).thenReturn(List.of(readyMaterial));
+        when(linkedItems.findByLessonIdOrderByDisplayOrderAsc(lesson.getId())).thenReturn(List.of(quizLink));
+        when(completions.findByLessonIdAndStudentId(lesson.getId(), student.getId())).thenReturn(Optional.empty());
+        when(progressService.rule(lesson.getId())).thenReturn(new LessonDtos.CompletionRuleView(1L,
+                new LessonCompletionRule(LessonCompletionRule.Operator.ALL, List.of(
+                        new LessonCompletionRule.Condition(LinkedItemType.QUIZ, quizId,
+                                LessonCompletionRule.Requirement.SCORE_AT_LEAST, java.math.BigDecimal.valueOf(80))))));
+
+        var serviceWithProvider = new LessonService(lessons, materials, linkedItems, completions, classrooms, memberships,
+                accounts, assignments, clock, classroomService, List.of(provider), progressService, managedFiles);
+        var detail = serviceWithProvider.get(student.getId(), classroom.getId(), lesson.getId());
+        assertThat(detail.linkedItems()).hasSize(1);
+        assertThat(detail.linkedItems().getFirst().completed()).isTrue();
+    }
+
+    @Test
+    void completeLessonUsesForUpdateLockOnMembershipAndStudentProgressBatchesCompletions() {
+        lesson.setStatus(LessonStatus.PUBLISHED);
+        lesson.setCompletionMode(CompletionMode.MANUAL);
+        var membership = new ClassroomMembershipEntity();
+        membership.setClassroom(classroom);
+        membership.setStudent(student);
+        membership.setStatus(MembershipStatus.ACTIVE);
+
+        when(memberships.findByClassroomIdAndStudentIdForUpdate(classroom.getId(), student.getId()))
+                .thenReturn(Optional.of(membership));
+        when(lessons.findByIdAndClassroomId(lesson.getId(), classroom.getId())).thenReturn(Optional.of(lesson));
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(completions.findByLessonIdAndStudentId(lesson.getId(), student.getId())).thenReturn(Optional.empty());
+
+        service.completeLesson(student.getId(), classroom.getId(), lesson.getId());
+        verify(memberships).findByClassroomIdAndStudentIdForUpdate(classroom.getId(), student.getId());
+        verify(completions).save(any(LessonCompletionEntity.class));
+
+        var completion = LessonCompletionEntity.builder()
+                .id(UUID.randomUUID()).lesson(lesson).student(student).isCompleted(true).completedAt(clock.instant()).build();
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20);
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(memberships.findByClassroomIdAndStatus(classroom.getId(), MembershipStatus.ACTIVE, pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(membership), pageable, 1));
+        when(completions.findByLessonIdAndStudentIdIn(lesson.getId(), List.of(student.getId())))
+                .thenReturn(List.of(completion));
+
+        var page = service.studentProgress(teacher.getId(), classroom.getId(), lesson.getId(), pageable);
+        assertThat(page.getData().getItems()).hasSize(1);
+        assertThat(page.getData().getItems().getFirst().completed()).isTrue();
+        verify(completions).findByLessonIdAndStudentIdIn(lesson.getId(), List.of(student.getId()));
+    }
 }

@@ -91,6 +91,14 @@ public class ManagedFileService {
         return records.read(actor, fileId);
     }
 
+    public void deleteUnreferenced(UUID actor, UUID fileId) {
+        var ticket = records.claimImmediateDeletion(actor, fileId);
+        if (ticket.objectUploaded()) {
+            objects.delete(ticket.objectKey());
+        }
+        records.finishDeletion(ticket);
+    }
+
     public void download(UUID actor, UUID fileId, OutputStream output) throws IOException {
         var file = records.downloadable(actor, fileId);
         var bounded = new OutputStream() {

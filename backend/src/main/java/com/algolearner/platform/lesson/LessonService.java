@@ -47,16 +47,43 @@ public class LessonService {
         var classroom = requireClassroom(classroomId);
         boolean isOwner = classroom.getOwner().getId().equals(accountId);
 
+        List<LessonEntity> visibleLessons;
         if (!isOwner) {
             requireActiveStudent(classroomId, accountId);
-            var publishedLessons = lessons.findByClassroomIdAndStatusInOrderByDisplayOrderAsc(
+            visibleLessons = lessons.findByClassroomIdAndStatusInOrderByDisplayOrderAsc(
                     classroomId, List.of(LessonStatus.PUBLISHED)
             );
-            return publishedLessons.stream().map(l -> toSummaryView(l, accountId)).toList();
+        } else {
+            visibleLessons = lessons.findByClassroomIdOrderByDisplayOrderAsc(classroomId);
+        }
+        if (visibleLessons.isEmpty()) {
+            return List.of();
         }
 
-        var allLessons = lessons.findByClassroomIdOrderByDisplayOrderAsc(classroomId);
-        return allLessons.stream().map(l -> toSummaryView(l, accountId)).toList();
+        var lessonIds = visibleLessons.stream().map(LessonEntity::getId).toList();
+        Map<UUID, LessonCompletionEntity> completionByLessonId = completions.findByLessonIdInAndStudentId(lessonIds, accountId)
+                .stream()
+                .filter(c -> c.getLesson() != null)
+                .collect(Collectors.toMap(
+                        c -> c.getLesson().getId(),
+                        c -> c,
+                        (first, second) -> first
+                ));
+        Map<UUID, Integer> readyMaterialCountByLessonId = materials.findByLessonIdIn(lessonIds)
+                .stream()
+                .filter(m -> m.getLesson() != null && "READY".equals(m.getMaterialState()) && m.getStoredFileId() != null)
+                .collect(Collectors.toMap(
+                        m -> m.getLesson().getId(),
+                        m -> 1,
+                        Integer::sum
+                ));
+
+        return visibleLessons.stream()
+                .map(l -> toSummaryView(
+                        l,
+                        completionByLessonId.get(l.getId()),
+                        readyMaterialCountByLessonId.getOrDefault(l.getId(), 0)))
+                .toList();
     }
 
     public LessonDtos.LessonDetailView get(UUID accountId, UUID classroomId, UUID lessonId) {
@@ -105,16 +132,29 @@ public class LessonService {
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
         if (lesson.getStatus() == LessonStatus.ARCHIVED) throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
+        CompletionMode previousMode = lesson.getCompletionMode();
         lesson.setTitle(request.title().trim());
         if (request.content() != null) lesson.setContent(request.content());
         if (request.codeExample() != null) lesson.setCodeExample(request.codeExample());
         if (request.externalLinks() != null) lesson.setExternalLinks(request.externalLinks());
-        if (request.completionMode() == CompletionMode.AUTO_ITEMS && lesson.getStatus() == LessonStatus.PUBLISHED
-                && lesson.getRuleVersion() == 0)
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before enabling automatic completion");
+        if (request.completionMode() == CompletionMode.AUTO_ITEMS) {
+            if (lesson.getStatus() == LessonStatus.PUBLISHED && lesson.getRuleVersion() == 0) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before enabling automatic completion");
+            }
+            if (lesson.getRuleVersion() > 0 && progressService != null) {
+                progressService.validateActiveRule(classroomId, lesson);
+            }
+        }
         if (request.completionMode() != null) lesson.setCompletionMode(request.completionMode());
 
-        return toDetailView(lessons.save(lesson), accountId);
+        var saved = lessons.save(lesson);
+        if (previousMode != CompletionMode.AUTO_ITEMS
+                && saved.getCompletionMode() == CompletionMode.AUTO_ITEMS
+                && saved.getRuleVersion() > 0
+                && progressService != null) {
+            progressService.recomputeAllActiveStudents(classroomId, saved);
+        }
+        return toDetailView(saved, accountId);
     }
 
     @Transactional
@@ -142,8 +182,14 @@ public class LessonService {
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
         requireStatus(lesson, LessonStatus.DRAFT);
-        if (lesson.getCompletionMode() == CompletionMode.AUTO_ITEMS && lesson.getRuleVersion() == 0)
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before publishing");
+        if (lesson.getCompletionMode() == CompletionMode.AUTO_ITEMS) {
+            if (lesson.getRuleVersion() == 0) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before publishing");
+            }
+            if (progressService != null) {
+                progressService.validateActiveRule(classroomId, lesson);
+            }
+        }
         lesson.setStatus(LessonStatus.PUBLISHED);
         return toDetailView(lessons.save(lesson), accountId);
     }
@@ -184,7 +230,18 @@ public class LessonService {
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
 
         requireStatus(lesson, LessonStatus.ARCHIVED);
-        lesson.setStatus(lesson.getArchivedFromStatus() == LessonStatus.PUBLISHED ? LessonStatus.PUBLISHED : LessonStatus.DRAFT);
+        LessonStatus targetStatus = lesson.getArchivedFromStatus() == LessonStatus.PUBLISHED
+                ? LessonStatus.PUBLISHED
+                : LessonStatus.DRAFT;
+        if (targetStatus == LessonStatus.PUBLISHED && lesson.getCompletionMode() == CompletionMode.AUTO_ITEMS) {
+            if (lesson.getRuleVersion() == 0) {
+                throw new ApiException(ErrorCode.VALIDATION_FAILED, "Configure completion conditions before publishing");
+            }
+            if (progressService != null) {
+                progressService.validateActiveRule(classroomId, lesson);
+            }
+        }
+        lesson.setStatus(targetStatus);
         lesson.setArchivedFromStatus(null);
         return toDetailView(lessons.save(lesson), accountId);
     }
@@ -283,7 +340,7 @@ public class LessonService {
         if (classroom.getStatus() != com.algolearner.platform.classroom.ClassroomStatus.ACTIVE
                 || classroom.getOwner().getStatus() != com.algolearner.platform.auth.AccountStatus.ACTIVE)
             throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
-        requireActiveStudent(classroomId, studentId);
+        requireActiveStudentForUpdate(classroomId, studentId);
 
         var lesson = lessons.findByIdAndClassroomId(lessonId, classroomId)
                 .orElseThrow(() -> new ApiException(ErrorCode.LESSON_NOT_FOUND));
@@ -367,12 +424,23 @@ public class LessonService {
         var classroom = requireClassroom(classroomId);
         requireOwnerForRead(classroom, actorId);
         if (lessons.findByIdAndClassroomId(lessonId, classroomId).isEmpty()) throw new ApiException(ErrorCode.LESSON_NOT_FOUND);
+        var page = memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE, pageable);
+        var studentIds = page.getContent().stream().map(member -> member.getStudent().getId()).toList();
+        Map<UUID, LessonCompletionEntity> completionsByStudent = studentIds.isEmpty()
+                ? Map.of()
+                : completions.findByLessonIdAndStudentIdIn(lessonId, studentIds).stream()
+                        .filter(c -> c.getStudent() != null)
+                        .collect(Collectors.toMap(
+                                c -> c.getStudent().getId(),
+                                c -> c,
+                                (first, second) -> first
+                        ));
         return com.algolearner.platform.common.dto.PageResponse.fromPage(
-                memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE, pageable).map(member -> {
-                    var completion = completions.findByLessonIdAndStudentId(lessonId, member.getStudent().getId());
+                page.map(member -> {
+                    var completion = completionsByStudent.get(member.getStudent().getId());
                     return new LessonDtos.StudentProgressView(member.getStudent().getId(), member.getStudent().getUsername(),
-                            completion.map(LessonCompletionEntity::isCompleted).orElse(false),
-                            completion.map(LessonCompletionEntity::getCompletedAt).orElse(null));
+                            completion != null && completion.isCompleted(),
+                            completion != null ? completion.getCompletedAt() : null);
                 }));
     }
 
@@ -409,18 +477,26 @@ public class LessonService {
         }
     }
 
-    private LessonDtos.LessonSummaryView toSummaryView(LessonEntity l, UUID accountId) {
-        Boolean completed = null;
-        java.time.Instant completedAt = null;
-        var comp = completions.findByLessonIdAndStudentId(l.getId(), accountId);
-        if (comp.isPresent()) {
-            completed = comp.get().isCompleted();
-            completedAt = comp.get().getCompletedAt();
+    private void requireActiveStudentForUpdate(UUID classroomId, UUID accountId) {
+        var membership = memberships.findByClassroomIdAndStudentIdForUpdate(classroomId, accountId);
+        if (membership.isEmpty()) {
+            membership = memberships.findByClassroomIdAndStudentId(classroomId, accountId);
         }
+        boolean active = membership
+                .filter(m -> m.getStatus() == MembershipStatus.ACTIVE)
+                .isPresent();
+        if (!active) {
+            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
+        }
+    }
+
+    private LessonDtos.LessonSummaryView toSummaryView(LessonEntity l, LessonCompletionEntity completion, int materialCount) {
+        Boolean completed = completion != null ? completion.isCompleted() : null;
+        java.time.Instant completedAt = completion != null ? completion.getCompletedAt() : null;
         return new LessonDtos.LessonSummaryView(
                 l.getId(), l.getClassroom().getId(), l.getTitle(), l.getStatus(),
                 l.getCompletionMode(), l.getDisplayOrder(), completed, completedAt,
-                l.getCreatedAt(), l.getUpdatedAt()
+                l.getCreatedAt(), l.getUpdatedAt(), l.getContent(), l.getCodeExample(), materialCount
         );
     }
 
@@ -447,13 +523,44 @@ public class LessonService {
                 ? Map.<ItemKey, LessonProgressProvider.ClassroomItemSummary>of()
                 : classroomItemSummaries(l.getClassroom().getId());
 
+        LessonDtos.CompletionRuleView ruleView = (l.getCompletionMode() == CompletionMode.AUTO_ITEMS
+                && l.getRuleVersion() > 0 && progressService != null)
+                ? progressService.rule(l.getId())
+                : null;
+        Map<ItemKey, List<LessonCompletionRule.Condition>> conditionsByItem =
+                (ruleView != null && ruleView.rule() != null && ruleView.rule().conditions() != null)
+                        ? ruleView.rule().conditions().stream()
+                                .filter(c -> c != null && c.itemType() != null && c.itemId() != null)
+                                .collect(Collectors.groupingBy(c -> new ItemKey(c.itemType(), c.itemId())))
+                        : Map.of();
+
         var linkViews = visibleRawItems.stream()
                 .map(item -> {
-                    var summary = itemSummaries.get(new ItemKey(item.getItemType(), item.getItemId()));
+                    var key = new ItemKey(item.getItemType(), item.getItemId());
+                    var summary = itemSummaries.get(key);
                     String title = summary != null ? summary.title() : null;
                     boolean available = isOwner ? (summary != null && summary.availableToStudent()) : true;
+                    Boolean itemCompleted;
+                    if (isOwner) {
+                        itemCompleted = false;
+                    } else {
+                        LessonProgressProvider p = provider(item.getItemType());
+                        LessonProgressSource source = p != null
+                                ? p.progress(item.getItemId(), l.getClassroom().getId(), accountId)
+                                : null;
+                        List<LessonCompletionRule.Condition> itemConditions = conditionsByItem.get(key);
+                        if (itemConditions != null && !itemConditions.isEmpty()) {
+                            boolean isAny = ruleView != null && ruleView.rule() != null
+                                    && ruleView.rule().operator() == LessonCompletionRule.Operator.ANY;
+                            itemCompleted = source != null && (isAny
+                                    ? itemConditions.stream().anyMatch(cond -> conditionSatisfied(cond, source))
+                                    : itemConditions.stream().allMatch(cond -> conditionSatisfied(cond, source)));
+                        } else {
+                            itemCompleted = source != null && source.submitted();
+                        }
+                    }
                     return new LessonDtos.LinkedItemView(
-                            item.getId(), item.getItemType(), item.getItemId(), item.getDisplayOrder(), title, available);
+                            item.getId(), item.getItemType(), item.getItemId(), item.getDisplayOrder(), title, available, itemCompleted);
                 })
                 .toList();
 
@@ -467,15 +574,12 @@ public class LessonService {
                 .map(item -> new ItemKey(item.itemType(), item.itemId()))
                 .collect(Collectors.toSet());
         List<UUID> requiredItemIds = List.of();
-        if (l.getCompletionMode() == CompletionMode.AUTO_ITEMS && l.getRuleVersion() > 0 && progressService != null) {
-            var ruleView = progressService.rule(l.getId());
-            if (ruleView != null && ruleView.rule() != null && ruleView.rule().conditions() != null) {
-                requiredItemIds = ruleView.rule().conditions().stream()
-                        .filter(condition -> isOwner || visibleItemKeys.contains(new ItemKey(condition.itemType(), condition.itemId())))
-                        .map(LessonCompletionRule.Condition::itemId)
-                        .distinct()
-                        .toList();
-            }
+        if (ruleView != null && ruleView.rule() != null && ruleView.rule().conditions() != null) {
+            requiredItemIds = ruleView.rule().conditions().stream()
+                    .filter(condition -> isOwner || visibleItemKeys.contains(new ItemKey(condition.itemType(), condition.itemId())))
+                    .map(LessonCompletionRule.Condition::itemId)
+                    .distinct()
+                    .toList();
         }
 
         return new LessonDtos.LessonDetailView(
@@ -484,6 +588,19 @@ public class LessonService {
                 matViews, linkViews, completed, completedAt, l.getCreatedAt(), l.getUpdatedAt(),
                 previousStatus, canDelete, requiredItemIds
         );
+    }
+
+    private static boolean conditionSatisfied(LessonCompletionRule.Condition condition, LessonProgressSource source) {
+        if (condition == null || condition.requirement() == null || source == null) {
+            return false;
+        }
+        return switch (condition.requirement()) {
+            case SUBMITTED -> source.submitted();
+            case SCORE_AT_LEAST -> source.publishedFinalEvaluation()
+                    && source.scorePercent() != null
+                    && condition.scorePercent() != null
+                    && source.scorePercent().compareTo(condition.scorePercent()) >= 0;
+        };
     }
 
     private Map<ItemKey, LessonProgressProvider.ClassroomItemSummary> classroomItemSummaries(UUID classroomId) {

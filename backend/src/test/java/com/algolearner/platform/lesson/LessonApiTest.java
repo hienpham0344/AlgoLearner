@@ -466,6 +466,124 @@ public class LessonApiTest extends com.algolearner.platform.support.PostgresInte
                 .andExpect(jsonPath("$.data.previousStatus").value(org.hamcrest.Matchers.nullValue()));
     }
 
+    @Test
+    void listIncludesContentCodeMaterialCountDetailIncludesItemCompletedAndProgressIsUnwrappedPage() throws Exception {
+        String classRes = mvc.perform(post("/api/v1/classrooms")
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Enriched Class\",\"joinMode\":\"AUTO_JOIN\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID classId = UUID.fromString(objectMapper.readTree(classRes).path("data").path("id").asText());
+        String code = objectMapper.readTree(classRes).path("data").path("classCode").asText();
+
+        mvc.perform(post("/api/v1/classrooms/join")
+                        .with(actor(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"classCode\":\"" + code + "\"}"))
+                .andExpect(status().isOk());
+
+        String lessonRes = mvc.perform(post("/api/v1/classrooms/{classId}/lessons", classId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Graphs\",\"content\":\"BFS and DFS\",\"codeExample\":\"void bfs() {}\",\"completionMode\":\"MANUAL\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID lessonId = UUID.fromString(objectMapper.readTree(lessonRes).path("data").path("id").asText());
+
+        var file = new com.algolearner.platform.storage.StoredFileEntity();
+        file.setId(UUID.randomUUID());
+        file.setUploaderId(teacher.getId());
+        file.setClassroomId(classId);
+        file.setObjectKey(teacher.getId() + "/" + file.getId());
+        file.setName("graphs.pdf");
+        file.setMediaType("application/pdf");
+        file.setKind(com.algolearner.platform.storage.FileKind.PDF);
+        file.setSize(512L);
+        file.setSha256("c".repeat(64));
+        file.setPurpose(com.algolearner.platform.storage.FilePurpose.LESSON_MATERIAL);
+        file.setState(com.algolearner.platform.storage.FileState.READY);
+        file.setObjectUploaded(true);
+        storedFiles.saveAndFlush(file);
+
+        mvc.perform(post("/api/v1/classrooms/{classId}/lessons/{lessonId}/materials", classId, lessonId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fileId\":\"" + file.getId() + "\"}"))
+                .andExpect(status().isCreated());
+
+        UUID questionId = UUID.randomUUID();
+        UUID correctOpt = UUID.randomUUID();
+        UUID wrongOpt = UUID.randomUUID();
+        var quiz = quizService.create(teacher.getId(), classId, new com.algolearner.platform.quiz.QuizDtos.Configure(
+                "Graph Quiz", true, null, null, 600, 3, false, false, false,
+                com.algolearner.platform.quiz.QuizDtos.ReleasePolicy.IMMEDIATE,
+                com.algolearner.platform.quiz.QuizDtos.TimeoutMode.AUTO_SUBMIT,
+                List.of(new com.algolearner.platform.quiz.QuizDtos.Question(
+                        questionId, "Q1",
+                        com.algolearner.platform.quiz.QuizDtos.QuestionType.SINGLE_CHOICE,
+                        com.algolearner.platform.quiz.QuizDtos.Scoring.ALL_OR_NOTHING,
+                        java.math.BigDecimal.ONE,
+                        List.of(
+                                new com.algolearner.platform.quiz.QuizDtos.Option(correctOpt, "Yes", true),
+                                new com.algolearner.platform.quiz.QuizDtos.Option(wrongOpt, "No", false))))));
+        quizService.publish(teacher.getId(), classId, quiz.id());
+
+        mvc.perform(post("/api/v1/classrooms/{classId}/lessons/{lessonId}/items", classId, lessonId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"itemType\":\"QUIZ\",\"itemId\":\"" + quiz.id() + "\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(put("/api/v1/classrooms/{classId}/lessons/{lessonId}/completion-rule", classId, lessonId)
+                        .with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"operator\":\"ALL\",\"conditions\":[{\"itemType\":\"QUIZ\",\"itemId\":\"" + quiz.id() + "\",\"requirement\":\"SCORE_AT_LEAST\",\"scorePercent\":80}]}"))
+                .andExpect(status().isOk());
+        mvc.perform(patch("/api/v1/classrooms/{classId}/lessons/{lessonId}/publish", classId, lessonId)
+                        .with(actor(teacher)))
+                .andExpect(status().isOk());
+
+        // Summary list contains content, codeExample, materialCount
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons", classId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].content").value("BFS and DFS"))
+                .andExpect(jsonPath("$.data[0].codeExample").value("void bfs() {}"))
+                .andExpect(jsonPath("$.data[0].materialCount").value(1));
+
+        // Teacher detail always has completed=false; student has completed=false before passing quiz
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/{lessonId}", classId, lessonId)
+                        .with(actor(teacher)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.linkedItems[0].completed").value(false));
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/{lessonId}", classId, lessonId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.linkedItems[0].completed").value(false));
+
+        // Student passes quiz -> linkedItems[0].completed becomes true
+        var attempt = quizService.start(student.getId(), classId, quiz.id());
+        quizService.save(student.getId(), classId, quiz.id(), attempt.id(),
+                new com.algolearner.platform.quiz.QuizDtos.SaveAnswer(questionId, List.of(correctOpt), 0, UUID.randomUUID()));
+        quizService.submit(student.getId(), classId, quiz.id(), attempt.id());
+
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/{lessonId}", classId, lessonId)
+                        .with(actor(student)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.linkedItems[0].completed").value(true));
+
+        // Progress endpoint returns single-wrapped PageResponse directly
+        mvc.perform(get("/api/v1/classrooms/{classId}/lessons/{lessonId}/progress", classId, lessonId)
+                        .with(actor(teacher)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.items").isArray())
+                .andExpect(jsonPath("$.data.items.length()").value(1))
+                .andExpect(jsonPath("$.data.items[0].completed").value(true))
+                .andExpect(jsonPath("$.data.pagination.totalElements").value(1))
+                .andExpect(jsonPath("$.data.data").doesNotExist());
+    }
+
     private AccountEntity account(String username, AccountRole role) {
         var account = new AccountEntity();
         account.setId(UUID.randomUUID());

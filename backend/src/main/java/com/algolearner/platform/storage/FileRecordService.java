@@ -31,7 +31,11 @@ public class FileRecordService {
     private final Clock clock;
     private final EntityManager entityManager;
 
-    public record ProcessingTicket(UUID id, UUID uploaderId, String objectKey, long size, String sha256, UUID token) { }
+    public record ProcessingTicket(UUID id, UUID uploaderId, String objectKey, long size, String sha256, UUID token, boolean objectUploaded) {
+        public ProcessingTicket(UUID id, UUID uploaderId, String objectKey, long size, String sha256, UUID token) {
+            this(id, uploaderId, objectKey, size, sha256, token, true);
+        }
+    }
 
     public void authorizeUpload(UUID actor, UUID classroom, FilePurpose purpose) {
         authorizeWrite(actor, classroom, purpose, false);
@@ -192,13 +196,37 @@ public class FileRecordService {
     }
 
     @Transactional
+    public ProcessingTicket claimImmediateDeletion(UUID actor, UUID fileId) {
+        accounts.activeRole(actor);
+        var initial = require(fileId);
+        classroomService.lockReadable(initial.getClassroomId());
+        var file = locked(fileId);
+        if (!file.getUploaderId().equals(actor)) throw denied();
+        Instant now = clock.instant();
+        if (file.getState() == FileState.DELETING
+                || (file.getProcessingUntil() != null && file.getProcessingUntil().isAfter(now))) {
+            throw conflict();
+        }
+        boolean referenced = Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS(SELECT 1 FROM tbl_lesson_material WHERE stored_file_id=?)
+                    OR EXISTS(SELECT 1 FROM tbl_assignment_answer WHERE stored_file_id=?)
+                """, Boolean.class, fileId, fileId));
+        if (referenced) throw conflict();
+        file.setState(FileState.DELETING);
+        file.setProcessingToken(UUID.randomUUID());
+        file.setProcessingUntil(now.plusSeconds(120));
+        return ticket(file);
+    }
+
+    @Transactional
     public void finishDeletion(ProcessingTicket ticket) {
         var file = locked(ticket.id());
         if (file.getState() == FileState.DELETING && ticket.token().equals(file.getProcessingToken())) files.delete(file);
     }
 
     private ProcessingTicket ticket(StoredFileEntity file) {
-        return new ProcessingTicket(file.getId(), file.getUploaderId(), file.getObjectKey(), file.getSize(), file.getSha256(), file.getProcessingToken());
+        return new ProcessingTicket(file.getId(), file.getUploaderId(), file.getObjectKey(), file.getSize(),
+                file.getSha256(), file.getProcessingToken(), file.isObjectUploaded());
     }
 
     private void authorizeWrite(UUID actor, UUID classroomId, FilePurpose purpose, boolean lock) {

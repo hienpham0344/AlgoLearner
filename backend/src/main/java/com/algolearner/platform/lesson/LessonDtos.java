@@ -79,10 +79,15 @@ public final class LessonDtos {
             UUID itemId,
             int displayOrder,
             String title,
-            Boolean available
+            Boolean available,
+            Boolean completed
     ) {
         public LinkedItemView(UUID id, LinkedItemType itemType, UUID itemId, int displayOrder) {
-            this(id, itemType, itemId, displayOrder, null, true);
+            this(id, itemType, itemId, displayOrder, null, true, false);
+        }
+
+        public LinkedItemView(UUID id, LinkedItemType itemType, UUID itemId, int displayOrder, String title, Boolean available) {
+            this(id, itemType, itemId, displayOrder, title, available, false);
         }
     }
 
@@ -96,8 +101,26 @@ public final class LessonDtos {
             Boolean isCompleted,
             Instant completedAt,
             Instant createdAt,
-            Instant updatedAt
-    ) { }
+            Instant updatedAt,
+            String content,
+            String codeExample,
+            int materialCount
+    ) {
+        public LessonSummaryView(
+                UUID id,
+                UUID classroomId,
+                String title,
+                LessonStatus status,
+                CompletionMode completionMode,
+                int displayOrder,
+                Boolean isCompleted,
+                Instant completedAt,
+                Instant createdAt,
+                Instant updatedAt
+        ) {
+            this(id, classroomId, title, status, completionMode, displayOrder, isCompleted, completedAt, createdAt, updatedAt, null, null, 0);
+        }
+    }
 
     public record LessonDetailView(
             UUID id,

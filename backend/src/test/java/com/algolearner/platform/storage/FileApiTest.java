@@ -51,6 +51,10 @@ class FileApiTest extends PostgresIntegrationTest {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
             ((java.io.OutputStream)call.getArgument(1)).write(blobs.get(call.getArgument(0))); return null;
         }).when(objects).download(anyString(),any());
+        doAnswer(call -> {
+            assertThat(TransactionSynchronizationManager.isActualTransactionActive()).isFalse();
+            blobs.remove(call.getArgument(0)); return null;
+        }).when(objects).delete(anyString());
     }
 
     @Test
@@ -112,6 +116,53 @@ class FileApiTest extends PostgresIntegrationTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("INVALID_FILE"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM tbl_stored_file WHERE classroom_id=?",Integer.class,classroom)).isZero();
         verify(objects,never()).upload(anyString(),anyString(),any());
+    }
+
+    @Test
+    void deleteUnreferencedFileRemovesBlobAndRecordAndGuardsOwnershipAndReferences() throws Exception {
+        var teacher = account(AccountRole.TEACHER);
+        var student = account(AccountRole.STUDENT);
+        UUID classroom = classroom(teacher, student);
+        byte[] bytes = LearningFileFixtures.pdf();
+
+        var firstUpload = http.perform(multipart("/api/v1/classrooms/{id}/files", classroom)
+                        .file(new MockMultipartFile("file", "attached.pdf", "application/pdf", bytes))
+                        .param("purpose", "LESSON_MATERIAL").with(identity(teacher)))
+                .andExpect(status().isCreated()).andReturn();
+        UUID attachedFileId = UUID.fromString(json.readTree(firstUpload.getResponse().getContentAsString()).at("/data/id").asText());
+
+        // Non-uploader gets 403; unknown file gets 404
+        http.perform(delete("/api/v1/files/{id}", attachedFileId).with(identity(student)))
+                .andExpect(status().isForbidden());
+        http.perform(delete("/api/v1/files/{id}", UUID.randomUUID()).with(identity(teacher)))
+                .andExpect(status().isNotFound());
+
+        // Bind to tbl_lesson_material -> DELETE returns 409 Conflict and preserves file & blob
+        UUID lessonId = UUID.randomUUID();
+        jdbc.update("INSERT INTO tbl_lesson(id,classroom_id,title) VALUES (?,?,?)", lessonId, classroom, "Materials");
+        jdbc.update("""
+                INSERT INTO tbl_lesson_material(id,lesson_id,file_name,file_url,file_type,file_size,stored_file_id,material_state)
+                VALUES (?,?,'attached.pdf','/api/v1/files/content','PDF',?,?,'READY')
+                """, UUID.randomUUID(), lessonId, bytes.length, attachedFileId);
+        http.perform(delete("/api/v1/files/{id}", attachedFileId).with(identity(teacher)))
+                .andExpect(status().isConflict());
+        verify(objects, never()).delete(anyString());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tbl_stored_file WHERE id=?", Integer.class, attachedFileId)).isEqualTo(1);
+
+        // Unreferenced file uploaded by teacher -> DELETE returns 204, deletes blob outside tx, deletes DB row
+        var secondUpload = http.perform(multipart("/api/v1/classrooms/{id}/files", classroom)
+                        .file(new MockMultipartFile("file", "orphan.pdf", "application/pdf", bytes))
+                        .param("purpose", "LESSON_MATERIAL").with(identity(teacher)))
+                .andExpect(status().isCreated()).andReturn();
+        UUID orphanFileId = UUID.fromString(json.readTree(secondUpload.getResponse().getContentAsString()).at("/data/id").asText());
+        String objectKey = jdbc.queryForObject("SELECT object_key FROM tbl_stored_file WHERE id=?", String.class, orphanFileId);
+
+        http.perform(delete("/api/v1/files/{id}", orphanFileId).with(identity(teacher)))
+                .andExpect(status().isNoContent());
+        verify(objects).delete(objectKey);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tbl_stored_file WHERE id=?", Integer.class, orphanFileId)).isZero();
+        http.perform(get("/api/v1/files/{id}", orphanFileId).with(identity(teacher)))
+                .andExpect(status().isNotFound());
     }
 
     private UUID classroom(AccountEntity teacher,AccountEntity... students) {
