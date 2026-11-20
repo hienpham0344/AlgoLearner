@@ -145,6 +145,7 @@ export function PracticePulse({ practice, loading }: PracticePulseProps) {
   const [activeTier, setActiveTier] = useState<DifficultyTier | null>(null);
 
   const hasActivityHistory = Boolean(practice.activityHistory && practice.activityHistory.length > 0);
+  const showActivityGrid = hasActivityHistory || practice.currentStreak !== null || practice.totalSolved !== null;
 
   useEffect(() => {
     const element = gridContainerRef.current;
@@ -167,12 +168,12 @@ export function PracticePulse({ practice, loading }: PracticePulseProps) {
     updateWeeksFromWidth();
 
     return () => observer.disconnect();
-  }, [hasActivityHistory, loading]);
+  }, [showActivityGrid, loading]);
 
   const gridData = useMemo(() => {
-    if (!practice.activityHistory || practice.activityHistory.length === 0) return null;
-    return buildChronologicalGrid(practice.activityHistory, weekCount);
-  }, [practice.activityHistory, weekCount]);
+    if (!showActivityGrid) return null;
+    return buildChronologicalGrid(practice.activityHistory ?? [], weekCount);
+  }, [practice.activityHistory, showActivityGrid, weekCount]);
 
   const activeCell =
     gridData && activeCellIndex !== null ? (gridData.flatCells[activeCellIndex] ?? null) : null;
