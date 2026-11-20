@@ -2,6 +2,7 @@ import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import type { DemoRole } from '../types';
 import { classroomApi, classroomApiUnavailable, classroomError, classroomKeys } from '../api/classroomApi';
 import { BackendClassroomPage } from './BackendClassroomPage';
@@ -34,9 +35,25 @@ export function ClassroomSourceRoute({ role, detail }: { role: DemoRole; detail:
     const Page = mockPages[role][detail ? 'detail' : 'list'];
     return <Page />;
   }
-  if (isLoading) return <div role="status" className="p-8">Loading account…</div>;
+  if (isLoading) {
+    return (
+      <LoadingScreen
+        variant="fullscreen"
+        message="Đang tải thông tin tài khoản…"
+        submessage="Đang đồng bộ phiên đăng nhập"
+      />
+    );
+  }
   if (!token || !user) return <Navigate to="/login" replace />;
-  if (availability.isPending) return <div role="status" className="p-8">Checking classroom API…</div>;
+  if (availability.isPending) {
+    return (
+      <LoadingScreen
+        variant="page"
+        message="Đang kết nối không gian lớp học…"
+        submessage="Kiểm tra trạng thái máy chủ"
+      />
+    );
+  }
   if (availability.isError) {
     if (import.meta.env.DEV && classroomApiUnavailable(availability.error)) {
       const Page = mockPages[role][detail ? 'detail' : 'list'];

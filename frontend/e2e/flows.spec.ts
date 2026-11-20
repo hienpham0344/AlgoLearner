@@ -184,11 +184,76 @@ test('4.3 uses API data and sends create request when available', async ({ page 
   await page.goto(`${base}/teacher/classrooms`);
   await expect(page.getByRole('heading', { name: 'API classroom' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Classrooms & Teaching Spaces' })).toHaveCount(0);
-  await page.getByRole('textbox', { name: 'Classroom name' }).fill('Created via API');
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('button', { name: /\+ New classroom/i }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Classroom name' }).fill('Created via API');
+  await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/teacher/classrooms/${classroom.id}$`));
   await expect(page.getByRole('heading', { name: 'Created via API' })).toBeVisible();
   expect(calls).toContain('POST /api/v1/classrooms');
+});
+
+test('4.3 minimalist table filters, searches, and creates classroom with join policy', async ({ page }) => {
+  const base = 'http://127.0.0.1:3101';
+  const activeClass = {
+    id: '11111111-1111-1111-1111-111111111111', name: 'Algorithms K23', description: 'Graph theory',
+    status: 'ACTIVE', classCode: 'ALGO2026', codeExpiresAt: null, codeLocked: false,
+    joiningOpen: true, joinMode: 'REQUIRE_APPROVAL', ownerId: '22222222-2222-2222-2222-222222222222',
+    createdAt: '2026-11-09T00:00:00Z', updatedAt: '2026-11-09T00:00:00Z',
+  };
+  const archivedClass = {
+    id: '33333333-3333-3333-3333-333333333333', name: 'Legacy Java 101', description: 'Archived term',
+    status: 'ARCHIVED', classCode: 'JAVA2025', codeExpiresAt: null, codeLocked: true,
+    joiningOpen: false, joinMode: 'AUTO_JOIN', ownerId: '22222222-2222-2222-2222-222222222222',
+    createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-15T00:00:00Z',
+  };
+  let postedBody: Record<string, unknown> | null = null;
+  await page.route('**/api/v1/classrooms**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === 'GET' && url.pathname === '/api/v1/classrooms') {
+      return route.fulfill({ json: { success: true, data: { items: [activeClass, archivedClass], pagination: { page: 0, size: 20, totalElements: 2, totalPages: 1, isFirst: true, isLast: true } }, timestamp: '2026-11-09T00:00:00Z' } });
+    }
+    if (request.method() === 'POST' && url.pathname === '/api/v1/classrooms') {
+      postedBody = request.postDataJSON();
+      return route.fulfill({ status: 201, json: { success: true, data: { ...activeClass, id: '44444444-4444-4444-4444-444444444444', name: String(postedBody?.name ?? 'New Class'), joinMode: postedBody?.joinMode ?? 'AUTO_JOIN' }, timestamp: '2026-11-09T00:00:00Z' } });
+    }
+    if (request.method() === 'GET' && url.pathname.endsWith('/44444444-4444-4444-4444-444444444444')) {
+      return route.fulfill({ json: { success: true, data: { ...activeClass, id: '44444444-4444-4444-4444-444444444444', name: 'New Approval Class', joinMode: 'REQUIRE_APPROVAL' }, timestamp: '2026-11-09T00:00:00Z' } });
+    }
+    if (request.method() === 'GET' && (url.pathname.endsWith('/members') || url.pathname.endsWith('/join-requests'))) {
+      return route.fulfill({ json: { success: true, data: { items: [], pagination: { page: 0, size: 20, totalElements: 0, totalPages: 0, isFirst: true, isLast: true } }, timestamp: '2026-11-09T00:00:00Z' } });
+    }
+    return route.fulfill({ status: 404, json: { success: false, errorCode: 'NOT_FOUND', message: 'Not found', path: url.pathname, timestamp: '2026-11-09T00:00:00Z' } });
+  });
+
+  await signIn(page, base, 'teacher');
+  await page.goto(`${base}/teacher/classrooms`);
+  await expect(page.getByRole('table')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Algorithms K23' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Legacy Java 101' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Active (1)' }).click();
+  await expect(page.getByRole('heading', { name: 'Algorithms K23' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Legacy Java 101' })).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'Archived (1)' }).click();
+  await expect(page.getByRole('heading', { name: 'Legacy Java 101' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Algorithms K23' })).toHaveCount(0);
+
+  await page.getByRole('tab', { name: 'All Classes (2)' }).click();
+  await page.getByRole('textbox', { name: 'Search classrooms' }).fill('ALGO2026');
+  await expect(page.getByRole('heading', { name: 'Algorithms K23' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Legacy Java 101' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Clear search' }).click();
+
+  await page.keyboard.press('n');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Classroom name' }).fill('New Approval Class');
+  await page.getByRole('dialog').locator('label').filter({ hasText: 'Require approval' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click();
+  await expect(page).toHaveURL(/\/teacher\/classrooms\/44444444-4444-4444-4444-444444444444$/);
+  expect(postedBody).toMatchObject({ name: 'New Approval Class', joinMode: 'REQUIRE_APPROVAL' });
 });
 
 test('4.3 teacher can manage classroom detail through API', async ({ page }) => {
@@ -223,12 +288,14 @@ test('4.3 teacher can manage classroom detail through API', async ({ page }) => 
   await signIn(page, base, 'teacher');
   await page.goto(`${base}/teacher/classrooms/${id}`);
   await expect(page.getByRole('heading', { name: 'Managed classroom' })).toBeVisible();
+  await page.getByRole('tab', { name: /settings/i }).click();
   const edit = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Edit classroom' }) });
   await edit.getByRole('textbox', { name: 'Classroom name' }).fill('Managed classroom');
   await edit.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('status')).toContainText('Classroom updated.');
   await page.getByRole('button', { name: 'Regenerate code' }).click();
   await expect(page.getByRole('status')).toContainText('Class code regenerated.');
+  await page.getByRole('tab', { name: /members/i }).click();
   const members = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Members' }) });
   await members.getByRole('textbox', { name: 'Student username or email' }).fill('student@example.test');
   await members.getByRole('button', { name: 'Add' }).click();
@@ -240,6 +307,7 @@ test('4.3 teacher can manage classroom detail through API', async ({ page }) => 
   await invite.locator('input[type="datetime-local"]').fill('2026-11-30T09:00');
   await invite.getByRole('button', { name: 'Invite' }).click();
   await expect(page.getByRole('status')).toContainText(invitationId);
+  await page.getByRole('tab', { name: /settings/i }).click();
   await page.getByRole('button', { name: 'Archive classroom' }).click();
   await expect(page.getByRole('status')).toContainText('Classroom archived.');
   for (const expected of [
