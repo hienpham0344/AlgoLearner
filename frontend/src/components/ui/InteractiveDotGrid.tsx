@@ -52,8 +52,12 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
 
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
+    const context = ctx;
 
-    let animationFrameId: number;
+    let animationFrameId: number | null = null;
+    let canvasWidth = -1;
+    let canvasHeight = -1;
+    let canvasDpr = -1;
     let dots: Dot[] = [];
     const ripples: Ripple[] = [];
 
@@ -96,6 +100,10 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const w = Math.floor(rect.width);
       const h = Math.floor(rect.height);
+      if (w === canvasWidth && h === canvasHeight && dpr === canvasDpr) return;
+      canvasWidth = w;
+      canvasHeight = h;
+      canvasDpr = dpr;
 
       canvas.width = w * dpr;
       canvas.height = h * dpr;
@@ -106,6 +114,7 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
       ctx.scale(dpr, dpr);
 
       initDots(w, h);
+      scheduleRender();
     };
 
     handleResize();
@@ -120,16 +129,19 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
       mouseX = e.clientX - rect.left;
       mouseY = e.clientY - rect.top;
       isMouseInside = true;
+      scheduleRender();
     };
 
     const onMouseEnter = () => {
       isMouseInside = true;
+      scheduleRender();
     };
 
     const onMouseLeave = () => {
       isMouseInside = false;
       mouseX = -9999;
       mouseY = -9999;
+      scheduleRender();
     };
 
     const onClick = (e: MouseEvent) => {
@@ -145,6 +157,7 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
         maxRadius: Math.max(rect.width, rect.height) * 0.8,
         strength: 1,
       });
+      scheduleRender();
     };
 
     // Listen on container (or parent if attached)
@@ -156,10 +169,13 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
     targetElement.addEventListener('mouseleave', onMouseLeave);
     targetElement.addEventListener('click', onClick as EventListener);
 
-    // Animation Loop
-    const render = () => {
-      const rect = container.getBoundingClientRect();
-      ctx.clearRect(0, 0, rect.width, rect.height);
+    function scheduleRender() {
+      if (animationFrameId === null) animationFrameId = requestAnimationFrame(render);
+    }
+
+    function render() {
+      animationFrameId = null;
+      context.clearRect(0, 0, canvasWidth, canvasHeight);
 
       // Advance ripples
       for (let i = ripples.length - 1; i >= 0; i--) {
@@ -173,6 +189,7 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
 
       const baseAlpha = 0.11;
       const activeAlpha = 0.85;
+      let unsettled = false;
 
       for (let i = 0; i < dots.length; i++) {
         const dot = dots[i];
@@ -223,21 +240,22 @@ export const InteractiveDotGrid: React.FC<InteractiveDotGridProps> = ({
         dot.currentY += (dot.targetY - dot.currentY) * 0.18;
         dot.currentAlpha += (dot.targetAlpha - dot.currentAlpha) * 0.15;
         dot.currentRadius += (dot.targetRadius - dot.currentRadius) * 0.15;
+        if (Math.abs(dot.targetX - dot.currentX) > 0.01 || Math.abs(dot.targetY - dot.currentY) > 0.01
+            || Math.abs(dot.targetAlpha - dot.currentAlpha) > 0.001
+            || Math.abs(dot.targetRadius - dot.currentRadius) > 0.01) unsettled = true;
 
         // Render dot
-        ctx.beginPath();
-        ctx.arc(dot.currentX, dot.currentY, dot.currentRadius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${dot.currentAlpha.toFixed(3)})`;
-        ctx.fill();
+        context.beginPath();
+        context.arc(dot.currentX, dot.currentY, dot.currentRadius, 0, Math.PI * 2);
+        context.fillStyle = `rgba(255, 255, 255, ${dot.currentAlpha.toFixed(3)})`;
+        context.fill();
       }
 
-      animationFrameId = requestAnimationFrame(render);
-    };
-
-    render();
+      if (unsettled || ripples.length > 0) scheduleRender();
+    }
 
     return () => {
-      cancelAnimationFrame(animationFrameId);
+      if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
       resizeObserver.disconnect();
       targetElement.removeEventListener('mousemove', onMouseMove as EventListener);
       targetElement.removeEventListener('mouseenter', onMouseEnter);

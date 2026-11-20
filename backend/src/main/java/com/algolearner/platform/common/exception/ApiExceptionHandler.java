@@ -44,6 +44,9 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ApiErrorResponse> tooLarge(Exception ex, HttpServletRequest request) {
+        if (request.getRequestURI().endsWith("/files")) {
+            return error(HttpStatus.PAYLOAD_TOO_LARGE,"FILE_TOO_LARGE","File exceeds upload limit",request,null);
+        }
         return error(ErrorCode.AVATAR_TOO_LARGE, request, null);
     }
 
@@ -64,7 +67,9 @@ public class ApiExceptionHandler {
             HttpStatus status = HttpStatus.valueOf(frameworkError.getStatusCode().value());
             return error(status, "HTTP_" + status.value(), status.getReasonPhrase(), request, null);
         }
-        LOG.error("Request failed: {}", request.getRequestURI(), ex);
+        // Exception messages and nested provider/SQL details can contain credentials or submitted content.
+        LOG.error("Request failed: method={}, path={}, exceptionType={}", request.getMethod(),
+                request.getRequestURI(), ex.getClass().getName());
         return error(ErrorCode.INTERNAL_SERVER_ERROR, request, null);
     }
 

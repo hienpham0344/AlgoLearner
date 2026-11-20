@@ -13,10 +13,8 @@ test('manual lesson demo supports real browser login, teacher authoring and stud
     await target.getByRole('button', { name: 'Sign in', exact: true }).click();
     await target.getByRole('button', { name: 'Continue to your workspace' }).click();
     await expect(target).toHaveURL(/\/dashboard$/);
-    const menu = target.getByRole('button', { name: 'Open navigation', exact: true });
-    if (await menu.isVisible()) await menu.click();
-    await target.getByRole('navigation', { name: new RegExp(`${role} workspace`, 'i') }).getByRole('link', { name: 'Class lessons', exact: true }).click();
     const lessons = target.getByRole('region', { name: 'Class lessons', exact: true });
+    await lessons.scrollIntoViewIfNeeded();
     await expect(lessons).toBeInViewport();
     expect((await new AxeBuilder({ page: target }).include('#lessons').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()).violations).toEqual([]);
     await target.screenshot({ path: testInfo.outputPath(`dashboard-class-lessons-${role}.png`) });

@@ -1,8 +1,9 @@
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import type { DemoRole } from '../types';
-import { classroomApi, classroomApiUnavailable, classroomError } from '../api/classroomApi';
+import { classroomApi, classroomApiUnavailable, classroomError, classroomKeys } from '../api/classroomApi';
 import { BackendClassroomPage } from './BackendClassroomPage';
 import { TeacherClassroomListPage } from '../teacher/pages/TeacherClassroomListPage';
 import { TeacherClassroomDetailPage } from '../teacher/pages/TeacherClassroomDetailPage';
@@ -20,9 +21,9 @@ const mockPages = {
 /** Choose one data source for the whole classroom workspace. Never hide API authorization errors with demo data. */
 export function ClassroomSourceRoute({ role, detail }: { role: DemoRole; detail: boolean }) {
   const { token, user, isLoading } = useAuth();
-  const forceMock = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
+  const forceMock = useIsDemoMode();
   const availability = useQuery({
-    queryKey: ['classrooms', 'source', token],
+    queryKey: classroomKeys.list(0),
     queryFn: () => classroomApi.list(0),
     enabled: Boolean(token) && !forceMock,
     retry: false,

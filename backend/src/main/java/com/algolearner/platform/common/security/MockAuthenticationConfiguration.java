@@ -6,7 +6,7 @@ import org.springframework.security.oauth2.jwt.*;
 import java.time.Clock;
 /** Unsigned development tokens require explicit mock and dev/test profiles. */
 @Configuration
-@Profile("mock & (dev | test) & !prod & !production")
+@Profile("mock & (dev | test) & !prod & !production & !internal-auth")
 public class MockAuthenticationConfiguration {
     @Bean JwtDecoder mockJwtDecoder(AccountRepository repository, Clock clock) {
         return token -> {

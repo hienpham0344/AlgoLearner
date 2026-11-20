@@ -1,4 +1,4 @@
--- IDs match MockData.id(username); only used by the local H2 HTTP integration run.
+-- IDs match MockData.id(username); legacy mock fixture; never loaded by the Supabase application launcher.
 INSERT INTO tbl_account (id, username, email, role, status, created_at, updated_at) VALUES
 ('8d788385-4312-33d1-9e8b-43bb78f3aa41', 'teacher', 'teacher@example.test', 'TEACHER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
 ('ccffb0bb-993e-3b79-859b-31e1611ec353', 'teacher2', 'teacher2@example.test', 'TEACHER', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),

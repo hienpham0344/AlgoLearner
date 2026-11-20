@@ -8,7 +8,8 @@ public interface ProfileRepository {
     Profile own(UUID id);
     Profile publicProfile(String username, Instant now);
     Profile byUsername(String username);
-    void update(UUID id, String name, String bio, Instant now);
+    void update(UUID id, boolean updateName, String name, boolean updateBio, String bio, Instant now);
     void privacy(UUID id, boolean isPublic, Instant now);
     void avatar(UUID id, String key, Instant now);
+    boolean compareAndSetAvatar(UUID id,String expectedKey,String newKey,Instant now);
 }

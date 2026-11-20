@@ -45,6 +45,7 @@ export function mapStudentDashboard(source: StudentDashboardResponse): StudentDa
       detail: '',
       createdAt: item.createdAt,
       read: item.readAt !== null,
+      href: '/student/classrooms#invitations',
     })),
   };
 }

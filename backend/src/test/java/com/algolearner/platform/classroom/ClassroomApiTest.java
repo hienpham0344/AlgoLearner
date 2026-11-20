@@ -8,6 +8,7 @@ import com.algolearner.platform.profile.PracticeRepository;
 import com.algolearner.platform.profile.ProfileRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,15 +33,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:classroom-api;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.flyway.enabled=false", "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false",
+        "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false",
         "app.security.jwt.issuer=https://issuer.example.test", "app.security.jwt.audience=classroom-tests",
         "app.security.jwt.jwk-set-uri=https://issuer.example.test/.well-known/jwks.json"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-class ClassroomApiTest {
+@EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = "jdbc:postgresql:.*")
+class ClassroomApiTest extends com.algolearner.platform.support.PostgresIntegrationTest {
     @TestConfiguration
     static class TestConfig {
         @Bean @Primary Clock fixedClock() { return Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC); }
@@ -158,6 +158,73 @@ class ClassroomApiTest {
         String invitationId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(invitation).path("data").asText();
         mvc.perform(post("/api/v1/classrooms/invitations/{id}/accept", invitationId).with(actor(student)))
                 .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/notifications").with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].readAt").isNotEmpty());
+    }
+
+    @Test
+    void invitationCannotAdmitStudentWhileJoiningIsClosed() throws Exception {
+        var created = createClass(teacher, "AUTO_JOIN");
+        String classroomId = created.path("id").asText();
+        String response = mvc.perform(post("/api/v1/classrooms/{id}/invitations", classroomId)
+                        .with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + student.getEmail() + "\",\"expiresAt\":\"" + futureExpiry() + "\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String invitationId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response).path("data").asText();
+        mvc.perform(patch("/api/v1/classrooms/{id}/join-configuration", classroomId)
+                        .with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codeLocked\":false,\"joiningOpen\":false,\"joinMode\":\"AUTO_JOIN\"}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/classrooms/invitations/{id}/accept", invitationId).with(actor(student)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("JOINING_CLOSED"));
+        mvc.perform(get("/api/v1/classrooms/{id}/members", classroomId).with(actor(teacher)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items").isEmpty());
+        mvc.perform(get("/api/v1/classrooms/invitations/me").with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].status").value("PENDING"));
+    }
+
+    @Test
+    void invitationAppearsInStudentInboxAndOwnerListAfterRevocation() throws Exception {
+        var created = createClass(teacher, "AUTO_JOIN");
+        String classroomId = created.path("id").asText();
+        String response = mvc.perform(post("/api/v1/classrooms/{id}/invitations", classroomId)
+                        .with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"" + student.getEmail() + "\",\"expiresAt\":\"" + futureExpiry() + "\"}"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String invitationId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(response).path("data").asText();
+        mvc.perform(get("/api/v1/classrooms/{id}/invitations", classroomId).with(actor(teacher)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].id").value(invitationId));
+        mvc.perform(get("/api/v1/classrooms/{id}/invitations", classroomId).with(actor(otherTeacher)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/classrooms/invitations/me").with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].id").value(invitationId));
+        mvc.perform(get("/api/v1/notifications").with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].invitationId").value(invitationId))
+                .andExpect(jsonPath("$.data.items[0].readAt").isEmpty());
+        String notificationResponse = mvc.perform(get("/api/v1/notifications").with(actor(student)))
+                .andReturn().getResponse().getContentAsString();
+        String notificationId = new com.fasterxml.jackson.databind.ObjectMapper().readTree(notificationResponse)
+                .path("data").path("items").path(0).path("id").asText();
+        var unrelatedStudent = account("unrelated", AccountRole.STUDENT);
+        mvc.perform(post("/api/v1/notifications/{id}/read", notificationId).with(actor(unrelatedStudent)))
+                .andExpect(status().isNotFound()).andExpect(jsonPath("$.errorCode").value("NOTIFICATION_NOT_FOUND"));
+        mvc.perform(post("/api/v1/notifications/{id}/read", notificationId).with(actor(otherTeacher)))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/notifications/{id}/read", notificationId).with(actor(student)))
+                .andExpect(status().isNoContent());
+        mvc.perform(post("/api/v1/notifications/{id}/read", notificationId).with(actor(student)))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/notifications").with(actor(student)))
+                .andExpect(jsonPath("$.data.items[0].readAt").isNotEmpty());
+        mvc.perform(get("/api/v1/notifications").with(actor(otherTeacher)))
+                .andExpect(status().isForbidden());
+        mvc.perform(post("/api/v1/classrooms/{id}/invitations/{invitationId}/revoke", classroomId, invitationId)
+                        .with(actor(teacher))).andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/notifications").with(actor(student)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.items[0].status").value("REVOKED"));
+        mvc.perform(post("/api/v1/classrooms/invitations/{id}/accept", invitationId).with(actor(student)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("INVITATION_UNAVAILABLE"));
     }
 
     @Test
@@ -268,6 +335,7 @@ class ClassroomApiTest {
     private AccountEntity account(String username, AccountRole role) {
         var account = new AccountEntity(); account.setId(UUID.randomUUID()); account.setUsername(username + UUID.randomUUID());
         account.setEmail(username + UUID.randomUUID() + "@example.test"); account.setRole(role); account.setStatus(AccountStatus.ACTIVE);
+        account.setPasswordHash("unused-test-fixture-hash");
         AccountEntity saved = accounts.save(account);
         testAccounts.add(saved);
         return saved;

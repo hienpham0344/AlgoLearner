@@ -76,9 +76,9 @@ Vì hệ thống cho phép sinh viên và người dùng nộp mã nguồn Java 
 - Mật khẩu người dùng bắt buộc mã hóa bằng **BCrypt** (độ mạnh `strength = 12`).
 - Mã OTP gửi qua email:
   - Sinh ngẫu nhiên mã số 6 chữ số có độ bảo mật cao (`SecureRandom`).
-  - Hạn sử dụng nghiêm ngặt: **5 phút**.
+  - Hạn sử dụng nghiêm ngặt: **10 phút** (SRS 1.1 FR-ACC-004).
   - Rate limit: Tối đa 1 lần yêu cầu gửi OTP mỗi 60 giây.
-  - Khóa tạm thời nếu nhập sai OTP quá 5 lần liên tiếp.
+  - Vô hiệu hóa OTP hiện tại sau 5 lần nhập sai liên tiếp; người dùng phải yêu cầu mã mới.
   - Ngay sau khi xác thực thành công, mã OTP phải bị đánh dấu là đã sử dụng (`USED`) hoặc xóa khỏi cache để chống tấn công phát lại (Replay Attack).
 
 ### 3.4. Ghi Nhật Ký Kiểm Toán (Audit Logging - SRS 4.16)

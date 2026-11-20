@@ -11,4 +11,7 @@ public class ClassroomInvitationEntity extends BaseAuditableEntity {
  @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="student_id",nullable=false) private AccountEntity student;
  @Enumerated(EnumType.STRING) @Column(nullable=false,length=20) private InvitationStatus status;
  @Column(name="expires_at",nullable=false) private Instant expiresAt;
+ public InvitationStatus effectiveStatus(Instant now) {
+  return status == InvitationStatus.PENDING && !expiresAt.isAfter(now) ? InvitationStatus.EXPIRED : status;
+ }
 }

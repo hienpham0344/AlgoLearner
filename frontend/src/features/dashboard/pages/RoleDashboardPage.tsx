@@ -1,9 +1,11 @@
+import { clearSession } from '@/services/apiClient';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
 import {
   dashboardApi,
@@ -14,11 +16,12 @@ import {
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
 import { getClassroomLessonSummary, getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
+import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
-const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 const shortDateFormatter = new Intl.DateTimeFormat('en', {
   timeZone: DISPLAY_TIME_ZONE,
@@ -49,13 +52,13 @@ const todayFormatter = new Intl.DateTimeFormat('en', {
   day: 'numeric',
 });
 
-const toBangkokDateKey = (date: Date) =>
-  new Date(date.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (date: Date) =>
+  new Date(date.getTime() + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 const getDeadlineUrgency = (dueAt: string): 'Overdue' | 'Due today' | 'Upcoming' => {
   const due = new Date(dueAt);
   if (due.getTime() < Date.now()) return 'Overdue';
-  return toBangkokDateKey(due) === toBangkokDateKey(new Date()) ? 'Due today' : 'Upcoming';
+  return toVietnamDateKey(due) === toVietnamDateKey(new Date()) ? 'Due today' : 'Upcoming';
 };
 
 const formatDayNumber = (iso: string) => dayNumberFormatter.format(new Date(iso));
@@ -88,7 +91,7 @@ const formatNumber = (value: number): string => {
   return String(value);
 };
 
-function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse; firstName: string }) {
+function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardResponse; firstName: string; isDemo: boolean }) {
   const statsByClassId = new Map(data.classroomStatistics.items.map(stat => [stat.classroomId, stat]));
   const classNameById = new Map(data.classrooms.items.map(cls => [cls.classroomId, cls.name]));
 
@@ -108,15 +111,6 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
     (sum, item) => sum + item.publishedQuizCount,
     0,
   );
-
-  const totalSubmissionsBaseline = Math.max(
-    totalUngraded + data.recentSubmissions.totalElements,
-    totalUngraded + 8,
-  );
-  const reviewCompletionPercent =
-    totalSubmissionsBaseline > 0
-      ? Math.round(((totalSubmissionsBaseline - totalUngraded) / totalSubmissionsBaseline) * 100)
-      : 100;
 
   const sortedAssignments = [...data.openOrUpcomingAssignments.items].sort(
     (a, b) => Date.parse(a.effectiveDueAt) - Date.parse(b.effectiveDueAt),
@@ -155,30 +149,14 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                 <p>
                   {totalActiveStudents} enrolled students · {totalUngraded} awaiting review
                 </p>
-                <div className="dashboard-progress-info">
-                  <span>Review completion</span>
-                  <strong>{reviewCompletionPercent}%</strong>
-                </div>
-                <div
-                  className="dashboard-progress-track"
-                  role="progressbar"
-                  aria-label="Review completion progress"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={reviewCompletionPercent}
-                >
-                  <span style={{ width: `${reviewCompletionPercent}%` }} />
-                </div>
+                <p>Grading progress will appear once the submission module is connected.</p>
                 <div className="flex flex-wrap items-center gap-4">
                   <Link className="dashboard-learning-action" to="/teacher/classrooms">
                     Manage classrooms &amp; lessons <ArrowRight size={15} aria-hidden="true" />
                   </Link>
-                  <Link
-                    to="/teacher/review-queue"
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white underline underline-offset-4"
-                  >
-                    Review queue →
-                  </Link>
+                  <a className="inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white underline underline-offset-4" href="#review">
+                    Review submissions →
+                  </a>
                 </div>
               </div>
             </div>
@@ -236,7 +214,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
               <div className="dashboard-empty dashboard-empty-line">
                 <div>
                   <strong>No open or upcoming assignments.</strong>
-                  <p>Published assignments for your active classrooms will appear here.</p>
+                  <p>Published assignments for your active classrooms will appear here once connected.</p>
                 </div>
               </div>
             )}
@@ -279,7 +257,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                         </div>
                         {stat && (
                           <span className="dashboard-class-next">
-                            {import.meta.env.MODE === 'auth-demo'
+                            {isDemo
                               ? (() => {
                                   const lessonSummary = getClassroomLessonSummary(classroom.classroomId, 'TEACHER', '');
                                   return `${lessonSummary.publishedCount} published · ${lessonSummary.draftCount} draft lessons · ${stat.publishedQuizCount} quizzes`;
@@ -389,7 +367,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
               <div className="dashboard-empty dashboard-empty-line">
                 <div>
                   <strong>No student submissions yet.</strong>
-                  <p>Ungraded work and recent submissions will appear here.</p>
+                  <p>Ungraded work and recent submissions will appear here once connected.</p>
                 </div>
               </div>
             )}
@@ -440,6 +418,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
                     <strong>{data.pendingContributions.problemCount}</strong>
                   </div>
                 </div>
+                <p>Public courses, coding practice, and content moderation data are not connected yet.</p>
               </div>
             </div>
           </section>
@@ -487,6 +466,7 @@ function TeacherWorkspace({ data, firstName }: { data: TeacherDashboardResponse;
           </section>
         </aside>
       </div>
+      <DashboardLessonLinks role="TEACHER" />
     </>
   );
 }
@@ -786,6 +766,7 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
                     </strong>
                   </div>
                 </div>
+                <p>Public courses, coding practice, and content moderation data are not connected yet.</p>
               </div>
             </div>
           </section>
@@ -828,6 +809,7 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
 
 export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
   const { user, logout } = useAuth();
+  const isDemo = useIsDemoMode();
   const navigate = useNavigate();
 
   const teacherQuery = useQuery({
@@ -848,10 +830,11 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
 
   useEffect(() => {
     if (isAxiosError(query.error) && query.error.response?.status === 401) {
-      logout();
+      clearSession();
       navigate('/login', { replace: true });
     }
   }, [query.error, logout, navigate]);
+
 
   const rawDisplayName = user?.fullName || user?.username || role;
   const displayName = rawDisplayName.replace(/^Demo\s+/i, '') || role;
@@ -862,11 +845,12 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
       ? teacherQuery.data.recentNotifications.items.filter(n => n.readAt === null).length
       : 0;
 
+
   const isForbidden = isAxiosError(query.error) && query.error.response?.status === 403;
 
   const syncedTeacherData: TeacherDashboardResponse | undefined =
     role === 'TEACHER' && teacherQuery.data
-      ? ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE)
+      ? isDemo
         ? (() => {
             const teacherPersona = readStoredPersona('TEACHER');
             const owned = readStoredClassrooms().filter(
@@ -921,7 +905,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
           )}
         </div>
       ) : role === 'TEACHER' && syncedTeacherData ? (
-        <TeacherWorkspace data={syncedTeacherData} firstName={firstName} />
+        <TeacherWorkspace data={syncedTeacherData} firstName={firstName} isDemo={isDemo} />
       ) : adminQuery.data ? (
         <AdminWorkspace data={adminQuery.data} />
       ) : null}
