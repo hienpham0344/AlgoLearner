@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -246,6 +247,151 @@ class AuthAcceptanceSecurityTest extends com.algolearner.platform.support.Postgr
                 .andExpect(jsonPath("$.data.user.lifecycleStatus").value("ACTIVE"));
         verify(pending, pending.code(), "REGISTER").andExpect(status().isBadRequest());
         assertEquals(1, sessions.findByAccountIdAndRevokedAtIsNull(pending.account().getId()).size());
+    }
+
+    @Test
+    void retryAfterHeaderReflectsRemainingLockoutAndOtpCooldownSeconds() throws Exception {
+        var account = account(AccountStatus.ACTIVE);
+        for (int attempt = 0; attempt < 4; attempt++) {
+            login(account, "wrong123").andExpect(status().isUnauthorized())
+                    .andExpect(header().doesNotExist("Retry-After"));
+        }
+        login(account, "wrong123")
+                .andExpect(status().isLocked())
+                .andExpect(header().string("Retry-After", "900"))
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_TEMP_LOCKED"));
+        clock.now = START.plusSeconds(299).plusMillis(500);
+        login(account, PASSWORD)
+                .andExpect(status().isLocked())
+                .andExpect(header().string("Retry-After", "601"))
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_TEMP_LOCKED"));
+        clock.now = START.plusSeconds(900).minusMillis(1);
+        login(account, PASSWORD)
+                .andExpect(status().isLocked())
+                .andExpect(header().string("Retry-After", "1"))
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_TEMP_LOCKED"));
+
+        clock.now = START;
+        var pending = registerPending();
+        send("/resend-otp", Map.of("email", pending.account().getEmail(), "purpose", "REGISTER"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "60"))
+                .andExpect(jsonPath("$.errorCode").value("OTP_RATE_LIMITED"));
+        clock.now = START.plusSeconds(15).plusMillis(200);
+        send("/resend-otp", Map.of("email", pending.account().getEmail(), "purpose", "REGISTER"))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().string("Retry-After", "45"))
+                .andExpect(jsonPath("$.errorCode").value("OTP_RATE_LIMITED"));
+    }
+
+    @Test
+    void preActivationLoginAttemptsAndLockAreClearedOnOtpVerification() throws Exception {
+        var pending = registerPending();
+        for (int attempt = 0; attempt < 4; attempt++) {
+            login(pending.account(), PASSWORD).andExpect(status().isUnauthorized());
+        }
+        login(pending.account(), PASSWORD)
+                .andExpect(status().isLocked())
+                .andExpect(header().string("Retry-After", "900"));
+        var lockedPending = accounts.findById(pending.account().getId()).orElseThrow();
+        assertEquals(5, lockedPending.getFailedLoginAttempts());
+        assertNotNull(lockedPending.getLoginLockedUntil());
+
+        verify(pending, pending.code(), "REGISTER")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.lifecycleStatus").value("ACTIVE"));
+        var activated = accounts.findById(pending.account().getId()).orElseThrow();
+        assertEquals(AccountStatus.ACTIVE, activated.getStatus());
+        assertEquals(0, activated.getFailedLoginAttempts());
+        assertNull(activated.getLoginLockedUntil());
+
+        login(pending.account(), PASSWORD)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.token").isString());
+    }
+
+    @Test
+    void paddedShortUsernameIsRejectedWhileTrimmedValidUsernameIsPersisted() throws Exception {
+        var paddedShort = registration();
+        paddedShort.put("username", "  ab  ");
+        rejectedRegistration(paddedShort);
+
+        var paddedValid = registration();
+        String expectedUsername = "u" + UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        paddedValid.put("username", "  " + expectedUsername + "  ");
+        send("/register", paddedValid).andExpect(status().isCreated());
+        var saved = accounts.findByEmailIgnoreCase((String) paddedValid.get("email")).orElseThrow();
+        assertEquals(expectedUsername, saved.getUsername());
+    }
+
+    @Test
+    void staleBearerHeaderIsIgnoredOnPublicAuthEndpointsButEnforcedOnLogoutAndProtectedRoutes() throws Exception {
+        String staleHeader = "Bearer stale.invalid.jwt";
+        mvc.perform(get("/api/v1/status").header("Authorization", staleHeader))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        var body = registration();
+        mvc.perform(post("/api/v1/auth/register").header("Authorization", staleHeader)
+                        .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+                .andExpect(status().isCreated());
+        var message = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        org.mockito.Mockito.verify(sender).send(message.capture());
+        var matcher = Pattern.compile("\\b[0-9]{6}\\b").matcher(message.getValue().getText());
+        assertTrue(matcher.find());
+        String email = (String) body.get("email");
+
+        mvc.perform(post("/api/v1/auth/resend-otp").header("Authorization", staleHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("email", email, "purpose", "REGISTER"))))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"));
+
+        mvc.perform(post("/api/v1/auth/verify-otp").header("Authorization", staleHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("email", email, "code", matcher.group(), "purpose", "REGISTER"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.user.lifecycleStatus").value("ACTIVE"));
+
+        var loginResult = mvc.perform(post("/api/v1/auth/login").header("Authorization", staleHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("usernameOrEmail", email, "password", PASSWORD))))
+                .andExpect(status().isOk())
+                .andReturn();
+        var refreshCookie = loginResult.getResponse().getCookie("algolearner_refresh");
+        assertNotNull(refreshCookie);
+
+        var refreshed = mvc.perform(post("/api/v1/auth/refresh-token").header("Authorization", staleHeader)
+                        .header("X-Requested-With", "XMLHttpRequest").cookie(refreshCookie))
+                .andExpect(status().isOk())
+                .andReturn();
+        String validToken = json.readTree(refreshed.getResponse().getContentAsString()).path("data").path("token").asText();
+
+        mvc.perform(post("/api/v1/auth/forgot-password").header("Authorization", staleHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("email", email))))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/auth/reset-password").header("Authorization", staleHeader)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json.writeValueAsString(Map.of("email", email, "resetToken", "invalid-grant",
+                                "newPassword", "Updated123", "confirmPassword", "Updated123"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errorCode").value("INVALID_OTP"));
+
+        mvc.perform(post("/api/v1/auth/logout").header("Authorization", staleHeader)
+                        .header("X-Requested-With", "XMLHttpRequest"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", staleHeader))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/users/me/profile").header("Authorization", staleHeader))
+                .andExpect(status().isUnauthorized());
+
+        mvc.perform(post("/api/v1/auth/logout").header("Authorization", "Bearer " + validToken)
+                        .header("X-Requested-With", "XMLHttpRequest"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/auth/me").header("Authorization", "Bearer " + validToken))
+                .andExpect(status().isUnauthorized());
     }
 
     private void rejectedRegistration(Map<String, Object> body) throws Exception {

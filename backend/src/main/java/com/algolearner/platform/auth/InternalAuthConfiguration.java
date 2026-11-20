@@ -21,7 +21,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 @Configuration
 @Profile("internal-auth")
 public class InternalAuthConfiguration {
-    @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(12); }
+    @Bean PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(10); }
 
     @Bean JwtEncoder jwtEncoder(@Value("${app.security.jwt-secret}") String secret) {
         return new NimbusJwtEncoder(new ImmutableSecret<>(keyBytes(secret)));
