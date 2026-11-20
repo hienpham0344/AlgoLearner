@@ -20,7 +20,6 @@ test('LIVE LES: teacher authoring and lifecycle preserve student completion thro
     await context.addInitScript(({ data }) => {
       localStorage.setItem('algolearner_token', data.token);
       localStorage.setItem('algolearner_user', JSON.stringify(data.user));
-      if (data.refreshToken) localStorage.setItem('algolearner_refresh_token', data.refreshToken);
     }, { data });
     return data;
   }

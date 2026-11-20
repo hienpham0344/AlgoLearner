@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { ClassroomLayout } from '../components/ClassroomLayout';
-import { classroomApi, classroomError } from '../api/classroomApi';
+import { classroomApi, classroomError, classroomKeys } from '../api/classroomApi';
 import type { DemoPersona, DemoRole, JoinMode } from '../types';
 
 const field = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900';
@@ -31,6 +31,8 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   const [pageNumber, setPageNumber] = useState(0);
   const [memberPage, setMemberPage] = useState(0);
   const [requestPage, setRequestPage] = useState(0);
+  const [invitationPage, setInvitationPage] = useState(0);
+  const [notificationPage, setNotificationPage] = useState(0);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -39,7 +41,6 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   const [joinMode, setJoinMode] = useState<JoinMode>('AUTO_JOIN');
   const [ownerId, setOwnerId] = useState('');
   const [classCode, setClassCode] = useState('');
-  const [invitationId, setInvitationId] = useState('');
   const [student, setStudent] = useState('');
   const [email, setEmail] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
@@ -52,24 +53,34 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
     fullName: user?.fullName || user?.username || role, role,
   };
   const list = useQuery({
-    queryKey: ['classrooms', 'list', pageNumber],
+    queryKey: classroomKeys.list(pageNumber),
     queryFn: () => classroomApi.list(pageNumber),
     enabled: !id,
   });
   const detail = useQuery({
-    queryKey: ['classrooms', 'detail', id],
+    queryKey: classroomKeys.detail(id || ''),
     queryFn: () => classroomApi.get(id!),
     enabled: Boolean(id),
   });
   const members = useQuery({
-    queryKey: ['classrooms', 'members', id, memberPage],
+    queryKey: classroomKeys.members(id || '', memberPage),
     queryFn: () => classroomApi.members(id!, memberPage),
     enabled: Boolean(id) && role !== 'STUDENT',
   });
   const requests = useQuery({
-    queryKey: ['classrooms', 'requests', id, requestPage],
+    queryKey: classroomKeys.requests(id || '', requestPage),
     queryFn: () => classroomApi.requests(id!, requestPage),
     enabled: Boolean(id) && role === 'TEACHER',
+  });
+  const invitations = useQuery({
+    queryKey: classroomKeys.invitations(id || '', invitationPage),
+    queryFn: () => classroomApi.invitations(id!, invitationPage),
+    enabled: Boolean(id) && role === 'TEACHER',
+  });
+  const notifications = useQuery({
+    queryKey: classroomKeys.notifications(notificationPage),
+    queryFn: () => classroomApi.notifications(notificationPage),
+    enabled: !id && role === 'STUDENT',
   });
 
   useEffect(() => {
@@ -87,7 +98,11 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
     setPending(true); setError(''); setNotice('');
     try {
       const result = await action();
-      await client.invalidateQueries({ queryKey: ['classrooms'] });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['classrooms'] }),
+        client.invalidateQueries({ queryKey: ['notifications'] }),
+        client.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
       setNotice(typeof success === 'string' ? success : success(result));
       next?.(result);
     } catch (failure) {
@@ -152,14 +167,29 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
               <button className={button} disabled={pending}>Join</button>
             </form>
           </section>
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-2 text-lg font-bold">Invitation</h2>
-            <p className="mb-3 text-sm text-slate-600">Enter the invitation ID from your notification.</p>
-            <form className="flex flex-wrap gap-3" onSubmit={event => submit(event, () => classroomApi.acceptInvitation(invitationId.trim()), 'Invitation accepted.')}>
-              <input className={field} aria-label="Invitation UUID" placeholder="Invitation UUID" required value={invitationId} onChange={event => setInvitationId(event.target.value)} />
-              <button className={button} disabled={pending}>Accept</button>
-              <button className={secondary} type="button" disabled={pending || !invitationId.trim()} onClick={() => void run(() => classroomApi.declineInvitation(invitationId.trim()), 'Invitation declined.')}>Decline</button>
-            </form>
+          <section id="invitations" className="rounded-xl border border-slate-200 bg-white p-5">
+            <h2 className="mb-2 text-lg font-bold">Thông báo</h2>
+            {notifications.isPending && <p role="status">Đang tải thông báo…</p>}
+            {notifications.isError && <p role="alert">{classroomError(notifications.error)}</p>}
+            {notifications.data && <>
+              {notifications.data.items.length === 0 && <p className="text-sm text-slate-600">Chưa có thông báo.</p>}
+              <ul className="divide-y divide-slate-100">{notifications.data.items.map(item => <li key={item.id} className="py-4 text-sm">
+                <strong>{item.title ?? item.classroomName}</strong>
+                {item.message && <p className="text-slate-600">{item.message}</p>}
+                {item.expiresAt && <p className="text-slate-600">Trạng thái: {item.status} · Hết hạn: {new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(item.expiresAt))}</p>}
+                {!item.readAt && <button type="button" className="mt-2 text-slate-700 underline" disabled={pending}
+                  onClick={() => void run(() => classroomApi.markNotificationRead(item.id), 'Đã đánh dấu đã đọc.')}>Đánh dấu đã đọc</button>}
+                {item.status === 'PENDING' && item.invitationId && <div className="mt-2 flex gap-2">
+                  <button type="button" className={button} disabled={pending} onClick={() => void run(
+                    () => classroomApi.acceptInvitation(item.invitationId!), 'Đã tham gia lớp.', () => navigate(`${base}/${item.classroomId}`))}>Chấp nhận</button>
+                  <button type="button" className={secondary} disabled={pending} onClick={() => void run(
+                    () => classroomApi.declineInvitation(item.invitationId!), 'Đã từ chối lời mời.')}>Từ chối</button>
+                </div>}
+                {item.type !== 'CLASS_INVITATION' && item.actionUrl && <Link className="mt-2 inline-block underline" to={item.actionUrl}>Xem chi tiết</Link>}
+                {(item.status === 'REVOKED' || item.status === 'EXPIRED') && <p>Lời mời đã hết hạn.</p>}
+              </li>)}</ul>
+              <PageControls page={notificationPage} totalPages={notifications.data.pagination.totalPages} onPage={setNotificationPage} />
+            </>}
           </section>
         </>}
       </>}
@@ -224,7 +254,13 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
                   <label className="text-sm">Expires at <input className={field} type="datetime-local" required value={expiresAt} onChange={event => setExpiresAt(event.target.value)} /></label>
                   <button className={button} disabled={pending}>Invite</button>
                 </form>
-                <form className="mt-4 flex gap-3" onSubmit={event => submit(event, () => classroomApi.revoke(id, invitationId.trim()), 'Invitation revoked.')}><input className={field} aria-label="Invitation UUID to revoke" placeholder="Invitation UUID to revoke" required value={invitationId} onChange={event => setInvitationId(event.target.value)} /><button className={secondary} disabled={pending}>Revoke</button></form>
+                {invitations.isPending && <p role="status" className="mt-4">Đang tải lời mời…</p>}
+                {invitations.isError && <p role="alert" className="mt-4">{classroomError(invitations.error)}</p>}
+                {invitations.data && <><ul className="mt-4 divide-y divide-slate-100">{invitations.data.items.map(invitation => <li key={invitation.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
+                  <span>{invitation.studentEmail} · {invitation.status}</span>
+                  {invitation.status === 'PENDING' && <button type="button" className={secondary} disabled={pending}
+                    onClick={() => void run(() => classroomApi.revoke(id, invitation.id), 'Đã thu hồi lời mời.')}>Thu hồi</button>}
+                </li>)}</ul><PageControls page={invitationPage} totalPages={invitations.data.pagination.totalPages} onPage={setInvitationPage} /></>}
               </section>
             </>}
           </>}

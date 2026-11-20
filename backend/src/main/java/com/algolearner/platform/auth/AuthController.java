@@ -1,170 +1,210 @@
 package com.algolearner.platform.auth;
 
-import com.algolearner.platform.common.dto.ApiResponse;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
-
 import static com.algolearner.platform.auth.AuthDtos.*;
 
+import com.algolearner.platform.common.dto.ApiResponse;
+import com.algolearner.platform.admin.AccountAdministrationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.util.UUID;
+import java.util.List;
+import java.security.Principal;
+import org.springframework.http.ResponseCookie;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.CookieValue;
+import com.algolearner.platform.common.exception.ApiException;
+import com.algolearner.platform.common.exception.ErrorCode;
+import org.springframework.context.annotation.Profile;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.ResponseStatus;
+
 @RestController
-@org.springframework.context.annotation.Profile("!mock")
-@RequestMapping(value = "/api/v1/auth", produces = MediaType.APPLICATION_JSON_VALUE)
-@Tag(name = "Authentication & Accounts", description = "SRS 4.1: Registration, Login, OTP, Passwords, and Sessions")
+@RequestMapping("/api/v1/auth")
+@Profile("internal-auth")
 public class AuthController {
-
-    private final AuthService authService;
-
-    public AuthController(AuthService authService) {
-        this.authService = authService;
+    private final AuthService service;
+    private final AuthSessionService sessions;
+    private final AccountAdministrationService administration;
+    public AuthController(AuthService service, AuthSessionService sessions,
+            AccountAdministrationService administration) {
+        this.service = service; this.sessions = sessions; this.administration = administration;
     }
 
+    @Operation(summary = "Register a Student or Teacher and email a verification code")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Pending account created and email accepted by SMTP"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid registration data"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Email or username already exists"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Email delivery is unavailable")
+    })
     @PostMapping("/register")
-    @Operation(summary = "Register new Student or Teacher account (FR-ACC-001)")
-    public ResponseEntity<ApiResponse<AuthUserResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        AuthUserResponse response = authService.register(request);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Account registered successfully. An OTP has been sent to your email", response));
+    public ResponseEntity<ApiResponse<Message>> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(service.register(request)));
     }
 
-    @PostMapping("/verify-otp")
-    @Operation(summary = "Verify OTP code for REGISTER or RESET_PASSWORD (FR-ACC-003, FR-ACC-004)")
-    public ResponseEntity<ApiResponse<Object>> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        Object response = authService.verifyOtp(request);
-        return ResponseEntity.ok(ApiResponse.success("OTP verified successfully", response));
-    }
-
+    @Operation(summary = "Resend a registration or password-reset verification code")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Generic response for password reset; registration code accepted by SMTP"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description = "Registration resend wait has not elapsed"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "503", description = "Registration email delivery is unavailable")
+    })
     @PostMapping("/resend-otp")
-    @Operation(summary = "Resend OTP code with 60s cooldown (FR-ACC-004)")
-    public ResponseEntity<ApiResponse<MessageResponse>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        MessageResponse response = authService.resendOtp(request);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    public ApiResponse<ResendResult> resend(@Valid @RequestBody EmailRequest request) {
+        try {
+            return ApiResponse.success(service.resend(request));
+        } catch (ApiException ex) {
+            if (!"RESET_PASSWORD".equals(request.purpose()) || !concealedResetFailure(ex)) throw ex;
+            return ApiResponse.success(new ResendResult(true, AuthService.RESET_REQUEST_MESSAGE));
+        }
     }
 
+    @Operation(summary = "Verify a registration or password-reset code")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Account activated and JWT issued"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Code is invalid, expired, or already used")
+    })
+    @PostMapping("/verify-otp")
+    public ApiResponse<?> verify(@Valid @RequestBody VerifyOtpRequest request, HttpServletRequest http,
+            HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        if ("RESET_PASSWORD".equals(request.purpose())) return ApiResponse.success(service.verifyReset(request));
+        var result = service.verify(request, http.getHeader("User-Agent"));
+        cookie(result, http, response);
+        return ApiResponse.success(result);
+    }
+
+    @Operation(summary = "Sign in with email or username", description = "Optional identityType selects EMAIL or USERNAME for legacy collisions; AUTO is the default and rejects ambiguity before counting password failures.")
+    @io.swagger.v3.oas.annotations.responses.ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "JWT issued"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Invalid credentials or inactive account"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Ambiguous identity; choose EMAIL or USERNAME"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Correct password for a suspended account; suspension reason returned")
+    })
     @PostMapping("/login")
-    @Operation(summary = "Login with username/email and password (FR-AUTH-001, FR-AUTH-002)")
-    public ResponseEntity<ApiResponse<AuthResponse>> login(
-            @Valid @RequestBody LoginRequest request,
-            HttpServletRequest servletRequest
-    ) {
-        String deviceLabel = servletRequest.getHeader("User-Agent");
-        AuthResponse response = authService.login(request, deviceLabel);
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+    public ApiResponse<AuthResult> login(@Valid @RequestBody LoginRequest request, HttpServletRequest http,
+            HttpServletResponse response) {
+        var result = service.login(request, http.getHeader("User-Agent"));
+        cookie(result, http, response);
+        return ApiResponse.success(result);
     }
 
     @PostMapping("/forgot-password")
-    @Operation(summary = "Request password reset OTP (FR-AUTH-003)")
-    public ResponseEntity<ApiResponse<MessageResponse>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        MessageResponse response = authService.forgotPassword(request);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    @Operation(summary = "Request a password reset OTP; response does not reveal account status or mail delivery")
+    public ApiResponse<Message> forgot(@Valid @RequestBody ForgotPasswordRequest request) {
+        try {
+            return ApiResponse.success(service.forgotPassword(request));
+        } catch (ApiException ex) {
+            if (!concealedResetFailure(ex)) throw ex;
+            return ApiResponse.success(AuthService.resetRequestMessage(request));
+        }
     }
 
     @PostMapping("/reset-password")
-    @Operation(summary = "Complete password reset with verified token (FR-AUTH-003)")
-    public ResponseEntity<ApiResponse<MessageResponse>> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        MessageResponse response = authService.resetPassword(request);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
-    }
-
-    @PostMapping("/refresh-token")
-    @Operation(summary = "Refresh JWT access token with refresh token (FR-AUTH-005)")
-    public ResponseEntity<ApiResponse<AuthResponse>> refreshToken(@Valid @RequestBody RefreshTokenRequest request) {
-        AuthResponse response = authService.refreshToken(request);
-        return ResponseEntity.ok(ApiResponse.success("Token refreshed successfully", response));
+    @Operation(summary = "Consume a verified reset grant and revoke all sessions")
+    public ApiResponse<ResendResult> reset(@Valid @RequestBody ResetPasswordRequest request) {
+        return ApiResponse.success(service.resetPassword(request));
     }
 
     @PostMapping("/change-password")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Change password for authenticated user (FR-AUTH-004)", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<MessageResponse>> changePassword(
-            Authentication authentication,
-            @RequestHeader(value = "X-Refresh-Token", required = false) String currentRefreshToken,
-            @Valid @RequestBody ChangePasswordRequest request
-    ) {
-        UUID accountId = id(authentication);
-        MessageResponse response = authService.changePassword(accountId, request, currentRefreshToken);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    @Operation(summary = "Change password using current password; revoke other sessions")
+    @SecurityRequirement(name = "bearerAuth")
+    public ApiResponse<ResendResult> change(@Valid @RequestBody ChangePasswordRequest request, JwtAuthenticationToken auth) {
+        return ApiResponse.success(service.changePassword(UUID.fromString(auth.getName()),
+                UUID.fromString(auth.getToken().getClaimAsString("sid")), request));
     }
 
-    @GetMapping("/sessions")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "List active login sessions for current user (FR-AUTH-006)", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<List<SessionResponse>>> listSessions(
-            Authentication authentication,
-            @RequestHeader(value = "X-Refresh-Token", required = false) String currentRefreshToken
-    ) {
-        UUID accountId = id(authentication);
-        List<SessionResponse> sessions = authService.listSessions(accountId, currentRefreshToken);
-        return ResponseEntity.ok(ApiResponse.success(sessions));
+    @PostMapping("/refresh-token")
+    @Operation(summary = "Rotate the HttpOnly refresh cookie and issue a 15-minute access token")
+    public ApiResponse<AuthResult> refresh(@CookieValue(name = "algolearner_refresh", required = false) String token,
+            HttpServletRequest http, HttpServletResponse response) {
+        requireSameOriginHeader(http);
+        var result = sessions.refresh(token);
+        cookie(result, http, response);
+        return ApiResponse.success(result);
     }
 
     @PostMapping("/logout")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Logout current session (FR-AUTH-006)", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<MessageResponse>> logout(
-            Authentication authentication,
-            @RequestHeader(value = "X-Refresh-Token", required = false) String currentRefreshToken
-    ) {
-        UUID accountId = id(authentication);
-        MessageResponse response = authService.logout(accountId, currentRefreshToken);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    @Operation(summary = "Revoke the bearer session when supplied, otherwise the refresh-cookie session; expire the cookie")
+    public ApiResponse<ResendResult> logout(@CookieValue(name = "algolearner_refresh", required = false) String token,
+            HttpServletRequest http, HttpServletResponse response, Principal principal) {
+        requireSameOriginHeader(http);
+        if (principal instanceof JwtAuthenticationToken auth) {
+            sessions.logoutCurrent(accountId(auth), sessionId(auth));
+        } else {
+            sessions.logout(token);
+        }
+        expireCookie(http, response);
+        return ApiResponse.success(new ResendResult(true, "Signed out"));
     }
 
-    @PostMapping("/logout-all")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Logout all sessions from all devices (FR-AUTH-006)", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<MessageResponse>> logoutAll(Authentication authentication) {
-        UUID accountId = id(authentication);
-        MessageResponse response = authService.logoutAll(accountId);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    @GetMapping("/sessions")
+    @Operation(summary = "List active sessions belonging to the authenticated account")
+    @SecurityRequirement(name = "bearerAuth")
+    public ApiResponse<List<SessionView>> sessions(JwtAuthenticationToken auth) {
+        return ApiResponse.success(sessions.list(accountId(auth), sessionId(auth)));
     }
 
-    @DeleteMapping("/sessions/{sessionId}")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Revoke a specific session (FR-AUTH-006)", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<MessageResponse>> revokeSession(
-            Authentication authentication,
-            @PathVariable UUID sessionId
-    ) {
-        UUID accountId = id(authentication);
-        MessageResponse response = authService.revokeSession(accountId, sessionId);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    @DeleteMapping("/sessions/{id}") @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Revoke another session belonging to this account")
+    @SecurityRequirement(name = "bearerAuth")
+    public void revokeSession(JwtAuthenticationToken auth, @PathVariable UUID id) {
+        sessions.revoke(accountId(auth), sessionId(auth), id);
     }
 
-    @PostMapping("/deactivate")
-    @PreAuthorize("hasAnyRole('STUDENT','TEACHER')")
-    @Operation(summary = "Self-deactivate user account (FR-ACC-006)", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<MessageResponse>> deactivate(
-            Authentication authentication,
-            @Valid @RequestBody DeactivateAccountRequest request
-    ) {
-        UUID accountId = id(authentication);
-        MessageResponse response = authService.deactivateAccount(accountId, request);
-        return ResponseEntity.ok(ApiResponse.success(response.message(), response));
+    @PostMapping("/logout-all") @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Revoke every session and expire the refresh cookie")
+    @SecurityRequirement(name = "bearerAuth")
+    public void logoutAll(JwtAuthenticationToken auth, HttpServletRequest http, HttpServletResponse response) {
+        sessions.logoutAll(accountId(auth));
+        expireCookie(http, response);
     }
 
-    @GetMapping("/me")
-    @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Get current authenticated user info", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<ApiResponse<AuthUserResponse>> me(Authentication authentication) {
-        UUID accountId = id(authentication);
-        AuthUserResponse response = authService.getCurrentUser(accountId);
-        return ResponseEntity.ok(ApiResponse.success(response));
+    @PostMapping("/deactivate") @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Deactivate the current Student or Teacher account")
+    @SecurityRequirement(name = "bearerAuth")
+    public void deactivate(JwtAuthenticationToken auth, @Valid @RequestBody DeactivateRequest request,
+            HttpServletRequest http, HttpServletResponse response) {
+        administration.deactivate(accountId(auth), request.currentPassword(), Boolean.TRUE.equals(request.confirmed()));
+        expireCookie(http, response);
     }
 
-    private UUID id(Authentication authentication) {
-        return UUID.fromString(authentication.getName());
+    private void cookie(AuthResult result, HttpServletRequest http, HttpServletResponse response) {
+        var cookie = ResponseCookie.from("algolearner_refresh", result.refreshToken()).path("/api/v1/auth")
+                .httpOnly(true).secure(http.isSecure()).sameSite("Strict");
+        if (result.rememberMe()) cookie.maxAge(result.refreshExpiresIn());
+        response.setHeader("Cache-Control", "no-store");
+        response.addHeader("Set-Cookie", cookie.build().toString());
+    }
+
+    private UUID accountId(JwtAuthenticationToken auth) { return UUID.fromString(auth.getName()); }
+    private UUID sessionId(JwtAuthenticationToken auth) { return UUID.fromString(auth.getToken().getClaimAsString("sid")); }
+
+    private boolean concealedResetFailure(ApiException ex) {
+        return ErrorCode.OTP_RATE_LIMITED.name().equals(ex.getErrorCode())
+                || ErrorCode.MAIL_NOT_CONFIGURED.name().equals(ex.getErrorCode())
+                || ErrorCode.MAIL_DELIVERY_FAILED.name().equals(ex.getErrorCode());
+    }
+
+    private void expireCookie(HttpServletRequest http, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-store");
+        response.addHeader("Set-Cookie", ResponseCookie.from("algolearner_refresh", "").path("/api/v1/auth")
+                .httpOnly(true).secure(http.isSecure()).sameSite("Strict").maxAge(0).build().toString());
+    }
+
+    private void requireSameOriginHeader(HttpServletRequest request) {
+        // Cross-origin forms cannot set this header. Do not allow credentialed CORS for untrusted origins.
+        if (!"XMLHttpRequest".equals(request.getHeader("X-Requested-With")))
+            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION);
     }
 }
-

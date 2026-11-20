@@ -10,7 +10,7 @@ Frontend đã có implementation và kiểm thử theo **contract đề xuất**
 - [Use Case](https://docs.google.com/document/d/1JJ8RykceUqcj4me708q1SVU7ZBLhF5jTDgjpAWF1SMM/edit): đã đọc UC-LES-01 và UC-LES-10, bao gồm luồng chính, AF/EF và phạm vi quyền.
 - [Test Plan, tab MD6: LES](https://docs.google.com/spreadsheets/d/1REBfe8zkJhmPyQx6_z2ogEPM8g7VoBssRw7QBskys_c/edit#gid=1227874164): 18 ca, 7 Student và 11 Teacher. Baseline sheet đang ghi 18 Untested; không sửa kết quả trong tài liệu dùng chung.
 - `docs/rules/API_DESIGN_GUIDELINES.md`, `CODING_STANDARDS.md`, `SECURITY_AND_SANDBOX_RULES.md`.
-- Contract cần review với #12: [API đề xuất 4.5](../api/API-4.5-classroom-lessons-proposed.md). Tất cả endpoint ở tài liệu này còn chờ BE xác nhận.
+- Contract chính thức sau khi chốt với #12: [API 4.5 — Bài học trong lớp](../api/API-4.5-lessons.md) (thay thế bản đề xuất cũ đã gỡ bỏ).
 
 ## Implementation
 

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, CheckCircle2, ChevronRight, Clock, FileText, Plus, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsPrototypeDemo } from '@/components/BackendStatusBanner';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { classroomApi } from '../../api/classroomApi';
 import { readStoredPersona } from '../../mock/useClassroomStore';
@@ -26,8 +27,6 @@ import { InteractiveCourseBackground } from '@/features/dashboard/components/Int
 import 'katex/dist/katex.min.css';
 import '../styles/lessons.css';
 
-const IS_PROTOTYPE_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
-
 export function LessonWorkspacePage({ role }: { role: LessonRole }) {
   const { user, isLoading } = useAuth();
   if (isLoading) return <p role="status" className="p-8">Loading account…</p>;
@@ -39,18 +38,19 @@ export function LessonWorkspacePage({ role }: { role: LessonRole }) {
 function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
   const { id = '', lessonId } = useParams<{ id: string; lessonId: string }>();
   const { user } = useAuth();
+  const isPrototypeDemo = useIsPrototypeDemo();
 
   useLayoutEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [id, lessonId]);
 
-  const demoPersona = IS_PROTOTYPE_DEMO ? readStoredPersona(role) : null;
+  const demoPersona = isPrototypeDemo ? readStoredPersona(role) : null;
   const effectiveUserId = demoPersona ? demoPersona.id : userId;
 
   const classroom = useQuery({
-    queryKey: ['lesson-classroom', effectiveUserId, id],
+    queryKey: ['lesson-classroom', effectiveUserId, id, isPrototypeDemo],
     queryFn: async () => {
-      if (IS_PROTOTYPE_DEMO) {
+      if (isPrototypeDemo) {
         const match = getSynchronizedClassroom(id);
         if (!match) throw new Error('Classroom not found.');
         return match;
@@ -59,7 +59,7 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
     },
     retry: false,
     staleTime: 0,
-    refetchInterval: IS_PROTOTYPE_DEMO ? false : 15_000,
+    refetchInterval: isPrototypeDemo ? false : 15_000,
   });
 
   const base = `/${role.toLowerCase()}/classrooms/${encodeURIComponent(id)}`;
@@ -72,9 +72,9 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
     role,
   };
 
-  const syncClassroom = IS_PROTOTYPE_DEMO ? (classroom.data as Classroom | undefined) : undefined;
+  const syncClassroom = isPrototypeDemo ? (classroom.data as Classroom | undefined) : undefined;
   const isMember =
-    !IS_PROTOTYPE_DEMO
+    !isPrototypeDemo
     || role !== 'STUDENT'
     || Boolean(syncClassroom?.members.some(m => m.studentId === effectiveUserId && m.status === 'ACTIVE'));
 
@@ -169,18 +169,19 @@ function LessonList({
   role: LessonRole;
   writable: boolean;
 }) {
+  const isPrototypeDemo = useIsPrototypeDemo();
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<LessonFilter>('ALL');
   const [search, setSearch] = useState('');
 
   const query = useQuery({
-    queryKey: lessonKeys.list(userId, classId, page),
-    queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
+    queryKey: [...lessonKeys.list(userId, classId, page), isPrototypeDemo],
+    queryFn: ({ signal }) => isPrototypeDemo
       ? Promise.resolve(lessonMockStore.list(classId, role, userId, page))
       : lessonApi.list(classId, page, signal),
     retry: false,
     staleTime: 0,
-    refetchInterval: !IS_PROTOTYPE_DEMO && role === 'STUDENT' ? 15_000 : false,
+    refetchInterval: !isPrototypeDemo && role === 'STUDENT' ? 15_000 : false,
   });
 
   const items = visibleLessons(query.data?.items || [], role);
@@ -308,7 +309,7 @@ function LessonList({
                             </span>
                           </div>
                           <h3>{lesson.title}</h3>
-                          <p>{lesson.completionMode === 'MANUAL' ? 'Mark complete when you are ready' : 'Complete linked assignments or quizzes'} · {lesson.attachments.length} materials</p>
+                          <p>{lesson.completionMode === 'MANUAL' ? 'Mark complete when you are ready' : 'Complete linked assignments or quizzes'} · {lesson.materialCount ?? lesson.attachments.length} materials</p>
                           <small>Updated {lessonDate(lesson.updatedAt)} · UTC+7</small>
                         </div>
                         <span className="lesson-list-cta" aria-hidden="true">
@@ -442,6 +443,7 @@ function LessonDetail({
 }) {
   const client = useQueryClient();
   const navigate = useNavigate();
+  const isPrototypeDemo = useIsPrototypeDemo();
   const classroomBase = `/${role.toLowerCase()}/classrooms/${encodeURIComponent(classId)}`;
   const base = `${classroomBase}/lessons`;
   const [editing, setEditing] = useState(create);
@@ -454,8 +456,8 @@ function LessonDetail({
   const [activeSectionId, setActiveSectionId] = useState<string>('');
 
   const listQuery = useQuery({
-    queryKey: lessonKeys.list(userId, classId, 0),
-    queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
+    queryKey: [...lessonKeys.list(userId, classId, 0), isPrototypeDemo],
+    queryFn: ({ signal }) => isPrototypeDemo
       ? Promise.resolve(lessonMockStore.list(classId, role, userId, 0))
       : lessonApi.list(classId, 0, signal),
     enabled: !create,
@@ -468,24 +470,24 @@ function LessonDetail({
   const nextLesson = currentIdx >= 0 && currentIdx + 1 < orderedLessons.length ? orderedLessons[currentIdx + 1] : null;
 
   const detail = useQuery({
-    queryKey: lessonKeys.detail(userId, classId, lessonId),
-    queryFn: ({ signal }) => IS_PROTOTYPE_DEMO
+    queryKey: [...lessonKeys.detail(userId, classId, lessonId), isPrototypeDemo],
+    queryFn: ({ signal }) => isPrototypeDemo
       ? Promise.resolve(lessonMockStore.get(classId, lessonId, role, userId))
       : lessonApi.get(classId, lessonId, signal),
     enabled: !create,
     retry: false,
     staleTime: 0,
-    refetchInterval: !IS_PROTOTYPE_DEMO && role === 'STUDENT' ? 15_000 : false,
+    refetchInterval: !isPrototypeDemo && role === 'STUDENT' ? 15_000 : false,
   });
   const policy = useQuery({
-    queryKey: lessonKeys.capabilities(userId, classId),
-    queryFn: () => IS_PROTOTYPE_DEMO ? Promise.resolve(lessonMockStore.getCapabilities()) : lessonApi.capabilities(classId),
+    queryKey: [...lessonKeys.capabilities(userId, classId), isPrototypeDemo],
+    queryFn: () => isPrototypeDemo ? Promise.resolve(lessonMockStore.getCapabilities()) : lessonApi.capabilities(classId),
     enabled: role === 'TEACHER',
     retry: false,
   });
   const options = useQuery({
-    queryKey: lessonKeys.activities(userId, classId),
-    queryFn: () => IS_PROTOTYPE_DEMO ? Promise.resolve(lessonMockStore.getActivities(classId)) : lessonApi.activities(classId),
+    queryKey: [...lessonKeys.activities(userId, classId), isPrototypeDemo],
+    queryFn: () => isPrototypeDemo ? Promise.resolve(lessonMockStore.getActivities(classId)) : lessonApi.activities(classId),
     enabled: role === 'TEACHER' && editing && policy.data?.activityLinkingAvailable === true,
     retry: false,
   });
@@ -561,7 +563,7 @@ function LessonDetail({
 
   async function save(input: LessonInput) {
     await mutation.mutateAsync(async () => {
-      const saved = IS_PROTOTYPE_DEMO
+      const saved = isPrototypeDemo
         ? (create ? lessonMockStore.create(classId, input, userId) : lessonMockStore.update(classId, lessonId, input, userId))
         : (create ? await lessonApi.create(classId, input) : await lessonApi.update(classId, lessonId, input));
       await refresh(); setEditing(false); setNotice('Lesson saved.');
@@ -573,7 +575,7 @@ function LessonDetail({
     setNotice('');
     try {
       await mutation.mutateAsync(async () => {
-        if (IS_PROTOTYPE_DEMO) {
+        if (isPrototypeDemo) {
           if (action === 'delete') lessonMockStore.remove(classId, lessonId);
           else lessonMockStore.transition(classId, lessonId, action, userId);
         } else {
@@ -588,7 +590,7 @@ function LessonDetail({
   async function complete() {
     setNotice('');
     try { await mutation.mutateAsync(async () => {
-      const saved = IS_PROTOTYPE_DEMO
+      const saved = isPrototypeDemo
         ? lessonMockStore.complete(classId, lessonId, userId)
         : await lessonApi.complete(classId, lessonId);
       if (!saved.progress?.completed) throw new Error('The server did not confirm completion. Refresh and try again.');

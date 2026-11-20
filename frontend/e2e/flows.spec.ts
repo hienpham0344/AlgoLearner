@@ -1,7 +1,9 @@
+import { installBackendFixture } from './backendFixture';
 import { expect, test, type Page } from '@playwright/test';
 import { writeFile } from 'node:fs/promises';
 
-test.beforeEach(async ({ page }) => {
+test.beforeEach(async ({ page }, testInfo) => {
+  if (/^(4\.3|4\.2 profile reads|4\.2 does not)/.test(testInfo.title) && !/in prototype|classroom prototype/.test(testInfo.title)) await installBackendFixture(page);
   await page.coverage.startJSCoverage({ resetOnNavigation: false });
 });
 
@@ -28,6 +30,38 @@ async function signIn(page: Page, base: string, username: string) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+test('registration validates password rules before calling the backend', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/v1/auth/register', route => {
+    requests += 1;
+    return route.fulfill({ status: 503, body: 'Service unavailable' });
+  });
+  await page.goto('http://127.0.0.1:3101/register');
+  await page.getByLabel('Email address').fill('new-user@example.test');
+  await page.getByLabel('Username').fill('new-user');
+  await page.getByLabel(/I agree to the Terms of Service/).check();
+  await page.getByLabel(/I accept the Privacy Policy/).check();
+  for (const password of ['12345678', 'abcdefgh']) {
+    await page.getByLabel('Password', { exact: true }).fill(password);
+    await page.getByLabel('Confirm password').fill(password);
+    await page.getByRole('button', { name: 'Create account' }).click();
+    await expect(page.locator('#reg-password-message')).toHaveText('Use at least one letter and one number.');
+    await expect(page.getByLabel('Password', { exact: true })).toBeFocused();
+    expect(requests).toBe(0);
+  }
+  const longPassword = 'a1' + 'é'.repeat(36);
+  await page.getByLabel('Password', { exact: true }).fill(longPassword);
+  await page.getByLabel('Confirm password').fill(longPassword);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.locator('#reg-password-message')).toHaveText('Password is too long. Use at most 72 UTF-8 bytes.');
+  expect(requests).toBe(0);
+  await page.getByLabel('Password', { exact: true }).fill('example123');
+  await page.getByLabel('Confirm password').fill('example123');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('alert')).toContainText('We couldn’t create your account. Please try again.');
+  expect(requests).toBe(1);
+});
+
 test('registration explains unavailable account creation in backend preview', async ({ page }) => {
   await page.route('**/api/v1/auth/register', route => route.fulfill({
     status: 401,
@@ -48,6 +82,20 @@ test('registration explains unavailable account creation in backend preview', as
   await expect(page).toHaveURL(/\/register$/);
 });
 
+test('registration stays on the form when the backend cannot send OTP', async ({ page }) => {
+  await page.route('**/api/v1/auth/register', route => route.fulfill({ status: 503, body: 'Service unavailable' }));
+  await page.goto('http://127.0.0.1:3101/register');
+  await page.getByLabel('Email address').fill('new-user@example.test');
+  await page.getByLabel('Username').fill('new-user');
+  await page.getByLabel('Password', { exact: true }).fill('ExamplePass123!');
+  await page.getByLabel('Confirm password').fill('ExamplePass123!');
+  await page.getByLabel(/I agree to the Terms of Service/).check();
+  await page.getByLabel(/I accept the Privacy Policy/).check();
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByRole('alert')).toContainText('We couldn’t create your account. Please try again.');
+  await expect(page).toHaveURL(/\/register$/);
+});
+
 test('4.2 student dashboard and profile work in demo mode', async ({ page }) => {
   await signIn(page, 'http://127.0.0.1:3100', 'learner@example.test');
   await expect(page.getByRole('heading', { name: 'Keep building.' })).toBeVisible();
@@ -60,7 +108,7 @@ test('4.2 student dashboard and profile work in demo mode', async ({ page }) => 
   await page.getByRole('tab', { name: 'Privacy' }).click();
   await expect(page.getByRole('heading', { name: 'Public profile' })).toBeVisible();
   await page.locator('label.folder-switch').click();
-  await expect(page.getByRole('status')).toContainText('Your public profile is visible.');
+  await expect(page.locator('.folder-feedback-toast')).toContainText('Your public profile is visible.');
 });
 
 test('4.2 profile reads the backend response in backend-mock mode', async ({ page }) => {
@@ -159,6 +207,7 @@ test('4.3 teacher can manage classroom detail through API', async ({ page }) => 
     if (request.method() === 'GET') {
       const data = path.endsWith('/members') ? pageData([])
         : path.endsWith('/join-requests') ? pageData([{ id: requestId, studentId: '55555555-5555-5555-5555-555555555555', username: 'waiting-student', createdAt: '2026-11-09T00:00:00Z' }])
+          : path.endsWith('/invitations') ? pageData([])
           : path === '/api/v1/classrooms' ? pageData([classroom()]) : classroom();
       return route.fulfill({ json: { success: true, data, timestamp: '2026-11-09T00:00:00Z' } });
     }
@@ -203,12 +252,13 @@ test('4.3 teacher can manage classroom detail through API', async ({ page }) => 
   ]) expect(calls).toContain(expected);
 });
 
-test('4.3 falls back to prototype when classroom API is absent', async ({ page }) => {
+test('4.3 shows backend 404 without substituting prototype data', async ({ page }) => {
   const base = 'http://127.0.0.1:3101';
   await page.route('**/api/v1/classrooms**', route => route.fulfill({ status: 404, body: '' }));
   await signIn(page, base, 'teacher');
   await page.goto(`${base}/teacher/classrooms`);
-  await expect(page.getByRole('heading', { name: 'Classrooms & Teaching Spaces' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('HTTP 404');
+  await expect(page.getByRole('heading', { name: 'Classrooms & Teaching Spaces' })).toHaveCount(0);
 });
 
 test('4.3 student sends class code to API and sees pending approval', async ({ page }) => {
@@ -243,7 +293,7 @@ test('4.3 does not hide authorization errors with mock data', async ({ page }) =
 test('4.3 does not reuse a previous account classroom list after sign out', async ({ page }) => {
   const base = 'http://127.0.0.1:3101';
   await page.route('**/api/v1/classrooms**', route => {
-    const teacher = route.request().headers().authorization === 'Bearer mock-teacher';
+    const teacher = route.request().headers().authorization === 'Bearer fixture-teacher';
     const name = teacher ? 'Teacher private classroom' : 'Student enrolled classroom';
     return route.fulfill({ json: {
       success: true,
@@ -274,13 +324,13 @@ test('4.2 does not reuse another teacher profile after sign out', async ({ page 
   await page.route('**/api/v1/auth/login', route => {
     const username = route.request().postDataJSON().usernameOrEmail;
     return route.fulfill({ json: { success: true, data: {
-      token: `mock-${username}`,
+      token: `fixture-${username}`,
       user: { id: username, username, email: `${username}@example.test`, role: 'TEACHER',
         fullName: username, lifecycleStatus: 'ACTIVE' },
     }, timestamp: '2026-11-09T00:00:00Z' } });
   });
   await page.route('**/api/v1/users/me/profile', route => {
-    const teacher = route.request().headers().authorization === 'Bearer mock-teacher';
+    const teacher = route.request().headers().authorization === 'Bearer fixture-teacher';
     const username = teacher ? 'teacher' : 'teacher2';
     return route.fulfill({ json: { success: true, data: {
       fullName: teacher ? 'Private teacher profile' : 'Second teacher profile', username,

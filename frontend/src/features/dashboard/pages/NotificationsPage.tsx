@@ -3,12 +3,12 @@ import { Link, Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, ArrowRight, Bell } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { dashboardApi, dashboardKeys } from '../api/dashboardApi';
 import { mapStudentDashboard } from '../mapStudentDashboard';
 import { dashboardDemoData } from '../dashboardDemoData';
 import '../styles/dashboard.css';
 
-const IS_DEMO = ['auth-demo', 'lessons-demo'].includes(import.meta.env.MODE);
 const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
 
 const shortDateFormatter = new Intl.DateTimeFormat('en', {
@@ -27,11 +27,12 @@ const formatTimestamp = (iso: string): string => {
 
 export const NotificationsPage: React.FC = () => {
   const { user } = useAuth();
+  const isDemo = useIsDemoMode();
 
   const studentQuery = useQuery({
     queryKey: dashboardKeys.student(),
     queryFn: ({ signal }) => dashboardApi.student(signal),
-    enabled: user?.role === 'STUDENT' && !IS_DEMO,
+    enabled: user?.role === 'STUDENT' && !isDemo,
     retry: false,
   });
 
@@ -47,7 +48,7 @@ export const NotificationsPage: React.FC = () => {
 
   const studentNotifications =
     user.role === 'STUDENT'
-      ? IS_DEMO
+      ? isDemo
         ? dashboardDemoData.notifications
         : studentQuery.data
           ? mapStudentDashboard(studentQuery.data).notifications

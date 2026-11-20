@@ -115,4 +115,3 @@ export function saveLessonReadProgress(userId: string, lessonId: string, percent
     return clamped;
   }
 }
-
