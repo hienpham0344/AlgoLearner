@@ -25,12 +25,12 @@ public final class PracticeDtos {
             @Size(max = 10000) String description,
             PracticeProblemType problemType,
             UUID lessonId,
-            @NotEmpty Set<PracticeLanguage> allowedLanguages,
+            @NotEmpty Set<@NotNull PracticeLanguage> allowedLanguages,
             Map<PracticeLanguage, @Size(max = 20000) String> starterCode,
-            @Min(100) @Max(10000) Integer timeLimitMs,
-            @Min(16) @Max(256) Integer memoryLimitMb,
+            @Min(100) @Max(5000) Integer timeLimitMs,
+            @Min(16) @Max(512) Integer memoryLimitMb,
             @Schema(description = "DRAFT (default) or PUBLISHED") PracticeStatus status,
-            @Valid @Size(max = 100) List<TestcaseInput> testcases,
+            @Size(max = 100) List<@Valid @NotNull TestcaseInput> testcases,
             Instant deadline,
             Integer maxScore) { }
 
@@ -40,10 +40,12 @@ public final class PracticeDtos {
             @Size(max = 10000) String description,
             PracticeProblemType problemType,
             UUID lessonId,
-            Set<PracticeLanguage> allowedLanguages,
+            @Schema(description = "true detaches the practice from its lesson; mutually exclusive with lessonId")
+            Boolean clearLessonId,
+            Set<@NotNull PracticeLanguage> allowedLanguages,
             Map<PracticeLanguage, @Size(max = 20000) String> starterCode,
-            @Min(100) @Max(10000) Integer timeLimitMs,
-            @Min(16) @Max(256) Integer memoryLimitMb,
+            @Min(100) @Max(5000) Integer timeLimitMs,
+            @Min(16) @Max(512) Integer memoryLimitMb,
             Instant deadline,
             Integer maxScore) { }
 
@@ -91,7 +93,8 @@ public final class PracticeDtos {
 
     public record SubmissionView(UUID id, UUID practiceId, UUID studentId, String studentUsername,
                                  PracticeLanguage language, String code, int testcaseVersion, PracticeVerdict verdict,
-                                 Integer runtimeMs, Integer memoryKb, RejudgeStatus rejudgeStatus, Instant submittedAt) { }
+                                 int testsPassed, int totalTests, Integer runtimeMs, Integer memoryKb,
+                                 RejudgeStatus rejudgeStatus, Instant submittedAt) { }
 
     public record ProgressView(UUID studentId, String username, CompletionStatus status, Instant completedAt) { }
 }

@@ -2,6 +2,7 @@ package com.algolearner.platform.practice;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -10,8 +11,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface PracticeSubmissionRepository extends JpaRepository<PracticeSubmissionEntity, UUID> {
+    @EntityGraph(attributePaths = "student")
     Page<PracticeSubmissionEntity> findByPracticeIdAndStudentId(UUID practiceId, UUID studentId, Pageable pageable);
+    @EntityGraph(attributePaths = "student")
     Page<PracticeSubmissionEntity> findByPracticeId(UUID practiceId, Pageable pageable);
+    @EntityGraph(attributePaths = "student")
     Optional<PracticeSubmissionEntity> findByIdAndPracticeId(UUID id, UUID practiceId);
     boolean existsByPracticeIdAndTestcaseVersion(UUID practiceId, int testcaseVersion);
 

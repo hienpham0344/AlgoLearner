@@ -1,4 +1,5 @@
 package com.algolearner.platform.classroom;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -7,6 +8,7 @@ public interface ClassroomMembershipRepository extends JpaRepository<ClassroomMe
  Optional<ClassroomMembershipEntity> findByClassroomIdAndStudentId(UUID classroomId, UUID studentId);
  boolean existsByClassroomId(UUID classroomId);
  Page<ClassroomMembershipEntity> findByStudentIdAndStatus(UUID studentId, MembershipStatus status, Pageable pageable);
+ @EntityGraph(attributePaths = "student")
  Page<ClassroomMembershipEntity> findByClassroomIdAndStatus(UUID classroomId, MembershipStatus status, Pageable pageable);
  List<ClassroomMembershipEntity> findByStudentIdAndStatus(UUID studentId, MembershipStatus status);
  List<ClassroomMembershipEntity> findByClassroomIdAndStatus(UUID classroomId, MembershipStatus status);

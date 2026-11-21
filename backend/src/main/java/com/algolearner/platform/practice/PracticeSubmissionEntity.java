@@ -25,6 +25,8 @@ public class PracticeSubmissionEntity extends BaseAuditableEntity {
     @Column(nullable = false, columnDefinition = "TEXT") private String code;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 20) private PracticeLanguage language;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 30) private PracticeVerdict verdict;
+    @Column(name = "tests_passed", nullable = false) private int testsPassed;
+    @Column(name = "total_tests", nullable = false) private int totalTests;
     @Column(name = "runtime_ms") private Integer runtimeMs;
     @Column(name = "memory_kb") private Integer memoryKb;
     /** Raw judge output; internal, never serialized to students. */

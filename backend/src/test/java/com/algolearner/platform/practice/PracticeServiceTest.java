@@ -14,6 +14,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -24,6 +30,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -41,7 +48,21 @@ class PracticeServiceTest {
     private final PracticeCompletionRepository completions = mock(PracticeCompletionRepository.class);
     private final PracticeJudgePort judge = mock(PracticeJudgePort.class);
     private final AtomicBoolean lessonArchived = new AtomicBoolean(false);
-    private final LessonStatusPort lessons = lessonId -> lessonArchived.get();
+    private final Set<UUID> archivedLessonIds = new java.util.HashSet<>();
+    private final LessonStatusPort lessons = new LessonStatusPort() {
+        @Override public boolean isArchived(UUID lessonId) { return lessonArchived.get() || archivedLessonIds.contains(lessonId); }
+        @Override public Set<UUID> archivedLessonIds(UUID classroomId) { return Set.copyOf(archivedLessonIds); }
+    };
+    /** Number of transactions currently open; the judge must be called while this is 0. */
+    private final AtomicInteger openTransactions = new AtomicInteger();
+    private final PlatformTransactionManager transactionManager = new PlatformTransactionManager() {
+        @Override public TransactionStatus getTransaction(TransactionDefinition definition) {
+            openTransactions.incrementAndGet();
+            return new SimpleTransactionStatus();
+        }
+        @Override public void commit(TransactionStatus status) { openTransactions.decrementAndGet(); }
+        @Override public void rollback(TransactionStatus status) { openTransactions.decrementAndGet(); }
+    };
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-15T03:30:00Z"), ZoneOffset.UTC);
     private final RunRateLimiter limiter = new RunRateLimiter(clock);
     private PracticeService service;
@@ -58,7 +79,7 @@ class PracticeServiceTest {
     @BeforeEach
     void setUp() {
         service = new PracticeService(classrooms, memberships, accounts, practices, testcases, submissions, completions,
-                judge, lessons, limiter, clock);
+                judge, lessons, limiter, clock, transactionManager);
         teacher = account(AccountRole.TEACHER);
         otherTeacher = account(AccountRole.TEACHER);
         student = account(AccountRole.STUDENT);
@@ -81,6 +102,7 @@ class PracticeServiceTest {
         hidden = testcase("SECRET-IN", "SECRET-OUT", false, 1, 1);
         stubVersion(1, sample, hidden);
         when(practices.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(practices.lockByIdAndClassroomId(practice.getId(), classroom.getId())).thenReturn(Optional.of(practice));
         when(testcases.countByPracticeIdAndVersionAndSample(eq(practice.getId()), anyInt(), org.mockito.ArgumentMatchers.anyBoolean())).thenReturn(1L);
     }
 
@@ -132,7 +154,7 @@ class PracticeServiceTest {
         var s3 = testcase("1 2", "3", true, 0, 3);
         var h3 = testcase("H3-IN", "H3-OUT", false, 1, 3);
         stubVersion(3, s3, h3);
-        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 12, 2048, "{\"ok\":true}"));
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 12, 2048, "{\"ok\":true}"));
 
         var view = service.submit(student.getId(), classroom.getId(), practice.getId(), code());
 
@@ -143,45 +165,46 @@ class PracticeServiceTest {
         assertThat(request.getValue().testcaseVersion()).isEqualTo(3);
         assertThat(request.getValue().testcases()).extracting(PracticeJudgePort.JudgeCase::input).containsExactly("1 2", "H3-IN");
         var stored = ArgumentCaptor.forClass(PracticeSubmissionEntity.class);
-        verify(submissions).save(stored.capture());
+        verify(submissions).saveAndFlush(stored.capture());
         assertThat(stored.getValue().getTestcaseVersion()).isEqualTo(3);
         assertThat(stored.getValue().getJudgeDetails()).isEqualTo("{\"ok\":true}");
-        var completion = ArgumentCaptor.forClass(PracticeCompletionEntity.class);
-        verify(completions).save(completion.capture());
-        assertThat(completion.getValue().getId()).isEqualTo(new PracticeCompletionId(student.getId(), practice.getId()));
-        assertThat(completion.getValue().getFirstAcceptedSubmission()).isSameAs(stored.getValue());
-        assertThat(completion.getValue().getCompletedAt()).isEqualTo(clock.instant());
+        // FR-PRC-004: tests passed is stored next to how many testcases the snapshot had
+        assertThat(stored.getValue().getTestsPassed()).isEqualTo(2);
+        assertThat(stored.getValue().getTotalTests()).isEqualTo(2);
+        assertThat(view.testsPassed()).isEqualTo(2);
+        assertThat(view.totalTests()).isEqualTo(2);
+        verify(completions).insertIfAbsent(student.getId(), practice.getId(), stored.getValue().getId(), clock.instant());
     }
 
     @Test @DisplayName("TC-PRC-01-03 unlimited attempts: every submission is stored, none is blocked")
     void tcPrc0103_unlimitedAttempts() {
-        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.WRONG_ANSWER, 5, 1024, null));
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.WRONG_ANSWER, 1, 5, 1024, null));
         for (int i = 0; i < 12; i++) service.submit(student.getId(), classroom.getId(), practice.getId(), code());
 
-        verify(submissions, times(12)).save(any());
-        verify(completions, never()).save(any());
+        verify(submissions, times(12)).saveAndFlush(any());
+        verify(completions, never()).insertIfAbsent(any(), any(), any(), any());
     }
 
-    @Test @DisplayName("TC-PRC-01-04 only ACCEPTED completes, first acceptance is kept, other students are independent")
+    @Test @DisplayName("TC-PRC-01-04 only ACCEPTED completes; completion is one atomic upsert, per student")
     void tcPrc0104_completion() {
-        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.TIME_LIMIT_EXCEEDED, 2000, 1024, null));
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.TIME_LIMIT_EXCEEDED, 1, 2000, 1024, null));
         var tle = service.submit(student.getId(), classroom.getId(), practice.getId(), code());
         assertThat(tle.verdict()).isEqualTo(PracticeVerdict.TIME_LIMIT_EXCEEDED);
+        verify(completions, never()).insertIfAbsent(any(), any(), any(), any());
+
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 5, 1024, null));
+        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        verify(completions, times(1)).insertIfAbsent(eq(student.getId()), eq(practice.getId()), any(), any());
+
+        // No read-then-write: a second ACCEPTED just issues the same idempotent insert (the DB keeps the first one).
+        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        verify(completions, times(2)).insertIfAbsent(eq(student.getId()), eq(practice.getId()), any(), any());
+        verify(completions, never()).existsById(any());
         verify(completions, never()).save(any());
-
-        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 5, 1024, null));
-        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
-        verify(completions, times(1)).save(any());
-
-        when(completions.existsById(new PracticeCompletionId(student.getId(), practice.getId()))).thenReturn(true);
-        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
-        verify(completions, times(1)).save(any());
 
         member(otherStudent);
         service.submit(otherStudent.getId(), classroom.getId(), practice.getId(), code());
-        var saved = ArgumentCaptor.forClass(PracticeCompletionEntity.class);
-        verify(completions, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues()).extracting(c -> c.getId().getStudentId()).containsExactly(student.getId(), otherStudent.getId());
+        verify(completions, times(1)).insertIfAbsent(eq(otherStudent.getId()), eq(practice.getId()), any(), any());
     }
 
     @Test @DisplayName("TC-PRC-01-05 DRAFT practice or archived lesson rejects RUN/SUBMIT, history stays")
@@ -197,7 +220,7 @@ class PracticeServiceTest {
         assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null))).isInstanceOf(ResourceNotAvailableException.class);
         assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code())).isInstanceOf(ResourceNotAvailableException.class);
         verifyNoInteractions(judge, completions);
-        verify(submissions, never()).save(any());
+        verify(submissions, never()).saveAndFlush(any());
 
         // earlier submissions remain readable after the lesson is archived
         var old = submissionOf(student);
@@ -205,10 +228,12 @@ class PracticeServiceTest {
         assertThat(service.submission(student.getId(), classroom.getId(), practice.getId(), old.getId()).id()).isEqualTo(old.getId());
     }
 
-    @Test @DisplayName("TC-PRC-01-06 suspended student or read-only class: reads work, RUN/SUBMIT are 403, data untouched")
+    @Test @DisplayName("TC-PRC-01-06 suspended student reaches nothing (FR-CLS-009); read-only class: reads work, RUN/SUBMIT are 403")
     void tcPrc0106_readOnly() {
         student.setStatus(AccountStatus.SUSPENDED);
-        assertThat(service.get(student.getId(), classroom.getId(), practice.getId()).id()).isEqualTo(practice.getId());
+        assertForbidden(() -> service.get(student.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.list(student.getId(), classroom.getId(), PageRequest.of(0, 10)));
+        assertForbidden(() -> service.mySubmissions(student.getId(), classroom.getId(), practice.getId(), PageRequest.of(0, 10)));
         assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("FORBIDDEN_OPERATION"));
         assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null)))
@@ -220,8 +245,8 @@ class PracticeServiceTest {
         assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("CLASSROOM_READ_ONLY"));
         verifyNoInteractions(judge);
-        verify(completions, never()).save(any());
-        verify(submissions, never()).save(any());
+        verify(completions, never()).insertIfAbsent(any(), any(), any(), any());
+        verify(submissions, never()).saveAndFlush(any());
     }
 
     @Test @DisplayName("TC-PRC-01-07 a student outside the class (or who left) gets 403")
@@ -250,7 +275,7 @@ class PracticeServiceTest {
         assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
                 .isInstanceOf(JudgeServiceUnavailableException.class);
 
-        doReturn(new PracticeJudgePort.SubmitResult(null, null, null, null)).when(judge).submit(any());
+        doReturn(new PracticeJudgePort.SubmitResult(null, 0, null, null, null)).when(judge).submit(any());
         assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
                 .isInstanceOf(JudgeServiceUnavailableException.class);
 
@@ -258,8 +283,8 @@ class PracticeServiceTest {
         assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null)))
                 .isInstanceOf(JudgeServiceUnavailableException.class);
 
-        verify(submissions, never()).save(any());
-        verify(completions, never()).save(any());
+        verify(submissions, never()).saveAndFlush(any());
+        verify(completions, never()).insertIfAbsent(any(), any(), any(), any());
     }
 
     @Test
@@ -322,7 +347,7 @@ class PracticeServiceTest {
     @Test @DisplayName("TC-PRC-10-02 lesson link: archived lesson makes the practice unavailable")
     void tcPrc1002_lessonLink() {
         var lessonId = UUID.randomUUID();
-        var update = new UpdatePractice(null, null, null, lessonId, null, null, null, null, null, null);
+        var update = new UpdatePractice(null, null, null, lessonId, null, null, null, null, null, null, null);
 
         var linked = service.update(teacher.getId(), classroom.getId(), practice.getId(), update);
         assertThat(linked.lessonId()).isEqualTo(lessonId);
@@ -372,7 +397,7 @@ class PracticeServiceTest {
     void tcPrc1004_idor() {
         var create = new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA), null, null, null, null, null, null, null);
         assertForbidden(() -> service.create(otherTeacher.getId(), classroom.getId(), create));
-        assertForbidden(() -> service.update(otherTeacher.getId(), classroom.getId(), practice.getId(), new UpdatePractice("x", null, null, null, null, null, null, null, null, null)));
+        assertForbidden(() -> service.update(otherTeacher.getId(), classroom.getId(), practice.getId(), new UpdatePractice("x", null, null, null, null, null, null, null, null, null, null)));
         assertForbidden(() -> service.changeStatus(otherTeacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED)));
         assertForbidden(() -> service.delete(otherTeacher.getId(), classroom.getId(), practice.getId()));
         assertForbidden(() -> service.listTestcases(otherTeacher.getId(), classroom.getId(), practice.getId()));
@@ -392,7 +417,7 @@ class PracticeServiceTest {
                     .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_SCOPE_VIOLATION"));
         }
         assertThatThrownBy(() -> service.update(teacher.getId(), classroom.getId(), practice.getId(),
-                new UpdatePractice(null, null, null, null, null, null, null, null, null, 5)))
+                new UpdatePractice(null, null, null, null, null, null, null, null, null, null, 5)))
                 .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_SCOPE_VIOLATION"));
         verify(practices, never()).save(any());
 
@@ -445,6 +470,187 @@ class PracticeServiceTest {
     void unknownTestcaseIsNotFound() {
         assertThatThrownBy(() -> service.deleteTestcase(teacher.getId(), classroom.getId(), practice.getId(), UUID.randomUUID(), false))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ================================================================ review fixes
+
+    @Test @DisplayName("SUBMIT/RUN call the judge with no transaction (JDBC connection) open, and write in a short transaction after")
+    void judgeRunsOutsideAnyTransaction() {
+        var seenOnSubmit = new AtomicInteger(-1);
+        var seenOnRun = new AtomicInteger(-1);
+        when(judge.submit(any())).thenAnswer(i -> {
+            seenOnSubmit.set(openTransactions.get());
+            return new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 5, 1024, null);
+        });
+        when(judge.run(any())).thenAnswer(i -> {
+            seenOnRun.set(openTransactions.get());
+            return new PracticeJudgePort.RunResult(List.of(new PracticeJudgePort.CaseResult(0, PracticeVerdict.ACCEPTED, "3", "", 4)));
+        });
+
+        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        service.run(student.getId(), classroom.getId(), practice.getId(), run(null));
+
+        assertThat(seenOnSubmit.get()).isZero();
+        assertThat(seenOnRun.get()).isZero();
+        assertThat(openTransactions.get()).isZero();
+    }
+
+    @Test @DisplayName("SUBMIT stores under the practice row lock and refuses a result judged against stale testcases (409)")
+    void submitRechecksTestcasesUnderLock() {
+        when(judge.submit(any())).thenAnswer(invocation -> {
+            // the teacher edits a hidden testcase in place while the judge is running
+            hidden.setExpectedOutput("CHANGED");
+            return new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 5, 1024, null);
+        });
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_TESTCASES_CHANGED"));
+        verify(practices).lockByIdAndClassroomId(practice.getId(), classroom.getId());
+        verify(submissions, never()).saveAndFlush(any());
+        verify(completions, never()).insertIfAbsent(any(), any(), any(), any());
+
+        hidden.setExpectedOutput("SECRET-OUT");
+        when(judge.submit(any())).thenAnswer(invocation -> {
+            practice.setTestcaseVersion(2); // a new version opened while judging: the rejudge flag would be missed
+            return new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 5, 1024, null);
+        });
+        assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_TESTCASES_CHANGED"));
+        verify(submissions, never()).saveAndFlush(any());
+    }
+
+    @Test @DisplayName("SUBMIT: a student suspended or an archive made while judging is honoured when storing")
+    void submitRechecksAccessWhenStoring() {
+        when(judge.submit(any())).thenAnswer(invocation -> {
+            student.setStatus(AccountStatus.SUSPENDED);
+            return new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 5, 1024, null);
+        });
+        assertForbidden(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()));
+        verify(submissions, never()).saveAndFlush(any());
+    }
+
+    @Test @DisplayName("testcase add/update/delete lock the practice row before versioning")
+    void testcaseEditsTakeThePracticeLock() {
+        when(testcases.findByIdAndPracticeIdAndVersion(hidden.getId(), practice.getId(), 1)).thenReturn(Optional.of(hidden));
+        service.addTestcase(teacher.getId(), classroom.getId(), practice.getId(), new TestcaseInput("C", "D", false, null), false);
+        service.updateTestcase(teacher.getId(), classroom.getId(), practice.getId(), hidden.getId(), new TestcaseInput("A", "B", false, null), false);
+        service.deleteTestcase(teacher.getId(), classroom.getId(), practice.getId(), hidden.getId(), false);
+
+        verify(practices, times(3)).lockByIdAndClassroomId(practice.getId(), classroom.getId());
+        verify(practices, never()).findByIdAndClassroomId(any(), any());
+    }
+
+    @Test @DisplayName("INTERNAL_ERROR, no verdict or an inconsistent tests-passed count never become a submission")
+    void unusableSubmitResultsAreJudgeFailures() {
+        var bad = List.of(
+                new PracticeJudgePort.SubmitResult(PracticeVerdict.INTERNAL_ERROR, 0, 1, 1, "oom"),
+                new PracticeJudgePort.SubmitResult(PracticeVerdict.WRONG_ANSWER, -1, 1, 1, null),
+                new PracticeJudgePort.SubmitResult(PracticeVerdict.WRONG_ANSWER, 3, 1, 1, null),
+                new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 1, 1, 1, null));
+        for (var result : bad) {
+            when(judge.submit(any())).thenReturn(result);
+            assertThatThrownBy(() -> service.submit(student.getId(), classroom.getId(), practice.getId(), code()))
+                    .isInstanceOf(JudgeServiceUnavailableException.class);
+        }
+        verify(submissions, never()).saveAndFlush(any());
+        verify(completions, never()).insertIfAbsent(any(), any(), any(), any());
+    }
+
+    @Test @DisplayName("RUN must return one result per case, with unique known indexes and no INTERNAL_ERROR")
+    void incompleteRunResultsAreJudgeFailures() {
+        member(otherStudent);
+        var ok = new PracticeJudgePort.CaseResult(0, PracticeVerdict.ACCEPTED, "3", "", 4);
+        var results = List.of(
+                new PracticeJudgePort.RunResult(List.of()),
+                new PracticeJudgePort.RunResult(List.of(ok, ok)),
+                new PracticeJudgePort.RunResult(List.of(new PracticeJudgePort.CaseResult(1, PracticeVerdict.ACCEPTED, "3", "", 4))),
+                new PracticeJudgePort.RunResult(List.of(new PracticeJudgePort.CaseResult(0, PracticeVerdict.INTERNAL_ERROR, "", "", 0))));
+        for (var result : results) {
+            when(judge.run(any())).thenReturn(result);
+            assertThatThrownBy(() -> service.run(student.getId(), classroom.getId(), practice.getId(), run(null)))
+                    .isInstanceOf(JudgeServiceUnavailableException.class);
+        }
+
+        // two sample testcases: both must come back, in any order, and are returned sorted by index
+        var second = testcase("4 5", "9", true, 1, 1);
+        stubVersion(1, sample, second, hidden);
+        when(judge.run(any())).thenReturn(new PracticeJudgePort.RunResult(List.of(
+                new PracticeJudgePort.CaseResult(1, PracticeVerdict.WRONG_ANSWER, "8", "", 4), new PracticeJudgePort.CaseResult(0, PracticeVerdict.ACCEPTED, "3", "", 4))));
+        var response = service.run(otherStudent.getId(), classroom.getId(), practice.getId(), run(null));
+        assertThat(response.cases()).extracting(RunCaseResult::index).containsExactly(0, 1);
+        assertThat(response.cases()).extracting(RunCaseResult::expectedOutput).containsExactly("3", "9");
+        assertThat(response.verdict()).isEqualTo(PracticeVerdict.WRONG_ANSWER);
+    }
+
+    @Test @DisplayName("negative maxScore is as invalid as a positive one")
+    void negativeMaxScoreIsRejected() {
+        var negative = new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA), null, null, null, null, null, null, -10);
+        assertThatThrownBy(() -> service.create(teacher.getId(), classroom.getId(), negative))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_SCOPE_VIOLATION"));
+        assertThatThrownBy(() -> service.update(teacher.getId(), classroom.getId(), practice.getId(),
+                new UpdatePractice(null, null, null, null, null, null, null, null, null, null, -1)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("PRACTICE_SCOPE_VIOLATION"));
+    }
+
+    @Test @DisplayName("PATCH: clearLessonId detaches the lesson; removing a language drops its starter code")
+    void patchDetachesLessonAndPrunesStarterCode() {
+        practice.setLessonId(UUID.randomUUID());
+        practice.setAllowedLanguages(EnumSet.of(PracticeLanguage.JAVA, PracticeLanguage.PYTHON));
+        practice.setStarterCode(new java.util.EnumMap<>(Map.of(PracticeLanguage.JAVA, "class Main {}", PracticeLanguage.PYTHON, "pass")));
+
+        var detail = service.update(teacher.getId(), classroom.getId(), practice.getId(),
+                new UpdatePractice(null, null, null, null, true, Set.of(PracticeLanguage.JAVA), null, null, null, null, null));
+
+        assertThat(detail.lessonId()).isNull();
+        assertThat(detail.allowedLanguages()).containsExactly(PracticeLanguage.JAVA);
+        assertThat(detail.starterCode()).containsOnlyKeys(PracticeLanguage.JAVA);
+        assertThatThrownBy(() -> service.update(teacher.getId(), classroom.getId(), practice.getId(),
+                new UpdatePractice(null, null, null, UUID.randomUUID(), true, null, null, null, null, null, null)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("VALIDATION_FAILED"));
+        // starter code sent together with the new language set is validated against the new set
+        assertThatThrownBy(() -> service.update(teacher.getId(), classroom.getId(), practice.getId(),
+                new UpdatePractice(null, null, null, null, null, Set.of(PracticeLanguage.JAVA), Map.of(PracticeLanguage.PYTHON, "pass"), null, null, null, null)))
+                .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getErrorCode()).isEqualTo("LANGUAGE_NOT_ALLOWED"));
+    }
+
+    @Test @DisplayName("student list filters archived-lesson practices in the query, not after paging")
+    void studentListExcludesArchivedLessonsInSql() {
+        var pageable = PageRequest.of(0, 2);
+        var lesson = UUID.randomUUID();
+        var other = new ClassroomPracticeEntity();
+        other.setId(UUID.randomUUID());
+        other.setClassroom(classroom);
+        other.setTitle("Other");
+        other.setStatus(PracticeStatus.PUBLISHED);
+        other.setAllowedLanguages(Set.of(PracticeLanguage.JAVA));
+        when(practices.findByClassroomIdAndStatus(classroom.getId(), PracticeStatus.PUBLISHED, pageable))
+                .thenReturn(new PageImpl<>(List.of(practice, other), pageable, 2));
+        when(completions.findForStudent(eq(student.getId()), any())).thenReturn(List.of());
+
+        // no archived lessons: the plain query, nothing excluded
+        assertThat(service.list(student.getId(), classroom.getId(), pageable).getData().getItems()).hasSize(2);
+        verify(practices, never()).findVisible(any(), any(), any(), any());
+
+        archivedLessonIds.add(lesson);
+        when(practices.findVisible(classroom.getId(), PracticeStatus.PUBLISHED, Set.of(lesson), pageable))
+                .thenReturn(new PageImpl<>(List.of(practice), pageable, 1));
+        var page = service.list(student.getId(), classroom.getId(), pageable);
+
+        assertThat(page.getData().getItems()).extracting(PracticeSummary::id).containsExactly(practice.getId());
+        assertThat(page.getData().getPagination().getTotalElements()).isEqualTo(1);
+        verify(practices).findVisible(classroom.getId(), PracticeStatus.PUBLISHED, Set.of(lesson), pageable);
+    }
+
+    @Test @DisplayName("empty pages skip the completion lookups (no IN () query)")
+    void emptyPagesSkipCompletionQueries() {
+        var pageable = PageRequest.of(0, 2);
+        when(practices.findByClassroomIdAndStatus(classroom.getId(), PracticeStatus.PUBLISHED, pageable)).thenReturn(new PageImpl<>(List.of(), pageable, 0));
+        when(memberships.findByClassroomIdAndStatus(classroom.getId(), MembershipStatus.ACTIVE, pageable)).thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        assertThat(service.list(student.getId(), classroom.getId(), pageable).getData().getItems()).isEmpty();
+        assertThat(service.progress(teacher.getId(), classroom.getId(), practice.getId(), pageable).getData().getItems()).isEmpty();
+
+        verify(completions, never()).findForStudent(any(), any());
+        verify(completions, never()).findForPractice(any(), any());
     }
 
     // ---- helpers

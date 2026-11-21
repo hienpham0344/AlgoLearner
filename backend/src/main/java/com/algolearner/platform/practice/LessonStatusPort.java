@@ -1,5 +1,6 @@
 package com.algolearner.platform.practice;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -9,4 +10,7 @@ import java.util.UUID;
 public interface LessonStatusPort {
     /** True when the lesson has been archived, which hides every practice attached to it. */
     boolean isArchived(UUID lessonId);
+
+    /** Ids of the archived lessons of one classroom, so listings can filter in SQL instead of after paging. */
+    Set<UUID> archivedLessonIds(UUID classroomId);
 }

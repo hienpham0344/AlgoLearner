@@ -4,6 +4,7 @@ import com.algolearner.platform.auth.*;
 import com.algolearner.platform.common.dto.PageResponse;
 import com.algolearner.platform.common.exception.AppException;
 import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import com.algolearner.platform.practice.ClassroomPracticeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -27,14 +28,15 @@ public class ClassroomService {
     private final ClassroomJoinRequestRepository requests;
     private final ClassroomInvitationRepository invitations;
     private final AccountRepository accounts;
+    private final ClassroomPracticeRepository practices;
     private final Clock clock;
     private final SecureRandom random = new SecureRandom();
 
     public ClassroomService(ClassroomRepository classrooms, ClassroomMembershipRepository memberships,
                             ClassroomJoinRequestRepository requests, ClassroomInvitationRepository invitations,
-                            AccountRepository accounts, Clock clock) {
+                            AccountRepository accounts, ClassroomPracticeRepository practices, Clock clock) {
         this.classrooms = classrooms; this.memberships = memberships; this.requests = requests;
-        this.invitations = invitations; this.accounts = accounts; this.clock = clock;
+        this.invitations = invitations; this.accounts = accounts; this.practices = practices; this.clock = clock;
     }
 
     public View get(UUID actorId, UUID classroomId) {
@@ -103,7 +105,7 @@ public class ClassroomService {
     public void delete(UUID actorId, UUID classroomId) {
         var classroom = ownedOrAdmin(actorId, classroomId);
         if (memberships.existsByClassroomId(classroomId) || requests.existsByClassroomId(classroomId)
-                || invitations.existsByClassroomId(classroomId)) {
+                || invitations.existsByClassroomId(classroomId) || practices.existsByClassroomId(classroomId)) {
             throw conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve related classroom data");
         }
         classrooms.delete(classroom);

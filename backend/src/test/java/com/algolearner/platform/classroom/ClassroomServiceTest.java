@@ -17,7 +17,8 @@ class ClassroomServiceTest {
     private final ClassroomInvitationRepository invitations = mock(ClassroomInvitationRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
-    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, accounts, clock);
+    private final com.algolearner.platform.practice.ClassroomPracticeRepository practices = mock(com.algolearner.platform.practice.ClassroomPracticeRepository.class);
+    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, accounts, practices, clock);
 
     @Test
     void teacherCreatesPrivateActiveClassWithGeneratedCode() {
@@ -82,6 +83,16 @@ class ClassroomServiceTest {
         var teacher = account(AccountRole.TEACHER); var classroom = classroom(teacher);
         when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher)); when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(memberships.existsByClassroomId(classroom.getId())).thenReturn(true);
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
+        verify(classrooms, never()).delete(any());
+    }
+
+    @Test
+    void deleteRejectsClassWithPracticesInsteadOfFailingOnTheForeignKey() {
+        var teacher = account(AccountRole.TEACHER); var classroom = classroom(teacher);
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher)); when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(practices.existsByClassroomId(classroom.getId())).thenReturn(true);
         assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
                 .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
         verify(classrooms, never()).delete(any());

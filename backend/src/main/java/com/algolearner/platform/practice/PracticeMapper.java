@@ -33,7 +33,7 @@ final class PracticeMapper {
 
     static SubmissionView submission(PracticeSubmissionEntity s) {
         return new SubmissionView(s.getId(), s.getPractice().getId(), s.getStudent().getId(), s.getStudent().getUsername(),
-                s.getLanguage(), s.getCode(), s.getTestcaseVersion(), s.getVerdict(), s.getRuntimeMs(), s.getMemoryKb(),
+                s.getLanguage(), s.getCode(), s.getTestcaseVersion(), s.getVerdict(), s.getTestsPassed(), s.getTotalTests(), s.getRuntimeMs(), s.getMemoryKb(),
                 s.getRejudgeStatus(), s.getSubmittedAt());
     }
 }

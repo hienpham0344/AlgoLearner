@@ -22,16 +22,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +49,9 @@ import java.util.stream.IntStream;
  * SRS 4.8 Classroom Practice. Access model: only the owning Teacher manages and monitors a practice, only an
  * ACTIVE student member sees available practices, and every student sees only their own submissions.
  * Practice is ungraded and has no deadline; its results never feed the gradebook (4.10).
+ *
+ * <p>RUN and SUBMIT never hold a database transaction (or JDBC connection) while the Code Judge runs: they read in a
+ * short read-only transaction, call the judge with no transaction open, then write in a second short transaction.
  */
 @Service
 @Profile("!mock | (mock & integration)")
@@ -64,16 +71,22 @@ public class PracticeService {
     private final LessonStatusPort lessons;
     private final RunRateLimiter runLimiter;
     private final Clock clock;
+    private final TransactionTemplate readTx;
+    private final TransactionTemplate writeTx;
 
     public PracticeService(ClassroomRepository classrooms, ClassroomMembershipRepository memberships,
                            AccountRepository accounts, ClassroomPracticeRepository practices,
                            PracticeTestcaseRepository testcases, PracticeSubmissionRepository submissions,
                            PracticeCompletionRepository completions, PracticeJudgePort judge,
-                           LessonStatusPort lessons, RunRateLimiter runLimiter, Clock clock) {
+                           LessonStatusPort lessons, RunRateLimiter runLimiter, Clock clock,
+                           PlatformTransactionManager transactionManager) {
         this.classrooms = classrooms; this.memberships = memberships; this.accounts = accounts;
         this.practices = practices; this.testcases = testcases; this.submissions = submissions;
         this.completions = completions; this.judge = judge; this.lessons = lessons;
         this.runLimiter = runLimiter; this.clock = clock;
+        this.readTx = new TransactionTemplate(transactionManager);
+        this.readTx.setReadOnly(true);
+        this.writeTx = new TransactionTemplate(transactionManager);
     }
 
     // ------------------------------------------------------------------ teacher: practice lifecycle
@@ -129,12 +142,20 @@ public class PracticeService {
         }
         if (input.description() != null) practice.setDescription(clean(input.description()));
         if (input.problemType() != null) practice.setProblemType(input.problemType());
-        if (input.lessonId() != null) practice.setLessonId(input.lessonId());
+        boolean clearLesson = Boolean.TRUE.equals(input.clearLessonId());
+        if (clearLesson && input.lessonId() != null) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "lessonId and clearLessonId cannot be combined");
+        }
+        if (clearLesson) practice.setLessonId(null);
+        else if (input.lessonId() != null) practice.setLessonId(input.lessonId());
         if (input.allowedLanguages() != null) {
             if (input.allowedLanguages().isEmpty()) throw new ApiException(ErrorCode.VALIDATION_FAILED, "At least one language is required");
-            practice.setAllowedLanguages(EnumSet.copyOf(input.allowedLanguages()));
+            var languages = EnumSet.copyOf(input.allowedLanguages());
+            practice.setAllowedLanguages(languages);
+            // Boilerplate of a language that is no longer allowed must not linger in the detail view.
+            practice.setStarterCode(starterCode(practice.getStarterCode(), languages, true));
         }
-        if (input.starterCode() != null) practice.setStarterCode(starterCode(input.starterCode(), practice.getAllowedLanguages()));
+        if (input.starterCode() != null) practice.setStarterCode(starterCode(input.starterCode(), practice.getAllowedLanguages(), false));
         if (input.timeLimitMs() != null) practice.setTimeLimitMs(input.timeLimitMs());
         if (input.memoryLimitMb() != null) practice.setMemoryLimitMb(input.memoryLimitMb());
         return detailFor(practice, null);
@@ -184,7 +205,7 @@ public class PracticeService {
     public TeacherTestcase addTestcase(UUID actorId, UUID classroomId, UUID practiceId, TestcaseInput input, boolean rejudge) {
         var ctx = teacher(actorId, classroomId);
         requireActiveClassroom(ctx.classroom());
-        var practice = practice(classroomId, practiceId);
+        var practice = lockedPractice(classroomId, practiceId);
         requireNotArchived(practice);
         openEditableVersion(practice, rejudge);
         int version = practice.getTestcaseVersion();
@@ -200,7 +221,7 @@ public class PracticeService {
                                           TestcaseInput input, boolean rejudge) {
         var ctx = teacher(actorId, classroomId);
         requireActiveClassroom(ctx.classroom());
-        var practice = practice(classroomId, practiceId);
+        var practice = lockedPractice(classroomId, practiceId);
         requireNotArchived(practice);
         var original = currentTestcase(practice, testcaseId);
         var copies = openEditableVersion(practice, rejudge);
@@ -218,7 +239,7 @@ public class PracticeService {
     public void deleteTestcase(UUID actorId, UUID classroomId, UUID practiceId, UUID testcaseId, boolean rejudge) {
         var ctx = teacher(actorId, classroomId);
         requireActiveClassroom(ctx.classroom());
-        var practice = practice(classroomId, practiceId);
+        var practice = lockedPractice(classroomId, practiceId);
         requireNotArchived(practice);
         var original = currentTestcase(practice, testcaseId);
         var copies = openEditableVersion(practice, rejudge);
@@ -265,8 +286,9 @@ public class PracticeService {
         practice(classroomId, practiceId);
         Page<ClassroomMembershipEntity> members = memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE, pageable);
         Set<UUID> studentIds = members.getContent().stream().map(m -> m.getStudent().getId()).collect(Collectors.toSet());
-        Map<UUID, PracticeCompletionEntity> done = completions.findForPractice(practiceId, studentIds).stream()
-                .collect(Collectors.toMap(c -> c.getId().getStudentId(), Function.identity()));
+        Map<UUID, PracticeCompletionEntity> done = studentIds.isEmpty() ? Map.of()
+                : completions.findForPractice(practiceId, studentIds).stream()
+                        .collect(Collectors.toMap(c -> c.getId().getStudentId(), Function.identity()));
         return PageResponse.fromPage(members.map(m -> {
             var completion = done.get(m.getStudent().getId());
             return new ProgressView(m.getStudent().getId(), m.getStudent().getUsername(),
@@ -288,18 +310,20 @@ public class PracticeService {
 
     public PageResponse<PracticeSummary> list(UUID actorId, UUID classroomId, Pageable pageable) {
         var ctx = participant(actorId, classroomId);
+        Set<UUID> archivedLessons = lessons.archivedLessonIds(classroomId);
         if (ctx.teacher()) {
             return PageResponse.fromPage(practices.findByClassroomId(classroomId, pageable)
-                    .map(p -> PracticeMapper.summary(p, isAvailable(p), null)));
+                    .map(p -> PracticeMapper.summary(p, isAvailable(p, archivedLessons), null)));
         }
-        Page<ClassroomPracticeEntity> page = practices.findByClassroomIdAndStatus(classroomId, PracticeStatus.PUBLISHED, pageable);
-        List<ClassroomPracticeEntity> visible = page.getContent().stream().filter(this::isAvailable).toList();
-        Set<UUID> ids = visible.stream().map(ClassroomPracticeEntity::getId).collect(Collectors.toSet());
-        Set<UUID> completed = completions.findForStudent(actorId, ids).stream().map(c -> c.getId().getPracticeId()).collect(Collectors.toSet());
-        // Practices hidden by an archived lesson are dropped from this page; the total is reduced to match.
-        long total = Math.max(visible.size(), page.getTotalElements() - (page.getContent().size() - visible.size()));
-        return PageResponse.fromPage(new PageImpl<>(
-                visible.stream().map(p -> PracticeMapper.summary(p, true, status(completed.contains(p.getId())))).toList(), pageable, total));
+        // Practices hidden by an archived lesson are excluded in SQL, so content, totalElements and totalPages stay
+        // consistent across pages.
+        Page<ClassroomPracticeEntity> page = archivedLessons.isEmpty()
+                ? practices.findByClassroomIdAndStatus(classroomId, PracticeStatus.PUBLISHED, pageable)
+                : practices.findVisible(classroomId, PracticeStatus.PUBLISHED, archivedLessons, pageable);
+        Set<UUID> ids = page.getContent().stream().map(ClassroomPracticeEntity::getId).collect(Collectors.toSet());
+        Set<UUID> completed = ids.isEmpty() ? Set.of()
+                : completions.findForStudent(actorId, ids).stream().map(c -> c.getId().getPracticeId()).collect(Collectors.toSet());
+        return PageResponse.fromPage(page.map(p -> PracticeMapper.summary(p, true, status(completed.contains(p.getId())))));
     }
 
     public PracticeDetail get(UUID actorId, UUID classroomId, UUID practiceId) {
@@ -312,84 +336,137 @@ public class PracticeService {
 
     // ------------------------------------------------------------------ student: RUN / SUBMIT
 
-    /** RUN: sample testcases or one custom input; nothing is persisted and completion is untouched. */
+    /** What RUN needs from the database, captured in a short read-only transaction before the judge is called. */
+    private record RunPlan(PracticeProblemType problemType, int timeLimitMs, int memoryLimitMb, List<JudgeCase> cases, boolean custom) { }
+
+    /** What SUBMIT judged: the testcase snapshot, kept to verify it is still current when the result is stored. */
+    private record SubmitPlan(int version, PracticeProblemType problemType, int timeLimitMs, int memoryLimitMb, List<JudgeCase> cases) { }
+
+    /**
+     * RUN: sample testcases or one custom input; nothing is persisted and completion is untouched. SUPPORTS (not the
+     * class-level read-only transaction): no JDBC connection is held while the judge runs.
+     */
+    @Transactional(propagation = Propagation.SUPPORTS)
     public RunResponse run(UUID actorId, UUID classroomId, UUID practiceId, RunInput input) {
-        var ctx = student(actorId, classroomId);
-        var practice = practice(classroomId, practiceId);
-        requireAvailable(practice);
-        requireStudentCanWrite(ctx);
-        requireLanguage(practice, input.language());
-        boolean custom = input.customInput() != null;
-        List<PracticeTestcaseEntity> samples = List.of();
-        List<JudgeCase> cases;
-        if (custom) {
-            if (input.customInput().getBytes(StandardCharsets.UTF_8).length > MAX_CUSTOM_INPUT_BYTES) {
-                throw new ApiException(ErrorCode.VALIDATION_FAILED, "Custom input must be at most 64 KB");
+        var plan = readTx.execute(tx -> {
+            var ctx = student(actorId, classroomId);
+            var practice = practice(classroomId, practiceId);
+            requireAvailable(practice);
+            requireStudentCanWrite(ctx);
+            requireLanguage(practice, input.language());
+            boolean custom = input.customInput() != null;
+            List<JudgeCase> cases;
+            if (custom) {
+                if (input.customInput().getBytes(StandardCharsets.UTF_8).length > MAX_CUSTOM_INPUT_BYTES) {
+                    throw new ApiException(ErrorCode.VALIDATION_FAILED, "Custom input must be at most 64 KB");
+                }
+                cases = List.of(new JudgeCase(0, input.customInput(), null));
+            } else {
+                var samples = testcases.findByPracticeIdAndVersionAndSampleTrueOrderByOrderIndexAsc(practiceId, practice.getTestcaseVersion());
+                if (samples.isEmpty()) throw new ApiException(ErrorCode.PRACTICE_NOT_READY, "Practice has no sample testcases");
+                cases = judgeCases(samples);
             }
-            cases = List.of(new JudgeCase(0, input.customInput(), null));
-        } else {
-            samples = testcases.findByPracticeIdAndVersionAndSampleTrueOrderByOrderIndexAsc(practiceId, practice.getTestcaseVersion());
-            if (samples.isEmpty()) throw new ApiException(ErrorCode.PRACTICE_NOT_READY, "Practice has no sample testcases");
-            cases = judgeCases(samples);
-        }
+            return new RunPlan(practice.getProblemType(), practice.getTimeLimitMs(), practice.getMemoryLimitMb(), cases, custom);
+        });
         runLimiter.acquire(actorId);
+        var cases = plan.cases();
         var result = callJudge(practiceId, actorId, () -> judge.run(new PracticeJudgePort.RunRequest(practiceId,
-                practice.getProblemType(), input.language(), input.sourceCode(), practice.getTimeLimitMs(), practice.getMemoryLimitMb(), cases)));
-        if (result.cases() == null || result.cases().isEmpty()) throw judgeFailure(practiceId, actorId, new IllegalStateException("empty run result"));
-        final List<PracticeTestcaseEntity> sampleRows = samples;
-        var views = result.cases().stream().map(r -> {
-            if (r.index() < 0 || r.index() >= cases.size()) throw judgeFailure(practiceId, actorId, new IllegalStateException("unknown testcase index"));
-            return custom
-                    ? new RunCaseResult(r.index(), input.customInput(), null, r.verdict(), r.stdout(), r.stderr(), r.runtimeMs())
-                    : new RunCaseResult(r.index(), sampleRows.get(r.index()).getInput(), sampleRows.get(r.index()).getExpectedOutput(),
-                            r.verdict(), r.stdout(), r.stderr(), r.runtimeMs());
-        }).toList();
+                plan.problemType(), input.language(), input.sourceCode(), plan.timeLimitMs(), plan.memoryLimitMb(), cases)));
+        requireCompleteRun(practiceId, actorId, result, cases.size());
+        var views = result.cases().stream()
+                .sorted(Comparator.comparingInt(PracticeJudgePort.CaseResult::index))
+                .map(r -> new RunCaseResult(r.index(), cases.get(r.index()).input(), plan.custom() ? null : cases.get(r.index()).expectedOutput(),
+                        r.verdict(), r.stdout(), r.stderr(), r.runtimeMs()))
+                .toList();
         var overall = views.stream().map(RunCaseResult::verdict).filter(v -> v != PracticeVerdict.ACCEPTED).findFirst().orElse(PracticeVerdict.ACCEPTED);
         return new RunResponse(overall, views);
+    }
+
+    /** One result per submitted case, no duplicate or unknown index, no INTERNAL_ERROR: anything else is a judge failure. */
+    private void requireCompleteRun(UUID practiceId, UUID studentId, PracticeJudgePort.RunResult result, int expected) {
+        if (result.cases() == null || result.cases().size() != expected) {
+            throw judgeFailure(practiceId, studentId, new IllegalStateException("run result does not cover every testcase"));
+        }
+        var seen = new HashSet<Integer>();
+        for (var r : result.cases()) {
+            if (r == null || r.index() < 0 || r.index() >= expected || !seen.add(r.index())) {
+                throw judgeFailure(practiceId, studentId, new IllegalStateException("unknown or duplicate testcase index"));
+            }
+            if (r.verdict() == null || r.verdict() == PracticeVerdict.INTERNAL_ERROR) {
+                throw judgeFailure(practiceId, studentId, new IllegalStateException("judge reported no usable verdict for a testcase"));
+            }
+        }
     }
 
     /**
      * SUBMIT: judge every testcase of the current version, store the submission pointing at that version, and
      * record the first ACCEPTED as completion. A judge outage stores nothing and invents no verdict.
+     *
+     * <p>Three steps, never one transaction: (1) read-only: access checks and the testcase snapshot; (2) judge, with
+     * no transaction open; (3) read-write: re-check access, lock the practice row, make sure the testcases did not
+     * change while judging (otherwise 409, nothing stored), store the submission and the completion.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.SUPPORTS)
     public SubmissionView submit(UUID actorId, UUID classroomId, UUID practiceId, CodeRequest input) {
-        var ctx = student(actorId, classroomId);
-        var practice = practice(classroomId, practiceId);
-        requireAvailable(practice);
-        requireStudentCanWrite(ctx);
-        requireLanguage(practice, input.language());
-        int version = practice.getTestcaseVersion();
-        var all = testcases.findByPracticeIdAndVersionOrderByOrderIndexAsc(practiceId, version);
-        if (all.isEmpty()) throw new ApiException(ErrorCode.PRACTICE_NOT_READY);
+        var plan = readTx.execute(tx -> {
+            var ctx = student(actorId, classroomId);
+            var practice = practice(classroomId, practiceId);
+            requireAvailable(practice);
+            requireStudentCanWrite(ctx);
+            requireLanguage(practice, input.language());
+            int version = practice.getTestcaseVersion();
+            var all = testcases.findByPracticeIdAndVersionOrderByOrderIndexAsc(practiceId, version);
+            if (all.isEmpty()) throw new ApiException(ErrorCode.PRACTICE_NOT_READY);
+            return new SubmitPlan(version, practice.getProblemType(), practice.getTimeLimitMs(), practice.getMemoryLimitMb(), judgeCases(all));
+        });
         var result = callJudge(practiceId, actorId, () -> judge.submit(new PracticeJudgePort.SubmitRequest(practiceId,
-                practice.getProblemType(), input.language(), input.sourceCode(), practice.getTimeLimitMs(),
-                practice.getMemoryLimitMb(), version, judgeCases(all))));
-        if (result.verdict() == null) throw judgeFailure(practiceId, actorId, new IllegalStateException("judge returned no verdict"));
+                plan.problemType(), input.language(), input.sourceCode(), plan.timeLimitMs(), plan.memoryLimitMb(),
+                plan.version(), plan.cases())));
+        requireUsableSubmit(practiceId, actorId, result, plan.cases().size());
+        return writeTx.execute(tx -> storeSubmission(actorId, classroomId, practiceId, input, plan, result));
+    }
 
+    /** A verdict-less, INTERNAL_ERROR or self-contradicting result is a judge failure (503), never a stored submission. */
+    private void requireUsableSubmit(UUID practiceId, UUID studentId, PracticeJudgePort.SubmitResult result, int total) {
+        if (result.verdict() == null) throw judgeFailure(practiceId, studentId, new IllegalStateException("judge returned no verdict"));
+        if (result.verdict() == PracticeVerdict.INTERNAL_ERROR) {
+            throw judgeFailure(practiceId, studentId, new IllegalStateException("judge reported INTERNAL_ERROR"));
+        }
+        if (result.testsPassed() < 0 || result.testsPassed() > total
+                || (result.verdict() == PracticeVerdict.ACCEPTED && result.testsPassed() != total)) {
+            throw judgeFailure(practiceId, studentId, new IllegalStateException("judge returned an inconsistent tests-passed count"));
+        }
+    }
+
+    private SubmissionView storeSubmission(UUID actorId, UUID classroomId, UUID practiceId, CodeRequest input,
+                                           SubmitPlan plan, PracticeJudgePort.SubmitResult result) {
+        var ctx = student(actorId, classroomId);
+        requireStudentCanWrite(ctx);
+        var practice = lockedPractice(classroomId, practiceId);
+        requireAvailable(practice);
+        if (practice.getTestcaseVersion() != plan.version()
+                || !plan.cases().equals(judgeCases(testcases.findByPracticeIdAndVersionOrderByOrderIndexAsc(practiceId, plan.version())))) {
+            throw new ApiException(ErrorCode.PRACTICE_TESTCASES_CHANGED);
+        }
         var submission = new PracticeSubmissionEntity();
         submission.setId(UUID.randomUUID());
         submission.setPractice(practice);
         submission.setStudent(ctx.account());
-        submission.setTestcaseVersion(version);
+        submission.setTestcaseVersion(plan.version());
         submission.setCode(input.sourceCode());
         submission.setLanguage(input.language());
         submission.setVerdict(result.verdict());
+        submission.setTestsPassed(result.testsPassed());
+        submission.setTotalTests(plan.cases().size());
         submission.setRuntimeMs(result.runtimeMs());
         submission.setMemoryKb(result.memoryKb());
         submission.setJudgeDetails(result.details());
         submission.setSubmittedAt(clock.instant());
-        submissions.save(submission);
+        submissions.saveAndFlush(submission);
 
-        var completionId = new PracticeCompletionId(actorId, practiceId);
-        if (result.verdict() == PracticeVerdict.ACCEPTED && !completions.existsById(completionId)) {
-            var completion = new PracticeCompletionEntity();
-            completion.setId(completionId);
-            completion.setStudent(ctx.account());
-            completion.setPractice(practice);
-            completion.setFirstAcceptedSubmission(submission);
-            completion.setCompletedAt(clock.instant());
-            completions.save(completion);
+        // Atomic first-ACCEPTED-wins: a parallel ACCEPTED for the same student cannot turn into a 500.
+        if (result.verdict() == PracticeVerdict.ACCEPTED) {
+            completions.insertIfAbsent(actorId, practiceId, submission.getId(), clock.instant());
         }
         return PracticeMapper.submission(submission);
     }
@@ -435,14 +512,15 @@ public class PracticeService {
     private record Ctx(AccountEntity account, ClassroomEntity classroom, boolean teacher) { }
 
     /**
-     * The owning Teacher (account must be ACTIVE) or an ACTIVE-membership student. A non-active student may still
-     * read; {@link #requireStudentCanWrite} blocks RUN/SUBMIT for them.
+     * The owning Teacher or an ACTIVE-membership student, both with an ACTIVE account (FR-CLS-009: a suspended or
+     * deactivated account reaches no learning feature, reads included). A student of a classroom whose owner is
+     * inactive still reads; {@link #requireStudentCanWrite} blocks RUN/SUBMIT for them (FR-CLS-010).
      */
     private Ctx participant(UUID actorId, UUID classroomId) {
         var account = accounts.findById(actorId).orElseThrow(() -> forbidden("Account access denied"));
+        if (account.getStatus() != AccountStatus.ACTIVE) throw forbidden("Inactive accounts cannot access classroom practice");
         var classroom = classrooms.findById(classroomId).orElseThrow(() -> new ResourceNotFoundException("Classroom", classroomId));
         if (account.getRole() == AccountRole.TEACHER && classroom.getOwner().getId().equals(actorId)) {
-            if (account.getStatus() != AccountStatus.ACTIVE) throw forbidden("Inactive accounts cannot perform this operation");
             return new Ctx(account, classroom, true);
         }
         if (account.getRole() == AccountRole.STUDENT && memberships.findByClassroomIdAndStudentId(classroomId, actorId)
@@ -462,15 +540,23 @@ public class PracticeService {
         return ctx;
     }
 
-    /** RUN/SUBMIT need an ACTIVE student in a classroom that is neither archived nor read-only (owner inactive). */
+    /** RUN/SUBMIT need a classroom that is neither archived nor read-only (owner inactive); the student is ACTIVE already. */
     private static void requireStudentCanWrite(Ctx ctx) {
-        if (ctx.account().getStatus() != AccountStatus.ACTIVE) throw forbidden("Suspended or inactive accounts are read-only");
         if (ctx.classroom().getOwner().getStatus() != AccountStatus.ACTIVE) throw new ApiException(ErrorCode.CLASSROOM_READ_ONLY);
         requireActiveClassroom(ctx.classroom());
     }
 
     private ClassroomPracticeEntity practice(UUID classroomId, UUID practiceId) {
         return practices.findByIdAndClassroomId(practiceId, classroomId)
+                .orElseThrow(() -> new ResourceNotFoundException("Practice", practiceId));
+    }
+
+    /**
+     * The practice row under a write lock. Testcase edits and the SUBMIT write step both take it, so versioning
+     * ({@link #openEditableVersion}) can never interleave with a submission being stored or with another edit.
+     */
+    private ClassroomPracticeEntity lockedPractice(UUID classroomId, UUID practiceId) {
+        return practices.lockByIdAndClassroomId(practiceId, classroomId)
                 .orElseThrow(() -> new ResourceNotFoundException("Practice", practiceId));
     }
 
@@ -483,6 +569,12 @@ public class PracticeService {
     private boolean isAvailable(ClassroomPracticeEntity practice) {
         return practice.getStatus() == PracticeStatus.PUBLISHED
                 && (practice.getLessonId() == null || !lessons.isArchived(practice.getLessonId()));
+    }
+
+    /** Same rule against a precomputed set of archived lesson ids (listings: one lookup instead of one per row). */
+    private static boolean isAvailable(ClassroomPracticeEntity practice, Set<UUID> archivedLessons) {
+        return practice.getStatus() == PracticeStatus.PUBLISHED
+                && (practice.getLessonId() == null || !archivedLessons.contains(practice.getLessonId()));
     }
 
     private void requireAvailable(ClassroomPracticeEntity practice) {
@@ -508,7 +600,7 @@ public class PracticeService {
 
     /** Practice is ungraded with no deadline: any attempt to configure either is a 400. */
     private static void requireUngraded(Object deadline, Integer maxScore) {
-        if (deadline != null || (maxScore != null && maxScore > 0)) throw new ApiException(ErrorCode.PRACTICE_SCOPE_VIOLATION);
+        if (deadline != null || (maxScore != null && maxScore != 0)) throw new ApiException(ErrorCode.PRACTICE_SCOPE_VIOLATION);
     }
 
     private void requireReady(ClassroomPracticeEntity practice, String message) {
@@ -530,10 +622,19 @@ public class PracticeService {
     }
 
     private static Map<PracticeLanguage, String> starterCode(Map<PracticeLanguage, String> source, Set<PracticeLanguage> allowed) {
+        return starterCode(source, allowed, false);
+    }
+
+    /** {@code dropDisallowed}: silently drop entries for languages outside {@code allowed} instead of rejecting them. */
+    private static Map<PracticeLanguage, String> starterCode(Map<PracticeLanguage, String> source, Set<PracticeLanguage> allowed,
+                                                             boolean dropDisallowed) {
         var result = new EnumMap<PracticeLanguage, String>(PracticeLanguage.class);
         if (source != null) {
             source.forEach((language, code) -> {
-                if (!allowed.contains(language)) throw new ApiException(ErrorCode.LANGUAGE_NOT_ALLOWED, "Starter code given for a language that is not allowed");
+                if (!allowed.contains(language)) {
+                    if (dropDisallowed) return;
+                    throw new ApiException(ErrorCode.LANGUAGE_NOT_ALLOWED, "Starter code given for a language that is not allowed");
+                }
                 if (code != null) result.put(language, code);
             });
         }

@@ -30,6 +30,11 @@ public interface PracticeJudgePort {
     record SubmitRequest(UUID practiceId, PracticeProblemType problemType, PracticeLanguage language, String sourceCode,
                          int timeLimitMs, int memoryLimitMb, int testcaseVersion, List<JudgeCase> testcases) { }
 
-    /** Aggregate only: must never carry hidden testcase input or expected output. {@code details} is stored, not exposed. */
-    record SubmitResult(PracticeVerdict verdict, Integer runtimeMs, Integer memoryKb, String details) { }
+    /**
+     * Aggregate only: must never carry hidden testcase input or expected output. {@code testsPassed} is the number of
+     * testcases of the submitted version that passed (0..testcases.size(); equal to it when ACCEPTED). A result with
+     * INTERNAL_ERROR, no verdict or an inconsistent count is treated as a judge failure, never stored.
+     * {@code details} is stored, not exposed.
+     */
+    record SubmitResult(PracticeVerdict verdict, int testsPassed, Integer runtimeMs, Integer memoryKb, String details) { }
 }

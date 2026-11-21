@@ -59,7 +59,12 @@ class PracticeApiTest {
     static class TestConfig {
         @Bean @Primary Clock fixedClock() { return Clock.fixed(Instant.parse("2026-11-15T03:30:00Z"), ZoneOffset.UTC); }
         @Bean @Primary TestAccounts testAccounts() { return new TestAccounts(); }
-        @Bean @Primary LessonStatusPort fakeLessons() { return archivedLessons::contains; }
+        @Bean @Primary LessonStatusPort fakeLessons() {
+            return new LessonStatusPort() {
+                @Override public boolean isArchived(UUID lessonId) { return archivedLessons.contains(lessonId); }
+                @Override public Set<UUID> archivedLessonIds(UUID classroomId) { return Set.copyOf(archivedLessons); }
+            };
+        }
         @Bean @Primary PracticeJudgePort fakeJudge() {
             return new PracticeJudgePort() {
                 @Override public RunResult run(RunRequest r) {
@@ -68,7 +73,8 @@ class PracticeApiTest {
                 }
                 @Override public SubmitResult submit(SubmitRequest r) {
                     if (judgeDown.get()) throw new IllegalStateException("judge crashed");
-                    return new SubmitResult(nextVerdict, 7, 1024, "{\"internal\":\"" + HIDDEN_OUT + "\"}");
+                    int passed = nextVerdict == PracticeVerdict.ACCEPTED ? r.testcases().size() : 1;
+                    return new SubmitResult(nextVerdict, passed, 7, 1024, "{\"internal\":\"" + HIDDEN_OUT + "\"}");
                 }
             };
         }
@@ -178,6 +184,7 @@ class PracticeApiTest {
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.data.verdict").value("ACCEPTED"))
                 .andExpect(jsonPath("$.data.testcaseVersion").value(1)).andExpect(jsonPath("$.data.runtimeMs").value(7))
                 .andExpect(jsonPath("$.data.memoryKb").value(1024))
+                .andExpect(jsonPath("$.data.testsPassed").value(2)).andExpect(jsonPath("$.data.totalTests").value(2))
                 .andExpect(jsonPath("$.data.submittedAt").value("2026-11-15T03:30:00Z")).andReturn().getResponse().getContentAsString();
         assertThat(body).doesNotContain(HIDDEN_OUT).doesNotContain("judgeDetails");
         assertThat(submissions.count()).isEqualTo(1);
@@ -255,7 +262,7 @@ class PracticeApiTest {
                 .andExpect(jsonPath("$.data.items.length()").value(1));
     }
 
-    @Test @DisplayName("TC-PRC-01-06 suspended student or read-only class: reading works, RUN/SUBMIT are 403, data kept")
+    @Test @DisplayName("TC-PRC-01-06 suspended student reaches nothing (FR-CLS-009); read-only class: reading works, RUN/SUBMIT are 403")
     void tcPrc0106_readOnly() throws Exception {
         String id = publishedPractice(null);
         submit(student, id);
@@ -263,7 +270,9 @@ class PracticeApiTest {
 
         student.setStatus(AccountStatus.SUSPENDED);
         accounts.saveAndFlush(student);
-        mvc.perform(get(BASE + "/{p}", classroom.getId(), id).with(actor(student))).andExpect(status().isOk());
+        mvc.perform(get(BASE + "/{p}", classroom.getId(), id).with(actor(student))).andExpect(status().isForbidden());
+        mvc.perform(get(BASE, classroom.getId()).with(actor(student))).andExpect(status().isForbidden());
+        mvc.perform(get(BASE + "/{p}/submissions/me", classroom.getId(), id).with(actor(student))).andExpect(status().isForbidden());
         mvc.perform(post(BASE + "/{p}/submit", classroom.getId(), id).with(actor(student)).contentType(MediaType.APPLICATION_JSON).content(codeBody()))
                 .andExpect(status().isForbidden());
         mvc.perform(post(BASE + "/{p}/run", classroom.getId(), id).with(actor(student)).contentType(MediaType.APPLICATION_JSON).content(codeBody()))
@@ -478,8 +487,120 @@ class PracticeApiTest {
                 .andExpect(status().isBadRequest());
         mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content("{\"deadline\":\"2026-12-01T00:00:00Z\"}"))
                 .andExpect(status().isBadRequest());
+        mvc.perform(post(BASE, classroom.getId()).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content(createJson("\"maxScore\":-10,", false)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("PRACTICE_SCOPE_VIOLATION"));
+        mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content("{\"maxScore\":-1}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.errorCode").value("PRACTICE_SCOPE_VIOLATION"));
         mvc.perform(post(BASE, classroom.getId()).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content(createJson("\"maxScore\":0,", false)))
                 .andExpect(status().isCreated());
+    }
+
+    @Test @DisplayName("FR-PRC-004 submission history lists tests passed; teacher and student both see it")
+    void testsPassedIsStoredAndListed() throws Exception {
+        String id = publishedPractice(null);
+        nextVerdict = PracticeVerdict.WRONG_ANSWER;
+        submit(student, id);
+        mvc.perform(get(BASE + "/{p}/submissions/me", classroom.getId(), id).with(actor(student)))
+                .andExpect(jsonPath("$.data.items[0].testsPassed").value(1)).andExpect(jsonPath("$.data.items[0].totalTests").value(2));
+        mvc.perform(get(BASE + "/{p}/submissions", classroom.getId(), id).with(actor(teacher)))
+                .andExpect(jsonPath("$.data.items[0].testsPassed").value(1)).andExpect(jsonPath("$.data.items[0].totalTests").value(2))
+                .andExpect(jsonPath("$.data.items[0].studentUsername").isNotEmpty());
+        assertThat(submissions.findAll()).singleElement().satisfies(sub -> {
+            assertThat(sub.getTestsPassed()).isEqualTo(1);
+            assertThat(sub.getTotalTests()).isEqualTo(2);
+        });
+    }
+
+    @Test @DisplayName("Two ACCEPTED submissions: one completion, no error, both submissions stored")
+    void secondAcceptedDoesNotDuplicateCompletion() throws Exception {
+        String id = publishedPractice(null);
+        submit(student, id);
+        submit(student, id);
+        assertThat(submissions.count()).isEqualTo(2);
+        assertThat(completions.count()).isEqualTo(1);
+    }
+
+    @Test @DisplayName("INTERNAL_ERROR from the judge is a 503, not a stored submission")
+    void internalErrorVerdictIsNotStored() throws Exception {
+        String id = publishedPractice(null);
+        nextVerdict = PracticeVerdict.INTERNAL_ERROR;
+        mvc.perform(post(BASE + "/{p}/submit", classroom.getId(), id).with(actor(student)).contentType(MediaType.APPLICATION_JSON).content(codeBody()))
+                .andExpect(status().isServiceUnavailable()).andExpect(jsonPath("$.errorCode").value("JUDGE_SERVICE_UNAVAILABLE"));
+        mvc.perform(post(BASE + "/{p}/run", classroom.getId(), id).with(actor(student)).contentType(MediaType.APPLICATION_JSON).content(codeBody()))
+                .andExpect(status().isServiceUnavailable());
+        assertThat(submissions.count()).isZero();
+        assertThat(completions.count()).isZero();
+    }
+
+    @Test @DisplayName("Null collection elements and out-of-range limits are 400, never 500")
+    void invalidCollectionsAndLimitsAreBadRequests() throws Exception {
+        for (String body : List.of(
+                "{\"title\":\"T\",\"allowedLanguages\":[\"JAVA\",null]}",
+                "{\"title\":\"T\",\"allowedLanguages\":[null]}",
+                "{\"title\":\"T\",\"allowedLanguages\":[\"JAVA\"],\"testcases\":[null]}",
+                "{\"title\":\"T\",\"allowedLanguages\":[\"JAVA\"],\"timeLimitMs\":5001}",
+                "{\"title\":\"T\",\"allowedLanguages\":[\"JAVA\"],\"memoryLimitMb\":513}")) {
+            mvc.perform(post(BASE, classroom.getId()).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest());
+        }
+        String id = createPractice(createJson("", false));
+        mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"allowedLanguages\":[\"JAVA\",null]}"))
+                .andExpect(status().isBadRequest());
+        // the sandbox ceiling is 5.0 s / 512 MB, and the limits are accepted up to it
+        mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"timeLimitMs\":5000,\"memoryLimitMb\":512}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.timeLimitMs").value(5000)).andExpect(jsonPath("$.data.memoryLimitMb").value(512));
+    }
+
+    @Test @DisplayName("PATCH can detach a practice from its lesson and drops starter code of removed languages")
+    void patchClearsLessonAndPrunesStarterCode() throws Exception {
+        UUID lesson = UUID.randomUUID();
+        String id = createPractice("{\"lessonId\":\"" + lesson + "\",\"title\":\"T\",\"allowedLanguages\":[\"JAVA\",\"PYTHON\"],"
+                + "\"starterCode\":{\"JAVA\":\"class Main {}\",\"PYTHON\":\"pass\"}}");
+        mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lessonId\":\"" + lesson + "\",\"clearLessonId\":true}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"clearLessonId\":true,\"allowedLanguages\":[\"JAVA\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.lessonId").isEmpty())
+                .andExpect(jsonPath("$.data.starterCode.JAVA").value("class Main {}")).andExpect(jsonPath("$.data.starterCode.PYTHON").doesNotExist());
+    }
+
+    @Test @DisplayName("Student list: archived-lesson practices are filtered in SQL, so pages and totals stay consistent")
+    void studentPaginationIgnoresArchivedLessonPractices() throws Exception {
+        UUID archived = UUID.randomUUID();
+        // newest first (createdAt DESC): the 4 archived-lesson practices sort before the 3 standalone ones
+        for (int i = 0; i < 3; i++) publishedPractice(null);
+        for (int i = 0; i < 4; i++) publishedPractice(archived);
+        archivedLessons.add(archived);
+
+        for (int page = 0; page < 2; page++) {
+            mvc.perform(get(BASE, classroom.getId()).param("size", "2").param("page", String.valueOf(page)).with(actor(student)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.pagination.totalElements").value(3))
+                    .andExpect(jsonPath("$.data.pagination.totalPages").value(2))
+                    .andExpect(jsonPath("$.data.items.length()").value(page == 0 ? 2 : 1));
+        }
+        mvc.perform(get(BASE, classroom.getId()).param("size", "10").with(actor(teacher)))
+                .andExpect(jsonPath("$.data.pagination.totalElements").value(7));
+    }
+
+    @Test @DisplayName("A classroom that has practices cannot be deleted: 409 CLASS_HAS_RETAINED_DATA, not a foreign-key 500")
+    void classroomWithPracticesIsNotDeletable() throws Exception {
+        var empty = new ClassroomEntity();
+        empty.setId(UUID.randomUUID());
+        empty.setOwner(teacher);
+        empty.setName("Empty");
+        empty.setStatus(ClassroomStatus.ACTIVE);
+        empty.setClassCode(UUID.randomUUID().toString().substring(0, 8));
+        empty.setJoiningOpen(true);
+        empty.setJoinMode(JoinMode.AUTO_JOIN);
+        classrooms.save(empty);
+        mvc.perform(post(BASE, empty.getId()).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content(createJson("", false)))
+                .andExpect(status().isCreated());
+        mvc.perform(delete("/api/v1/classrooms/{c}", empty.getId()).with(actor(teacher)))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.errorCode").value("CLASS_HAS_RETAINED_DATA"));
     }
 
     @Test @DisplayName("TC-PRC-10-06 archiving keeps every submission and completion")

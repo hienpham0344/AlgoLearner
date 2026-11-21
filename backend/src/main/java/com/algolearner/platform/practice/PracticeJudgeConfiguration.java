@@ -4,6 +4,8 @@ import com.algolearner.platform.common.exception.JudgeServiceUnavailableExceptio
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import java.util.Set;
+import java.util.UUID;
 
 /** Fallbacks used until modules 4.9 and 4.5 provide real adapters. */
 @Configuration
@@ -26,6 +28,9 @@ public class PracticeJudgeConfiguration {
     @Bean
     @ConditionalOnMissingBean(LessonStatusPort.class)
     LessonStatusPort noLessonsArchived() {
-        return lessonId -> false;
+        return new LessonStatusPort() {
+            @Override public boolean isArchived(UUID lessonId) { return false; }
+            @Override public Set<UUID> archivedLessonIds(UUID classroomId) { return Set.of(); }
+        };
     }
 }

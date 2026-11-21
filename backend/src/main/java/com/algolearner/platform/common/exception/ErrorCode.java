@@ -44,6 +44,7 @@ public enum ErrorCode {
     PRACTICE_INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "Invalid practice status transition"),
     PRACTICE_NOT_READY(HttpStatus.CONFLICT, "Practice has no usable testcases"),
     PRACTICE_NOT_DELETABLE(HttpStatus.CONFLICT, "Only a draft practice without submissions can be deleted"),
+    PRACTICE_TESTCASES_CHANGED(HttpStatus.CONFLICT, "Practice testcases changed while the submission was being judged. Please submit again"),
     PRACTICE_READ_ONLY(HttpStatus.CONFLICT, "Archived practice is read-only"),
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Request could not be completed");
 
