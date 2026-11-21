@@ -725,20 +725,17 @@ function ProfileFolder({ profile }: { profile: OwnerProfile }) {
                     <ChangePasswordForm />
                     <SessionManager />
 
-                    <div className="folder-settings-list">
-                      <div className="folder-editorial-row">
-                        <div className="folder-row-info">
-                          <strong className="folder-row-title">Account password</strong>
-                          <p className="folder-row-desc">
-                            Password reset codes are sent to your verified email address ({profile.email})
-                            and expire after 10 minutes.
-                          </p>
-                        </div>
-                        <Link to="/forgot-password" className="folder-action-pill">
-                          <span>Reset password</span>
-                          <ArrowUpRight size={13} aria-hidden="true" />
-                        </Link>
+                    <div className="security-reset-row">
+                      <div className="security-reset-info">
+                        <strong className="security-reset-title">Forgot password?</strong>
+                        <span className="security-reset-meta">
+                          Send password reset code to {profile.email}
+                        </span>
                       </div>
+                      <Link to="/forgot-password" className="security-btn-secondary">
+                        <span>Reset via email</span>
+                        <ArrowUpRight size={13} aria-hidden="true" />
+                      </Link>
                     </div>
                   </div>
                 </div>

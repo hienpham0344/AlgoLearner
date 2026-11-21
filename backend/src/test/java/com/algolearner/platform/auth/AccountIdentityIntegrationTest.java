@@ -52,6 +52,19 @@ class AccountIdentityIntegrationTest extends com.algolearner.platform.support.Po
     }
 
     @Test
+    void singleQueryConflictCheckDetectsAllNamespaceCollisionsCaseInsensitively() {
+        String suffix = UUID.randomUUID().toString().substring(0, 12);
+        String existingEmail = "conflict-" + suffix + "@test.dev";
+        String existingUsername = "user_" + suffix;
+        save(existingEmail, existingUsername);
+        assertTrue(AccountIdentityRegistration.conflicts(accounts, existingEmail.toUpperCase(), "fresh_" + suffix));
+        assertTrue(AccountIdentityRegistration.conflicts(accounts, "fresh-" + suffix + "@test.dev", existingUsername.toUpperCase()));
+        assertTrue(AccountIdentityRegistration.conflicts(accounts, existingUsername.toUpperCase(), "fresh_" + suffix));
+        assertTrue(AccountIdentityRegistration.conflicts(accounts, "fresh-" + suffix + "@test.dev", existingEmail.toUpperCase()));
+        assertFalse(AccountIdentityRegistration.conflicts(accounts, "other-" + suffix + "@test.dev", "other_" + suffix));
+    }
+
+    @Test
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     void concurrentCaseVariantsCreateExactlyOneAccount() throws Exception {
         String suffix = UUID.randomUUID().toString().substring(0, 12);

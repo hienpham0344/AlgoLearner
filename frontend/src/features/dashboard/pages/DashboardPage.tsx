@@ -3,10 +3,11 @@ import { clearSession } from '@/services/apiClient';
 import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { profileApi } from '@/features/profile/api/profileApi';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
@@ -19,6 +20,7 @@ import { PracticePulse } from '../components/PracticePulse';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
 import { getClassroomLessonSummary } from '@/features/classroom/lessons/mock/lessonMockStore';
 import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
+import { lessonApi, lessonKeys } from '@/features/classroom/lessons/api/lessonApi';
 import '../styles/dashboard.css';
 
 const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
@@ -137,6 +139,20 @@ export const DashboardPage = () => {
     retry: false,
   });
 
+  const mappedBackendData = !IS_DEMO && dashboardQuery.data
+    ? mapStudentDashboard(dashboardQuery.data)
+    : EMPTY_DASHBOARD_DATA;
+
+  const classroomLessonQueries = useQueries({
+    queries: (isStudent && !IS_DEMO ? mappedBackendData.classes : []).map(cls => ({
+      queryKey: lessonKeys.list(user?.id || '', cls.id, 0),
+      queryFn: ({ signal }: { signal: AbortSignal }) => lessonApi.list(cls.id, 0, signal),
+      enabled: Boolean(user?.id && cls.id),
+      retry: false,
+      staleTime: 30_000,
+    })),
+  });
+
   useEffect(() => {
     const isUnauthorized = [profileQuery.error, dashboardQuery.error].some(
       error => isAxiosError(error) && error.response?.status === 401,
@@ -222,11 +238,82 @@ export const DashboardPage = () => {
     };
   })();
 
+  const { backendClasses, backendCourses, backendPrimaryClassroomHref } = (() => {
+    if (IS_DEMO || !dashboardQuery.data) {
+      return {
+        backendClasses: mappedBackendData.classes,
+        backendCourses: mappedBackendData.courses,
+        backendPrimaryClassroomHref: null as string | null,
+      };
+    }
+    const summaries = mappedBackendData.classes.map((cls, index) => {
+      const items = classroomLessonQueries[index]?.data?.items || [];
+      const published = items.filter(lesson => lesson.status === 'PUBLISHED');
+      const completedCount = published.filter(lesson => Boolean(lesson.progress?.completed)).length;
+      const nextLesson = published.find(lesson => !lesson.progress?.completed) || null;
+      return {
+        classroom: cls,
+        publishedCount: published.length,
+        completedCount,
+        nextLesson,
+      };
+    });
+
+    const enrichedClasses: EnrolledClass[] = summaries.map(({ classroom, publishedCount, completedCount, nextLesson }) => ({
+      ...classroom,
+      nextAction:
+        nextLesson && completedCount < publishedCount
+          ? `Up next: ${nextLesson.title}`
+          : publishedCount > 0
+            ? `All ${publishedCount} lessons completed`
+            : 'No published lessons yet',
+      completedModules: publishedCount > 0 ? completedCount : undefined,
+      totalModules: publishedCount > 0 ? publishedCount : undefined,
+      href: `/student/classrooms/${encodeURIComponent(classroom.id)}`,
+    }));
+
+    if (mappedBackendData.courses.length > 0) {
+      return {
+        backendClasses: enrichedClasses,
+        backendCourses: mappedBackendData.courses,
+        backendPrimaryClassroomHref: null as string | null,
+      };
+    }
+
+    const orderedForLearning = [...summaries]
+      .filter(s => s.publishedCount > 0)
+      .sort((a, b) => {
+        const aScore = a.publishedCount > a.completedCount ? 2 : 1;
+        const bScore = b.publishedCount > b.completedCount ? 2 : 1;
+        return bScore - aScore;
+      });
+
+    const derivedCourses: CourseProgress[] = orderedForLearning.map(({ classroom, publishedCount, completedCount, nextLesson }) => ({
+      id: classroom.id,
+      title: classroom.name,
+      topic: 'CLASSROOM',
+      currentModule: `${completedCount} / ${publishedCount} lessons`,
+      currentLesson: nextLesson?.title || 'View classroom materials',
+      completedUnits: completedCount,
+      totalUnits: publishedCount,
+      progressPercent: Math.round((completedCount / publishedCount) * 100),
+      href: nextLesson
+        ? `/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(nextLesson.id)}`
+        : `/student/classrooms/${encodeURIComponent(classroom.id)}`,
+    }));
+
+    const primaryClass = orderedForLearning[0]?.classroom;
+    return {
+      backendClasses: enrichedClasses,
+      backendCourses: derivedCourses,
+      backendPrimaryClassroomHref: primaryClass ? `/student/classrooms/${encodeURIComponent(primaryClass.id)}` : null,
+    };
+  })();
+
   const data: StudentDashboardData = IS_DEMO
     ? { ...dashboardDemoData, classes: syncedDemoClasses, courses: syncedDemoCourses }
-    : dashboardQuery.data
-      ? mapStudentDashboard(dashboardQuery.data)
-      : EMPTY_DASHBOARD_DATA;
+    : { ...mappedBackendData, classes: backendClasses, courses: backendCourses };
+  const resolvedPrimaryClassroomHref = IS_DEMO ? primaryClassroomHref : backendPrimaryClassroomHref;
 
   const practice: PracticeStats = data.practice;
   const loadState = IS_DEMO ? 'ready' : resolveLoadState(dashboardQuery.isPending, dashboardQuery.isError, dashboardQuery.error);
@@ -259,29 +346,29 @@ export const DashboardPage = () => {
             </p>
           )}
 
-          {!IS_DEMO && (dashboardQuery.isPending || dashboardQuery.isError) ? (
-            <div className="dashboard-fetch-state" role={dashboardQuery.isError ? 'alert' : 'status'}>
+          {!IS_DEMO && dashboardQuery.isPending ? (
+            <LoadingScreen
+              variant="page"
+              message="Đang tải dữ liệu học tập…"
+              submessage="Đang đồng bộ lộ trình, bài tập và streak của bạn"
+            />
+          ) : !IS_DEMO && dashboardQuery.isError ? (
+            <div className="dashboard-fetch-state" role="alert">
               <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
               <h2>
-                {dashboardQuery.isPending
-                  ? 'Loading your workspace…'
-                  : loadState === 'restricted'
-                    ? 'Access restricted.'
-                    : 'Learning activity unavailable.'}
+                {loadState === 'restricted'
+                  ? 'Access restricted.'
+                  : 'Learning activity unavailable.'}
               </h2>
-              {dashboardQuery.isError && (
-                <>
-                  <p>
-                    {loadState === 'restricted'
-                      ? 'This account cannot access the student dashboard.'
-                      : 'We could not load your learning data.'}
-                  </p>
-                  {loadState !== 'restricted' && (
-                    <button type="button" onClick={() => dashboardQuery.refetch()}>
-                      Try again
-                    </button>
-                  )}
-                </>
+              <p>
+                {loadState === 'restricted'
+                  ? 'This account cannot access the student dashboard.'
+                  : 'We could not load your learning data.'}
+              </p>
+              {loadState !== 'restricted' && (
+                <button type="button" onClick={() => dashboardQuery.refetch()}>
+                  Try again
+                </button>
               )}
             </div>
           ) : (
@@ -320,12 +407,12 @@ export const DashboardPage = () => {
                           <div className="flex flex-wrap items-center gap-3">
                             {featuredCourse.href && (
                               <Link className="dashboard-learning-action" to={featuredCourse.href}>
-                                {primaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
+                                {resolvedPrimaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
                               </Link>
                             )}
-                            {primaryClassroomHref && (
+                            {resolvedPrimaryClassroomHref && (
                               <Link
-                                to={primaryClassroomHref}
+                                to={resolvedPrimaryClassroomHref}
                                 className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 hover:text-white underline underline-offset-4"
                               >
                                 Open classroom →

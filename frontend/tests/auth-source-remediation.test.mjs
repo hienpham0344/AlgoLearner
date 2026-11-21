@@ -405,3 +405,43 @@ test('CRITICAL-1: AccountSecurityPanels work when source is unknown in productio
     axios.defaults.adapter = origAdapter;
   }
 });
+
+test('BackendStatusBanner polls at 60s interval, skips hidden tabs, and rechecks on visibility/focus', async () => {
+  const { container } = setupDom();
+  const origFetch = globalThis.fetch;
+  const root = createRoot(container);
+  try {
+    const mod = await loadBundle({ mode: 'production' });
+    assert.equal(mod.STATUS_POLL_INTERVAL_MS, 60_000);
+
+    let fetchCount = 0;
+    globalThis.fetch = async () => {
+      fetchCount += 1;
+      return new Response(
+        JSON.stringify({ success: true, data: { source: 'backend' } }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    };
+
+    await act(async () => { root.render(createElement(mod.BackendStatusBanner)); });
+    await flush();
+    assert.equal(fetchCount, 1);
+
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await flush();
+    assert.equal(fetchCount, 1);
+
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    await flush();
+    assert.equal(fetchCount, 2);
+
+    await act(async () => { window.dispatchEvent(new Event('focus')); });
+    await flush();
+    assert.equal(fetchCount, 3);
+  } finally {
+    await act(async () => { root.unmount(); });
+    globalThis.fetch = origFetch;
+  }
+});

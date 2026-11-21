@@ -35,11 +35,13 @@ test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) =>
   await expect(page.getByRole('status')).toContainText('Profile changes saved.');
   await page.getByRole('link', { name: 'Workspace' }).click();
   await page.goto(`${base}/teacher/classrooms`);
+  await page.getByRole('button', { name: /\+ New classroom/i }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Create classroom' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Classroom name' }).fill(classroomName);
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Classroom name' }).fill(classroomName);
   const createdResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/classrooms')
     && response.request().method() === 'POST');
-  await page.getByRole('button', { name: 'Create', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Create', exact: true }).click();
   expect((await createdResponse).status()).toBe(201);
   await expect(page).toHaveURL(/\/teacher\/classrooms\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { name: classroomName })).toBeVisible();
@@ -54,6 +56,7 @@ test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) =>
   await page.goto(`${base}/profile`);
   await expect(page.getByRole('textbox', { name: 'Display name' })).toBeVisible();
   await page.goto(`${base}/student/classrooms`);
+  await page.getByRole('button', { name: 'Join Class' }).click();
   await expect(page.getByRole('heading', { name: 'Join with class code' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Class code' }).fill(classCode!);
   const joinedResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/classrooms/join')

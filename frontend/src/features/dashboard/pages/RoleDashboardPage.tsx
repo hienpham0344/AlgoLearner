@@ -7,6 +7,7 @@ import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import {
   dashboardApi,
   dashboardKeys,
@@ -885,10 +886,11 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
   return (
     <WorkspaceLayout role={role} unreadCount={unreadCount} displayNameOverride={displayName}>
       {query.isPending ? (
-        <div className="dashboard-fetch-state" role="status">
-          <span className="dashboard-eyebrow">{role} WORKSPACE</span>
-          <h2>Loading {role.toLowerCase()} workspace…</h2>
-        </div>
+        <LoadingScreen
+          variant="page"
+          message={`Đang tải không gian làm việc ${role === 'TEACHER' ? 'giảng viên' : role === 'ADMIN' ? 'quản trị' : 'học viên'}…`}
+          submessage="Đang đồng bộ dữ liệu và tiến trình lớp học"
+        />
       ) : query.isError ? (
         <div className="dashboard-fetch-state" role="alert">
           <span className="dashboard-eyebrow">{role} WORKSPACE</span>

@@ -39,11 +39,14 @@ export const useIsDemoMode = (): boolean => useDemoFlags().isDemoMode;
 
 export const useIsPrototypeDemo = (): boolean => useDemoFlags().isPrototypeDemo;
 
+export const STATUS_POLL_INTERVAL_MS = 60_000;
+
 export function BackendStatusBanner() {
   const source = useApiSource();
   useEffect(() => {
     const controller = new AbortController();
     const check = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       try {
         const response = await fetch('/api/v1/status', { signal: controller.signal, cache: 'no-store' });
         const headerSource = response.headers.get('X-Algolearner-Source');
@@ -55,9 +58,21 @@ export function BackendStatusBanner() {
         }
       } catch { /* Connection errors do not authorize mock data; only the local proxy does. */ }
     };
+    const handleVisibilityOrFocus = () => {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void check();
+      }
+    };
     void check();
-    const interval = setInterval(() => { void check(); }, 5000);
-    return () => { controller.abort(); clearInterval(interval); };
+    const interval = setInterval(() => { void check(); }, STATUS_POLL_INTERVAL_MS);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
   }, []);
   if (source !== 'mock') return null;
   return <div role="status" className="sticky top-0 z-50 bg-amber-100 px-4 py-2 text-center text-sm text-amber-950">

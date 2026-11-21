@@ -127,6 +127,8 @@ public class AuthService {
         var otp = verifyCode(request, "REGISTER", AccountStatus.PENDING_VERIFICATION);
         var account = otp.getAccount();
         account.setStatus(AccountStatus.ACTIVE);
+        account.setFailedLoginAttempts(0);
+        account.setLoginLockedUntil(null);
         return sessions.issue(account, false, userAgent);
     }
 
@@ -219,7 +221,8 @@ public class AuthService {
                 .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS));
         Instant now = clock.instant();
         if (account.getLoginLockedUntil() != null && account.getLoginLockedUntil().isAfter(now))
-            throw new ApiException(ErrorCode.ACCOUNT_TEMP_LOCKED);
+            throw ApiException.withRetryAfter(ErrorCode.ACCOUNT_TEMP_LOCKED,
+                    retryAfterSeconds(now, account.getLoginLockedUntil()));
         if (account.getLoginLockedUntil() != null) {
             account.setLoginLockedUntil(null);
             account.setFailedLoginAttempts(0);
@@ -237,8 +240,9 @@ public class AuthService {
             int failures = account.getFailedLoginAttempts() + 1;
             account.setFailedLoginAttempts(failures);
             if (failures >= 5) {
-                account.setLoginLockedUntil(now.plus(LOGIN_LOCK));
-                throw new ApiException(ErrorCode.ACCOUNT_TEMP_LOCKED);
+                Instant lockedUntil = now.plus(LOGIN_LOCK);
+                account.setLoginLockedUntil(lockedUntil);
+                throw ApiException.withRetryAfter(ErrorCode.ACCOUNT_TEMP_LOCKED, retryAfterSeconds(now, lockedUntil));
             }
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
@@ -258,9 +262,13 @@ public class AuthService {
     private void sendCode(AccountEntity account, String purpose) {
         long stageStarted = RegistrationTiming.begin();
         var previous = otps.findFirstByAccountIdAndPurposeOrderBySentAtDesc(account.getId(), purpose);
-        if (previous.isPresent() && previous.get().getSentAt().plus(RESEND_WAIT).isAfter(clock.instant()))
-            throw new ApiException(ErrorCode.OTP_RATE_LIMITED);
-        previous.ifPresent(code -> { code.setUsedAt(clock.instant()); code.setResetUsedAt(clock.instant()); });
+        Instant checkedAt = clock.instant();
+        if (previous.isPresent()) {
+            Instant retryAt = previous.get().getSentAt().plus(RESEND_WAIT);
+            if (retryAt.isAfter(checkedAt))
+                throw ApiException.withRetryAfter(ErrorCode.OTP_RATE_LIMITED, retryAfterSeconds(checkedAt, retryAt));
+        }
+        previous.ifPresent(code -> { code.setUsedAt(checkedAt); code.setResetUsedAt(checkedAt); });
         RegistrationTiming.record("otp_lookup", stageStarted);
         String code = String.format(Locale.ROOT, "%06d", random.nextInt(1_000_000));
         Instant now = clock.instant();
@@ -279,6 +287,12 @@ public class AuthService {
         stageStarted = RegistrationTiming.begin();
         mailer.send(account.getEmail(), code, purpose);
         RegistrationTiming.record("smtp_send", stageStarted);
+    }
+
+    private static long retryAfterSeconds(Instant now, Instant until) {
+        Duration remaining = Duration.between(now, until);
+        long seconds = remaining.getSeconds() + (remaining.getNano() > 0 ? 1L : 0L);
+        return Math.max(1L, seconds);
     }
 
 }
