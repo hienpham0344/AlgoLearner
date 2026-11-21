@@ -171,7 +171,7 @@ export function DeactivateAccountForm() {
       >
         <div className="account-danger-field">
           <label className="account-danger-label" htmlFor="deactivate-password">
-            Current password
+            Mật khẩu hiện tại
           </label>
           <div className="account-danger-input-wrap">
             <input

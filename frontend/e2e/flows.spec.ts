@@ -342,6 +342,7 @@ test('4.3 student sends class code to API and sees pending approval', async ({ p
   });
   await signIn(page, base, 'student');
   await page.goto(`${base}/student/classrooms`);
+  await page.getByRole('button', { name: 'Join Class' }).click();
   await expect(page.getByRole('heading', { name: 'Join with class code' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Class code' }).fill('CPLAB26X');
   await page.getByRole('button', { name: 'Join', exact: true }).click();

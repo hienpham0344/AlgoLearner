@@ -56,6 +56,7 @@ test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) =>
   await page.goto(`${base}/profile`);
   await expect(page.getByRole('textbox', { name: 'Display name' })).toBeVisible();
   await page.goto(`${base}/student/classrooms`);
+  await page.getByRole('button', { name: 'Join Class' }).click();
   await expect(page.getByRole('heading', { name: 'Join with class code' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Class code' }).fill(classCode!);
   const joinedResponse = page.waitForResponse(response => response.url().endsWith('/api/v1/classrooms/join')
