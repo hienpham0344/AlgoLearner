@@ -125,24 +125,15 @@ export function SessionManager() {
 export function DeactivateAccountForm() {
   const isDemoMode = useIsDemoMode();
   const navigate = useNavigate();
-  const [expanded, setExpanded] = useState(false);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
-  const handleCancel = () => {
-    setExpanded(false);
-    setPassword('');
-    setShowPassword(false);
-    setConfirmed(false);
-    setError('');
-  };
-
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending || !confirmed || !password) return;
+    if (pending || !confirmed || !password || isDemoMode) return;
     setPending(true);
     setError('');
     try {
@@ -165,93 +156,73 @@ export function DeactivateAccountForm() {
             You will be signed out of all devices; learning data is preserved. Only an Admin can reactivate your account.
           </p>
         </div>
-        {!expanded && (
-          <button
-            type="button"
-            className="account-danger-btn-outline"
-            disabled={isDemoMode}
-            onClick={() => setExpanded(true)}
-          >
-            Deactivate…
-          </button>
-        )}
       </div>
 
       {isDemoMode && (
         <p className="account-danger-status" role="status">
-          Backend connection is required to deactivate your account.
+          Cần kết nối backend để vô hiệu hóa tài khoản.
         </p>
       )}
 
-      {expanded && (
-        <form
-          className="account-danger-form"
-          onSubmit={event => void submit(event)}
-          aria-busy={pending}
-        >
-          <div className="account-danger-field">
-            <label className="account-danger-label" htmlFor="deactivate-password">
-              Current password
-            </label>
-            <div className="account-danger-input-wrap">
-              <input
-                id="deactivate-password"
-                className="account-danger-input"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="Enter your current password"
-                value={password}
-                onChange={event => setPassword(event.target.value)}
-                disabled={pending || isDemoMode}
-                required
-              />
-              <button
-                type="button"
-                className="account-danger-toggle-pw"
-                onClick={() => setShowPassword(prev => !prev)}
-                disabled={pending || isDemoMode}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
-            </div>
-          </div>
-
-          <label className="account-danger-check">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={event => setConfirmed(event.target.checked)}
-              disabled={pending || isDemoMode}
-            />
-            <span>I understand that my account will be deactivated until an Admin restores it.</span>
+      <form
+        className="account-danger-form"
+        onSubmit={event => void submit(event)}
+        aria-busy={pending}
+      >
+        <div className="account-danger-field">
+          <label className="account-danger-label" htmlFor="deactivate-password">
+            Current password
           </label>
-
-          {error && (
-            <p className="account-danger-error" role="alert">
-              {error}
-            </p>
-          )}
-
-          <div className="account-danger-actions">
+          <div className="account-danger-input-wrap">
+            <input
+              id="deactivate-password"
+              className="account-danger-input"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="Enter your current password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              disabled={pending || isDemoMode}
+              required
+            />
             <button
               type="button"
-              className="account-danger-btn-ghost"
-              onClick={handleCancel}
-              disabled={pending}
+              className="account-danger-toggle-pw"
+              onClick={() => setShowPassword(prev => !prev)}
+              disabled={pending || isDemoMode}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="account-danger-btn-solid"
-              disabled={pending || !confirmed || !password || isDemoMode}
-            >
-              {pending ? 'Deactivating…' : 'Deactivate account'}
+              {showPassword ? 'Hide' : 'Show'}
             </button>
           </div>
-        </form>
-      )}
+        </div>
+
+        <label className="account-danger-check">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={event => setConfirmed(event.target.checked)}
+            disabled={pending || isDemoMode}
+          />
+          <span>I understand that my account will be deactivated until an Admin restores it.</span>
+        </label>
+
+        {error && (
+          <p className="account-danger-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="account-danger-actions">
+          <button
+            type="submit"
+            className="account-danger-btn-solid"
+            disabled={pending || !confirmed || !password || isDemoMode}
+          >
+            {pending ? 'Deactivating…' : 'Deactivate account'}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
