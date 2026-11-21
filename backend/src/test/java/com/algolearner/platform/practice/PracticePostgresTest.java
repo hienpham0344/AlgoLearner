@@ -17,9 +17,10 @@ import com.algolearner.platform.practice.PracticeDtos.TestcaseInput;
 import com.algolearner.platform.profile.PracticeRepository;
 import com.algolearner.platform.profile.ProfileRepository;
 import com.algolearner.platform.profile.dashboard.DashboardRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -27,8 +28,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -44,34 +43,23 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Runs the real schema on PostgreSQL: Flyway migrates every V*.sql, Hibernate {@code ddl-auto: validate} checks the
- * entities against it, and the concurrency guarantees of SRS 4.8 are exercised with real transactions and row locks
- * (H2 cannot show these). Opt-in against a scratch database, never the shared one:
- * <pre>
- * mvn test -Dtest=PracticePostgresTest -Dpostgres.check=true -Dpostgres.url=jdbc:postgresql://localhost:5432/scratch
- *          -Dpostgres.username=... -Dpostgres.password=...
- * </pre>
+ * Concurrency guarantees of SRS 4.8 with real transactions and row locks, which an in-memory database cannot show.
+ * The schema is created by Flyway and checked by Hibernate {@code ddl-auto: validate} (see PostgresIntegrationTest).
+ * Opt-in like the other PostgreSQL tests: set TEST_DB_URL (database name ending in _test), TEST_DB_USERNAME and
+ * TEST_DB_PASSWORD. This class commits its own data, so it removes it again after every test.
  */
-@EnabledIfSystemProperty(named = "postgres.check", matches = "true")
+@EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = "jdbc:postgresql:.*")
 @SpringBootTest(properties = {
-        "spring.jpa.hibernate.ddl-auto=validate", "spring.flyway.enabled=true",
         // Two connections only: if SUBMIT held a transaction while judging, the 4th parallel request could not start.
         "spring.datasource.hikari.maximum-pool-size=2", "spring.datasource.hikari.connection-timeout=8000",
         "logging.level.root=WARN", "debug=false",
         "app.security.jwt.issuer=https://issuer.example.test", "app.security.jwt.audience=practice-tests",
         "app.security.jwt.jwk-set-uri=https://issuer.example.test/.well-known/jwks.json"})
 @ActiveProfiles("test")
-class PracticePostgresTest {
+class PracticePostgresTest extends com.algolearner.platform.support.PostgresIntegrationTest {
     private static final int PARALLEL = 4;
     /** Released once PARALLEL submissions are inside the judge at the same time. */
     private static volatile CountDownLatch insideJudge = new CountDownLatch(PARALLEL);
-
-    @DynamicPropertySource
-    static void database(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", () -> System.getProperty("postgres.url"));
-        registry.add("spring.datasource.username", () -> System.getProperty("postgres.username"));
-        registry.add("spring.datasource.password", () -> System.getProperty("postgres.password", ""));
-    }
 
     @TestConfiguration
     static class TestConfig {
@@ -106,7 +94,6 @@ class PracticePostgresTest {
     @Autowired AccountRepository accounts;
     @Autowired ClassroomRepository classrooms;
     @Autowired ClassroomMembershipRepository memberships;
-    @Autowired PracticeSubmissionRepository submissions;
     @Autowired PracticeTestcaseRepository testcases;
     @Autowired ClassroomPracticeRepository practices;
     @Autowired JdbcTemplate jdbc;
@@ -143,12 +130,24 @@ class PracticePostgresTest {
         practiceId = created.id();
     }
 
+    @AfterEach
+    void cleanUp() {
+        // committed data must not leak into the other (rolled-back) test classes sharing this schema
+        jdbc.update("DELETE FROM tbl_practice_completion WHERE practice_id = ?", practiceId);
+        jdbc.update("DELETE FROM tbl_practice_submission WHERE practice_id = ?", practiceId);
+        jdbc.update("DELETE FROM tbl_practice_testcase WHERE practice_id = ?", practiceId);
+        jdbc.update("DELETE FROM tbl_classroom_practice WHERE id = ?", practiceId);
+        jdbc.update("DELETE FROM tbl_classroom_membership WHERE classroom_id = ?", classroom.getId());
+        jdbc.update("DELETE FROM tbl_classroom WHERE id = ?", classroom.getId());
+        jdbc.update("DELETE FROM tbl_account WHERE id IN (?, ?)", teacher.getId(), student.getId());
+    }
+
     @Test
     void flywayMigratedAndEntitiesMatchTheSchema() {
         // reaching this line already means Flyway ran every migration and ddl-auto=validate accepted the entities
-        List<String> columns = jdbc.queryForList("SELECT column_name FROM information_schema.columns WHERE table_name = 'tbl_practice_submission'", String.class);
+        List<String> columns = jdbc.queryForList("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'tbl_practice_submission'", String.class);
         assertThat(columns).contains("tests_passed", "total_tests");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success", Integer.class)).isGreaterThanOrEqualTo(5);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM flyway_schema_history WHERE success AND version = '202611210001'", Integer.class)).isEqualTo(1);
         // the sandbox ceiling (5 s / 512 MB) is enforced by the schema as well as by the API
         for (String limits : List.of("time_limit_ms = 5001", "memory_limit_mb = 513")) {
             org.junit.jupiter.api.Assertions.assertThrows(org.springframework.dao.DataIntegrityViolationException.class, () ->

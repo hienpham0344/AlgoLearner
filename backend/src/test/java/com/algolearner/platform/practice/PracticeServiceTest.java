@@ -653,6 +653,36 @@ class PracticeServiceTest {
         verify(completions, never()).findForPractice(any(), any());
     }
 
+    @Test @DisplayName("Admin reads practice data of any classroom, but never runs, submits, edits or sees hidden testcases")
+    void adminIsReadOnly() {
+        var admin = account(AccountRole.ADMIN);
+        var other = submissionOf(student);
+        when(submissions.findByIdAndPracticeId(other.getId(), practice.getId())).thenReturn(Optional.of(other));
+        var pageable = PageRequest.of(0, 10);
+        when(practices.findByClassroomId(classroom.getId(), pageable)).thenReturn(new PageImpl<>(List.of(practice), pageable, 1));
+        when(submissions.findByPracticeId(practice.getId(), pageable)).thenReturn(new PageImpl<>(List.of(other), pageable, 1));
+        when(memberships.findByClassroomIdAndStatus(classroom.getId(), MembershipStatus.ACTIVE, pageable)).thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        assertThat(service.list(admin.getId(), classroom.getId(), pageable).getData().getItems()).hasSize(1);
+        assertThat(service.get(admin.getId(), classroom.getId(), practice.getId()).id()).isEqualTo(practice.getId());
+        assertThat(service.get(admin.getId(), classroom.getId(), practice.getId()).sampleTestcases()).extracting(SampleTestcase::input).containsExactly("1 2");
+        assertThat(service.classSubmissions(admin.getId(), classroom.getId(), practice.getId(), null, pageable).getData().getItems()).hasSize(1);
+        assertThat(service.submission(admin.getId(), classroom.getId(), practice.getId(), other.getId()).studentId()).isEqualTo(student.getId());
+        assertThat(service.progress(admin.getId(), classroom.getId(), practice.getId(), pageable).getData().getItems()).isEmpty();
+
+        assertForbidden(() -> service.listTestcases(admin.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.run(admin.getId(), classroom.getId(), practice.getId(), run(null)));
+        assertForbidden(() -> service.submit(admin.getId(), classroom.getId(), practice.getId(), code()));
+        assertForbidden(() -> service.mySubmissions(admin.getId(), classroom.getId(), practice.getId(), pageable));
+        assertForbidden(() -> service.changeStatus(admin.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED)));
+        assertForbidden(() -> service.delete(admin.getId(), classroom.getId(), practice.getId()));
+        assertForbidden(() -> service.addTestcase(admin.getId(), classroom.getId(), practice.getId(), new TestcaseInput("a", "b", false, null), false));
+        verifyNoInteractions(judge);
+
+        admin.setStatus(AccountStatus.SUSPENDED);
+        assertForbidden(() -> service.get(admin.getId(), classroom.getId(), practice.getId()));
+    }
+
     // ---- helpers
     private static void assertForbidden(Runnable call) {
         assertThatThrownBy(call::run).isInstanceOfSatisfying(ApiException.class,

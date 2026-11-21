@@ -46,8 +46,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
- * SRS 4.8 Classroom Practice. Access model: only the owning Teacher manages and monitors a practice, only an
- * ACTIVE student member sees available practices, and every student sees only their own submissions.
+ * SRS 4.8 Classroom Practice. Access model: only the owning Teacher manages a practice (an Admin may read it, never
+ * change it), only an ACTIVE student member sees available practices and runs/submits code, and every student sees
+ * only their own submissions.
  * Practice is ungraded and has no deadline; its results never feed the gradebook (4.10).
  *
  * <p>RUN and SUBMIT never hold a database transaction (or JDBC connection) while the Code Judge runs: they read in a
@@ -282,7 +283,7 @@ public class PracticeService {
     // ------------------------------------------------------------------ teacher: monitoring
 
     public PageResponse<ProgressView> progress(UUID actorId, UUID classroomId, UUID practiceId, Pageable pageable) {
-        teacher(actorId, classroomId);
+        staff(actorId, classroomId);
         practice(classroomId, practiceId);
         Page<ClassroomMembershipEntity> members = memberships.findByClassroomIdAndStatus(classroomId, MembershipStatus.ACTIVE, pageable);
         Set<UUID> studentIds = members.getContent().stream().map(m -> m.getStudent().getId()).collect(Collectors.toSet());
@@ -298,7 +299,7 @@ public class PracticeService {
     }
 
     public PageResponse<SubmissionView> classSubmissions(UUID actorId, UUID classroomId, UUID practiceId, UUID studentId, Pageable pageable) {
-        teacher(actorId, classroomId);
+        staff(actorId, classroomId);
         practice(classroomId, practiceId);
         Page<PracticeSubmissionEntity> page = studentId == null
                 ? submissions.findByPracticeId(practiceId, pageable)
@@ -311,7 +312,7 @@ public class PracticeService {
     public PageResponse<PracticeSummary> list(UUID actorId, UUID classroomId, Pageable pageable) {
         var ctx = participant(actorId, classroomId);
         Set<UUID> archivedLessons = lessons.archivedLessonIds(classroomId);
-        if (ctx.teacher()) {
+        if (ctx.staff()) {
             return PageResponse.fromPage(practices.findByClassroomId(classroomId, pageable)
                     .map(p -> PracticeMapper.summary(p, isAvailable(p, archivedLessons), null)));
         }
@@ -329,7 +330,7 @@ public class PracticeService {
     public PracticeDetail get(UUID actorId, UUID classroomId, UUID practiceId) {
         var ctx = participant(actorId, classroomId);
         var practice = practice(classroomId, practiceId);
-        if (ctx.teacher()) return detailFor(practice, null);
+        if (ctx.staff()) return detailFor(practice, null);
         requireAvailable(practice);
         return detailFor(practice, status(completions.existsById(new PracticeCompletionId(actorId, practiceId))));
     }
@@ -481,10 +482,10 @@ public class PracticeService {
     public SubmissionView submission(UUID actorId, UUID classroomId, UUID practiceId, UUID submissionId) {
         var ctx = participant(actorId, classroomId);
         var practice = practice(classroomId, practiceId);
-        if (!ctx.teacher()) requireHistoryVisible(practice);
+        if (!ctx.staff()) requireHistoryVisible(practice);
         var submission = submissions.findByIdAndPracticeId(submissionId, practiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Submission", submissionId));
-        if (!ctx.teacher() && !submission.getStudent().getId().equals(actorId)) throw forbidden("Submission belongs to another student");
+        if (!ctx.staff() && !submission.getStudent().getId().equals(actorId)) throw forbidden("Submission belongs to another student");
         return PracticeMapper.submission(submission);
     }
 
@@ -509,10 +510,14 @@ public class PracticeService {
 
     // ------------------------------------------------------------------ access helpers
 
-    private record Ctx(AccountEntity account, ClassroomEntity classroom, boolean teacher) { }
+    /** {@code admin}: an ACTIVE Admin, who may read (never change) the practice data of any classroom. */
+    private record Ctx(AccountEntity account, ClassroomEntity classroom, boolean teacher, boolean admin) {
+        /** Sees practice-level data of every student: the owning Teacher, or an Admin (read side only). */
+        boolean staff() { return teacher || admin; }
+    }
 
     /**
-     * The owning Teacher or an ACTIVE-membership student, both with an ACTIVE account (FR-CLS-009: a suspended or
+     * The owning Teacher, an ACTIVE-membership student or an Admin (read-only), all with an ACTIVE account (FR-CLS-009: a suspended or
      * deactivated account reaches no learning feature, reads included). A student of a classroom whose owner is
      * inactive still reads; {@link #requireStudentCanWrite} blocks RUN/SUBMIT for them (FR-CLS-010).
      */
@@ -520,11 +525,12 @@ public class PracticeService {
         var account = accounts.findById(actorId).orElseThrow(() -> forbidden("Account access denied"));
         if (account.getStatus() != AccountStatus.ACTIVE) throw forbidden("Inactive accounts cannot access classroom practice");
         var classroom = classrooms.findById(classroomId).orElseThrow(() -> new ResourceNotFoundException("Classroom", classroomId));
+        if (account.getRole() == AccountRole.ADMIN) return new Ctx(account, classroom, false, true);
         if (account.getRole() == AccountRole.TEACHER && classroom.getOwner().getId().equals(actorId)) {
-            return new Ctx(account, classroom, true);
+            return new Ctx(account, classroom, true, false);
         }
         if (account.getRole() == AccountRole.STUDENT && memberships.findByClassroomIdAndStudentId(classroomId, actorId)
-                .map(m -> m.getStatus() == MembershipStatus.ACTIVE).orElse(false)) return new Ctx(account, classroom, false);
+                .map(m -> m.getStatus() == MembershipStatus.ACTIVE).orElse(false)) return new Ctx(account, classroom, false, false);
         throw forbidden("Only the classroom owner or an active member may access practices");
     }
 
@@ -534,9 +540,16 @@ public class PracticeService {
         return ctx;
     }
 
+    /** Owner Teacher or Admin, for read-only monitoring. Hidden testcases and every write stay Teacher-only. */
+    private Ctx staff(UUID actorId, UUID classroomId) {
+        var ctx = participant(actorId, classroomId);
+        if (!ctx.staff()) throw forbidden("Only the classroom owner or an Admin may perform this operation");
+        return ctx;
+    }
+
     private Ctx student(UUID actorId, UUID classroomId) {
         var ctx = participant(actorId, classroomId);
-        if (ctx.teacher()) throw forbidden("Only a student member may perform this operation");
+        if (ctx.teacher() || ctx.admin()) throw forbidden("Only a student member may perform this operation");
         return ctx;
     }
 

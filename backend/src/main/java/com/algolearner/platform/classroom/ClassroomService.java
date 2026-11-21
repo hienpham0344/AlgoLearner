@@ -45,15 +45,14 @@ public class ClassroomService {
 
     public ClassroomService(ClassroomRepository classrooms, ClassroomMembershipRepository memberships,
                             ClassroomJoinRequestRepository requests, ClassroomInvitationRepository invitations,
-                            NotificationRepository notifications, AccountRepository accounts,
-                            ClassroomPracticeRepository practices, Clock clock,
-                            ClassroomPairLock pairLock, EntityManager entityManager,
-                            AuditService audit, AccountIdentityResolver identityResolver) {
+                            NotificationRepository notifications, AccountRepository accounts, Clock clock,
+                            ClassroomPairLock pairLock, EntityManager entityManager, AuditService audit, AccountIdentityResolver identityResolver,
+                            ClassroomPracticeRepository practices) {
         this.classrooms = classrooms; this.memberships = memberships; this.requests = requests;
-        this.invitations = invitations; this.notifications = notifications; this.accounts = accounts;
-        this.practices = practices; this.clock = clock;
+        this.invitations = invitations; this.notifications = notifications; this.accounts = accounts; this.clock = clock;
         this.pairLock = pairLock; this.entityManager = entityManager;
         this.audit = audit; this.identityResolver = identityResolver;
+        this.practices = practices;
     }
 
     public View get(UUID actorId, UUID classroomId) {

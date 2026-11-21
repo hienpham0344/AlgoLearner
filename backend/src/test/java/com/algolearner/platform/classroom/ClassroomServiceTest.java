@@ -25,7 +25,7 @@ class ClassroomServiceTest {
     private final EntityManager entityManager = mock(EntityManager.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
     private final com.algolearner.platform.practice.ClassroomPracticeRepository practices = mock(com.algolearner.platform.practice.ClassroomPracticeRepository.class);
-    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts));
+    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts), practices);
 
     @Test
     void invitationCreatesNotificationForInvitedStudent() {

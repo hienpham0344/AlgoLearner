@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,15 +41,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:practice-api;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.flyway.enabled=false", "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false",
+        "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false",
         "app.security.jwt.issuer=https://issuer.example.test", "app.security.jwt.audience=practice-tests",
         "app.security.jwt.jwk-set-uri=https://issuer.example.test/.well-known/jwks.json"})
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
-class PracticeApiTest {
+@EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = "jdbc:postgresql:.*")
+class PracticeApiTest extends com.algolearner.platform.support.PostgresIntegrationTest {
     private static final String BASE = "/api/v1/classrooms/{c}/practices";
     private static final String HIDDEN_OUT = "HIDDEN-EXPECTED-42";
     private static volatile PracticeVerdict nextVerdict = PracticeVerdict.ACCEPTED;
@@ -632,6 +632,39 @@ class PracticeApiTest {
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.errorCode").value("PRACTICE_NOT_READY"));
         mvc.perform(post(BASE + "/{p}/status", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.errorCode").value("PRACTICE_INVALID_STATUS_TRANSITION"));
+    }
+
+    @Test @DisplayName("Admin can read practices, progress and submissions of any class; every write and hidden testcase is 403")
+    void adminIsReadOnly() throws Exception {
+        AccountEntity admin = account("admin", AccountRole.ADMIN);
+        String id = publishedPractice(null);
+        String submission = submit(student, id);
+
+        mvc.perform(get(BASE, classroom.getId()).with(actor(admin))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1));
+        String detail = mvc.perform(get(BASE + "/{p}", classroom.getId(), id).with(actor(admin))).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(detail).doesNotContain(HIDDEN_OUT).doesNotContain("HIDDEN-INPUT");
+        mvc.perform(get(BASE + "/{p}/progress", classroom.getId(), id).with(actor(admin))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(2));
+        mvc.perform(get(BASE + "/{p}/submissions", classroom.getId(), id).with(actor(admin))).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items.length()").value(1)).andExpect(jsonPath("$.data.items[0].testsPassed").value(2));
+        mvc.perform(get(BASE + "/{p}/submissions/{s}", classroom.getId(), id, submission).with(actor(admin))).andExpect(status().isOk());
+
+        mvc.perform(get(BASE + "/{p}/testcases", classroom.getId(), id).with(actor(admin))).andExpect(status().isForbidden());
+        mvc.perform(get(BASE + "/{p}/submissions/me", classroom.getId(), id).with(actor(admin))).andExpect(status().isForbidden());
+        mvc.perform(post(BASE + "/{p}/run", classroom.getId(), id).with(actor(admin)).contentType(MediaType.APPLICATION_JSON).content(codeBody()))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(BASE + "/{p}/submit", classroom.getId(), id).with(actor(admin)).contentType(MediaType.APPLICATION_JSON).content(codeBody()))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(BASE, classroom.getId()).with(actor(admin)).contentType(MediaType.APPLICATION_JSON).content(createJson("", false)))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch(BASE + "/{p}", classroom.getId(), id).with(actor(admin)).contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"x\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(BASE + "/{p}/status", classroom.getId(), id).with(actor(admin)).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete(BASE + "/{p}", classroom.getId(), id).with(actor(admin))).andExpect(status().isForbidden());
+        assertThat(submissions.count()).isEqualTo(1);
     }
 
     // ---- helpers
