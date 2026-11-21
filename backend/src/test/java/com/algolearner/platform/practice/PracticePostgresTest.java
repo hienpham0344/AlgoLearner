@@ -133,6 +133,7 @@ class PracticePostgresTest extends com.algolearner.platform.support.PostgresInte
     @AfterEach
     void cleanUp() {
         // committed data must not leak into the other (rolled-back) test classes sharing this schema
+        jdbc.update("DELETE FROM tbl_audit_log WHERE actor_id IN (?, ?)", teacher.getId(), student.getId());
         jdbc.update("DELETE FROM tbl_practice_completion WHERE practice_id = ?", practiceId);
         jdbc.update("DELETE FROM tbl_practice_submission WHERE practice_id = ?", practiceId);
         jdbc.update("DELETE FROM tbl_practice_testcase WHERE practice_id = ?", practiceId);

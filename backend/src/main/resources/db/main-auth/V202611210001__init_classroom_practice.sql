@@ -69,3 +69,9 @@ CREATE TABLE tbl_practice_completion (
 );
 CREATE INDEX idx_practice_completion_practice_id ON tbl_practice_completion(practice_id);
 CREATE INDEX idx_practice_completion_submission_id ON tbl_practice_completion(first_accepted_submission_id);
+
+-- Same protection as every other application table (V202611110002): RLS stays enabled on tbl_*.
+ALTER TABLE tbl_classroom_practice ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_practice_testcase ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_practice_submission ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_practice_completion ENABLE ROW LEVEL SECURITY;

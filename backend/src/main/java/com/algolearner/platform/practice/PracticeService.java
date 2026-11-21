@@ -3,6 +3,7 @@ package com.algolearner.platform.practice;
 import com.algolearner.platform.auth.AccountEntity;
 import com.algolearner.platform.auth.AccountRepository;
 import com.algolearner.platform.auth.AccountRole;
+import com.algolearner.platform.audit.AuditService;
 import com.algolearner.platform.auth.AccountStatus;
 import com.algolearner.platform.classroom.ClassroomEntity;
 import com.algolearner.platform.classroom.ClassroomMembershipEntity;
@@ -20,6 +21,7 @@ import com.algolearner.platform.practice.PracticeDtos.*;
 import com.algolearner.platform.practice.PracticeJudgePort.JudgeCase;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -72,6 +74,7 @@ public class PracticeService {
     private final LessonStatusPort lessons;
     private final RunRateLimiter runLimiter;
     private final Clock clock;
+    private final ObjectProvider<AuditService> audit;
     private final TransactionTemplate readTx;
     private final TransactionTemplate writeTx;
 
@@ -80,11 +83,11 @@ public class PracticeService {
                            PracticeTestcaseRepository testcases, PracticeSubmissionRepository submissions,
                            PracticeCompletionRepository completions, PracticeJudgePort judge,
                            LessonStatusPort lessons, RunRateLimiter runLimiter, Clock clock,
-                           PlatformTransactionManager transactionManager) {
+                           PlatformTransactionManager transactionManager, ObjectProvider<AuditService> audit) {
         this.classrooms = classrooms; this.memberships = memberships; this.accounts = accounts;
         this.practices = practices; this.testcases = testcases; this.submissions = submissions;
         this.completions = completions; this.judge = judge; this.lessons = lessons;
-        this.runLimiter = runLimiter; this.clock = clock;
+        this.runLimiter = runLimiter; this.clock = clock; this.audit = audit;
         this.readTx = new TransactionTemplate(transactionManager);
         this.readTx.setReadOnly(true);
         this.writeTx = new TransactionTemplate(transactionManager);
@@ -123,9 +126,11 @@ public class PracticeService {
             }
             testcases.flush();
         }
+        audit(actorId, "PRACTICE_CREATE", practice.getId(), null, PracticeStatus.DRAFT.name());
         if (initial == PracticeStatus.PUBLISHED) {
             requireReady(practice, "Publishing needs at least one sample and one hidden testcase");
             practice.setStatus(PracticeStatus.PUBLISHED);
+            audit(actorId, "PRACTICE_PUBLISH", practice.getId(), PracticeStatus.DRAFT.name(), PracticeStatus.PUBLISHED.name());
         }
         return detailFor(practice, null);
     }
@@ -178,7 +183,10 @@ public class PracticeService {
                     "Cannot move practice from " + practice.getStatus() + " to " + input.status());
         }
         if (input.status() == PracticeStatus.PUBLISHED) requireReady(practice, "Publishing needs at least one sample and one hidden testcase");
+        PracticeStatus before = practice.getStatus();
         practice.setStatus(input.status());
+        audit(actorId, input.status() == PracticeStatus.PUBLISHED ? "PRACTICE_PUBLISH" : "PRACTICE_ARCHIVE",
+                practice.getId(), before.name(), input.status().name());
         return detailFor(practice, null);
     }
 
@@ -191,6 +199,7 @@ public class PracticeService {
         if (practice.getStatus() != PracticeStatus.DRAFT) throw new ApiException(ErrorCode.PRACTICE_NOT_DELETABLE);
         testcases.deleteByPracticeId(practiceId);
         practices.delete(practice);
+        audit(actorId, "PRACTICE_DELETE", practiceId, PracticeStatus.DRAFT.name(), null);
     }
 
     // ------------------------------------------------------------------ teacher: testcases (versioned)
@@ -208,7 +217,7 @@ public class PracticeService {
         requireActiveClassroom(ctx.classroom());
         var practice = lockedPractice(classroomId, practiceId);
         requireNotArchived(practice);
-        openEditableVersion(practice, rejudge);
+        openEditableVersion(actorId, practice, rejudge);
         int version = practice.getTestcaseVersion();
         int order = input.orderIndex() != null ? input.orderIndex()
                 : testcases.findByPracticeIdAndVersionOrderByOrderIndexAsc(practiceId, version).size();
@@ -225,7 +234,7 @@ public class PracticeService {
         var practice = lockedPractice(classroomId, practiceId);
         requireNotArchived(practice);
         var original = currentTestcase(practice, testcaseId);
-        var copies = openEditableVersion(practice, rejudge);
+        var copies = openEditableVersion(actorId, practice, rejudge);
         var target = copies == null ? original : copies.get(original.getId());
         target.setInput(input.input());
         target.setExpectedOutput(input.expectedOutput());
@@ -243,7 +252,7 @@ public class PracticeService {
         var practice = lockedPractice(classroomId, practiceId);
         requireNotArchived(practice);
         var original = currentTestcase(practice, testcaseId);
-        var copies = openEditableVersion(practice, rejudge);
+        var copies = openEditableVersion(actorId, practice, rejudge);
         testcases.delete(copies == null ? original : copies.get(original.getId()));
         testcases.flush();
         keepPublishedReady(practice);
@@ -255,7 +264,7 @@ public class PracticeService {
      * or null when the edit can happen in place. {@code rejudge} flags every older-version submission
      * PENDING_REJUDGE; verdicts and completions stay as they were until the 4.9 rejudge job runs.
      */
-    private Map<UUID, PracticeTestcaseEntity> openEditableVersion(ClassroomPracticeEntity practice, boolean rejudge) {
+    private Map<UUID, PracticeTestcaseEntity> openEditableVersion(UUID actorId, ClassroomPracticeEntity practice, boolean rejudge) {
         Map<UUID, PracticeTestcaseEntity> copies = null;
         int current = practice.getTestcaseVersion();
         if (submissions.existsByPracticeIdAndTestcaseVersion(practice.getId(), current)) {
@@ -275,8 +284,12 @@ public class PracticeService {
             }
             practice.setTestcaseVersion(next);
             testcases.flush();
+            audit(actorId, "PRACTICE_TESTCASE_VERSION", practice.getId(), "v" + current, "v" + next);
         }
-        if (rejudge) submissions.markForRejudge(practice.getId(), practice.getTestcaseVersion(), RejudgeStatus.PENDING_REJUDGE);
+        if (rejudge) {
+            int flagged = submissions.markForRejudge(practice.getId(), practice.getTestcaseVersion(), RejudgeStatus.PENDING_REJUDGE);
+            audit(actorId, "PRACTICE_REJUDGE_REQUESTED", practice.getId(), null, "submissions=" + flagged);
+        }
         return copies;
     }
 
@@ -487,6 +500,17 @@ public class PracticeService {
                 .orElseThrow(() -> new ResourceNotFoundException("Submission", submissionId));
         if (!ctx.staff() && !submission.getStudent().getId().equals(actorId)) throw forbidden("Submission belongs to another student");
         return PracticeMapper.submission(submission);
+    }
+
+    // ------------------------------------------------------------------ audit (SRS 4.16)
+
+    /**
+     * Sensitive teacher actions are written to the audit log in the caller's transaction. Only states and counts are
+     * recorded, never source code or testcase content. The audit module is absent in the {@code mock} profile.
+     */
+    private void audit(UUID actorId, String action, UUID practiceId, String before, String after) {
+        audit.ifAvailable(log -> log.record(actorId, AccountRole.TEACHER.name(), "CLASSROOM_PRACTICE",
+                practiceId.toString(), action, before, after, null, null));
     }
 
     // ------------------------------------------------------------------ judge boundary

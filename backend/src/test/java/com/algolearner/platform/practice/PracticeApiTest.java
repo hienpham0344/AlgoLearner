@@ -109,6 +109,7 @@ class PracticeApiTest extends com.algolearner.platform.support.PostgresIntegrati
     @Autowired ClassroomRepository classrooms;
     @Autowired ClassroomMembershipRepository memberships;
     @Autowired PracticeSubmissionRepository submissions;
+    @Autowired org.springframework.jdbc.core.JdbcTemplate jdbc;
     @Autowired PracticeCompletionRepository completions;
     @Autowired ClassroomPracticeRepository practices;
     @jakarta.persistence.PersistenceContext jakarta.persistence.EntityManager entityManager;
@@ -140,6 +141,7 @@ class PracticeApiTest extends com.algolearner.platform.support.PostgresIntegrati
         classrooms.save(classroom);
         join(student);
         join(otherStudent);
+        entityManager.flush(); // audit rows (JDBC) reference these accounts
     }
 
     // ================================================================ PRC-01 (student)
@@ -667,6 +669,27 @@ class PracticeApiTest extends com.algolearner.platform.support.PostgresIntegrati
         assertThat(submissions.count()).isEqualTo(1);
     }
 
+    @Test @DisplayName("SRS 4.16: create, publish, version/rejudge and archive are audited, with states only")
+    void sensitiveActionsAreAudited() throws Exception {
+        String id = publishedPractice(null);
+        submit(student, id);
+        mvc.perform(put(BASE + "/{p}/testcases/{t}", classroom.getId(), id, hiddenTestcaseId(id)).param("rejudge", "true").with(actor(teacher))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"input\":\"NEW-IN\",\"expectedOutput\":\"NEW-OUT\",\"sample\":false}"))
+                .andExpect(status().isOk());
+        mvc.perform(post(BASE + "/{p}/status", classroom.getId(), id).with(actor(teacher)).contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ARCHIVED\"}"))
+                .andExpect(status().isOk());
+
+        List<String> actions = jdbc.queryForList("SELECT action FROM tbl_audit_log WHERE target_type = 'CLASSROOM_PRACTICE' AND target_id = ? ORDER BY id",
+                String.class, id);
+        assertThat(actions).containsExactly("PRACTICE_CREATE", "PRACTICE_PUBLISH", "PRACTICE_TESTCASE_VERSION", "PRACTICE_REJUDGE_REQUESTED", "PRACTICE_ARCHIVE");
+        assertThat(jdbc.queryForList("SELECT coalesce(before_state, '') || '>' || coalesce(after_state, '') FROM tbl_audit_log WHERE target_id = ? ORDER BY id",
+                String.class, id)).doesNotContain("class Main {}").doesNotContain(HIDDEN_OUT);
+        // reads never write audit rows
+        long before = jdbc.queryForObject("SELECT count(*) FROM tbl_audit_log WHERE target_id = ?", Long.class, id);
+        mvc.perform(get(BASE + "/{p}", classroom.getId(), id).with(actor(teacher))).andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM tbl_audit_log WHERE target_id = ?", Long.class, id)).isEqualTo(before);
+    }
+
     // ---- helpers
     private String publishedPractice(UUID lessonId) throws Exception {
         String lesson = lessonId == null ? "" : "\"lessonId\":\"" + lessonId + "\",";
@@ -729,7 +752,7 @@ class PracticeApiTest extends com.algolearner.platform.support.PostgresIntegrati
         a.setEmail(username + UUID.randomUUID() + "@example.test");
         a.setRole(role);
         a.setStatus(AccountStatus.ACTIVE);
-        AccountEntity saved = accounts.save(a);
+        AccountEntity saved = accounts.saveAndFlush(a);
         testAccounts.add(saved);
         return saved;
     }

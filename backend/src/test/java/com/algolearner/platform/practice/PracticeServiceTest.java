@@ -1,5 +1,6 @@
 package com.algolearner.platform.practice;
 
+import com.algolearner.platform.audit.AuditService;
 import com.algolearner.platform.auth.AccountEntity;
 import com.algolearner.platform.auth.AccountRepository;
 import com.algolearner.platform.auth.AccountRole;
@@ -65,6 +66,7 @@ class PracticeServiceTest {
     };
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-15T03:30:00Z"), ZoneOffset.UTC);
     private final RunRateLimiter limiter = new RunRateLimiter(clock);
+    private final AuditService audit = mock(AuditService.class);
     private PracticeService service;
 
     private AccountEntity teacher;
@@ -79,7 +81,7 @@ class PracticeServiceTest {
     @BeforeEach
     void setUp() {
         service = new PracticeService(classrooms, memberships, accounts, practices, testcases, submissions, completions,
-                judge, lessons, limiter, clock, transactionManager);
+                judge, lessons, limiter, clock, transactionManager, auditProvider(audit));
         teacher = account(AccountRole.TEACHER);
         otherTeacher = account(AccountRole.TEACHER);
         student = account(AccountRole.STUDENT);
@@ -683,10 +685,56 @@ class PracticeServiceTest {
         assertForbidden(() -> service.get(admin.getId(), classroom.getId(), practice.getId()));
     }
 
+    // ================================================================ audit (SRS 4.16)
+
+    @Test @DisplayName("sensitive teacher actions are audited with states only: create, publish, archive, delete, version, rejudge")
+    void sensitiveActionsAreAudited() {
+        var draft = service.create(teacher.getId(), classroom.getId(), new CreatePractice("T", null, null, null, Set.of(PracticeLanguage.JAVA),
+                null, null, null, null, List.of(new TestcaseInput("1", "2", true, null), new TestcaseInput("3", "4", false, null)), null, null));
+        verify(audit).record(teacher.getId(), "TEACHER", "CLASSROOM_PRACTICE", draft.id().toString(), "PRACTICE_CREATE", null, "DRAFT", null, null);
+
+        service.changeStatus(teacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED));
+        verify(audit).record(teacher.getId(), "TEACHER", "CLASSROOM_PRACTICE", practice.getId().toString(), "PRACTICE_ARCHIVE", "PUBLISHED", "ARCHIVED", null, null);
+
+        practice.setStatus(PracticeStatus.DRAFT);
+        service.changeStatus(teacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.PUBLISHED));
+        verify(audit).record(teacher.getId(), "TEACHER", "CLASSROOM_PRACTICE", practice.getId().toString(), "PRACTICE_PUBLISH", "DRAFT", "PUBLISHED", null, null);
+
+        practice.setStatus(PracticeStatus.DRAFT);
+        service.delete(teacher.getId(), classroom.getId(), practice.getId());
+        verify(audit).record(teacher.getId(), "TEACHER", "CLASSROOM_PRACTICE", practice.getId().toString(), "PRACTICE_DELETE", "DRAFT", null, null, null);
+
+        practice.setStatus(PracticeStatus.PUBLISHED);
+        when(submissions.existsByPracticeIdAndTestcaseVersion(practice.getId(), 1)).thenReturn(true);
+        when(submissions.markForRejudge(practice.getId(), 2, RejudgeStatus.PENDING_REJUDGE)).thenReturn(3);
+        service.addTestcase(teacher.getId(), classroom.getId(), practice.getId(), new TestcaseInput("C", "D", false, null), true);
+        verify(audit).record(teacher.getId(), "TEACHER", "CLASSROOM_PRACTICE", practice.getId().toString(), "PRACTICE_TESTCASE_VERSION", "v1", "v2", null, null);
+        verify(audit).record(teacher.getId(), "TEACHER", "CLASSROOM_PRACTICE", practice.getId().toString(), "PRACTICE_REJUDGE_REQUESTED", null, "submissions=3", null, null);
+    }
+
+    @Test @DisplayName("a student's RUN/SUBMIT and a rejected teacher action write no audit row; no audit module (mock profile) is fine")
+    void auditIsLimitedAndOptional() {
+        when(judge.submit(any())).thenReturn(new PracticeJudgePort.SubmitResult(PracticeVerdict.ACCEPTED, 2, 5, 1024, null));
+        service.submit(student.getId(), classroom.getId(), practice.getId(), code());
+        assertForbidden(() -> service.changeStatus(otherTeacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED)));
+        verifyNoInteractions(audit);
+
+        var withoutAudit = new PracticeService(classrooms, memberships, accounts, practices, testcases, submissions, completions,
+                judge, lessons, limiter, clock, transactionManager, auditProvider(null));
+        assertThat(withoutAudit.changeStatus(teacher.getId(), classroom.getId(), practice.getId(), new ChangeStatus(PracticeStatus.ARCHIVED)).status())
+                .isEqualTo(PracticeStatus.ARCHIVED);
+    }
+
     // ---- helpers
     private static void assertForbidden(Runnable call) {
         assertThatThrownBy(call::run).isInstanceOfSatisfying(ApiException.class,
                 e -> assertThat(e.getErrorCode()).isEqualTo("FORBIDDEN_OPERATION"));
+    }
+
+    private static org.springframework.beans.factory.ObjectProvider<AuditService> auditProvider(AuditService audit) {
+        var factory = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        if (audit != null) factory.addBean("audit", audit);
+        return factory.getBeanProvider(AuditService.class);
     }
 
     private static CodeRequest code() { return new CodeRequest(PracticeLanguage.JAVA, "class Main {}"); }
