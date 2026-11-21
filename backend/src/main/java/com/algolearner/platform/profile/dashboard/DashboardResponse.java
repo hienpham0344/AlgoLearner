@@ -16,7 +16,13 @@ public final class DashboardResponse {
                        String title, Instant opensAt, Instant effectiveClosesAt) { }
     public record Course(UUID courseId, String title, int completedUnits, int totalUnits,
                          double progressPercent) { }
-    public record Notification(UUID notificationId, String title, Instant createdAt, Instant readAt) { }
+    public record Notification(UUID notificationId, String title, Instant createdAt, Instant readAt,
+                               String type, String message, String targetType, UUID targetId,
+                               UUID classroomId, String actionUrl) {
+        public Notification(UUID notificationId, String title, Instant createdAt, Instant readAt) {
+            this(notificationId, title, createdAt, readAt, "SYSTEM", null, "SYSTEM", null, null, null);
+        }
+    }
     public record Streak(int currentStreak, int highestStreak) { }
     public record Practice(long solved) { }
     public record Contributions(long courseCount, long problemCount) { }

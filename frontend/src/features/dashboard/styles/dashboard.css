@@ -1,3 +1,22 @@
+.dashboard-lessons { margin: 0 0 30px; padding: 24px; border: 1px solid #d8ded7; border-radius: 14px; background: #fff; scroll-margin-top: 95px; }
+.dashboard-lessons-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.dashboard-lessons .dashboard-eyebrow { color: #526259; }
+.dashboard-lessons-heading h2 { margin: 7px 0; color: #222e27; font-size: 22px; font-weight: 700; letter-spacing: -.035em; }
+.dashboard-lessons-heading p, .dashboard-lessons-state { color: #536056; font-size: 13px; line-height: 1.7; }
+.dashboard-lessons-heading > a { display: inline-flex; align-items: center; gap: 6px; color: #315641; font-size: 12px; font-weight: 650; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.dashboard-lessons-classes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); list-style: none; margin: 0; padding: 0; gap: 12px; }
+.dashboard-lessons-classes a { display: flex; align-items: center; gap: 14px; height: 100%; padding: 18px; background: #f5f7f2; border: 1px solid #dde5d8; border-radius: 9px; color: #294c36; text-decoration: none; }
+.dashboard-lessons-classes a:hover { background: #eaf0e5; border-color: #8fa78b; }
+.dashboard-lessons-classes a > div { flex: 1; min-width: 0; }
+.dashboard-lessons-classes a > svg { flex-shrink: 0; }
+.dashboard-lessons-classes strong { display: block; font-size: 14px; font-weight: 650; line-height: 1.5; overflow-wrap: anywhere; }
+.dashboard-lessons-classes span { display: block; margin-top: 5px; color: #50634f; font-size: 12px; }
+.dashboard-lessons button { padding: 7px 12px; border: 1px solid #b3c2ae; border-radius: 6px; color: #2f5037; background: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.dashboard-lessons-state button { margin-top: 10px; }
+.dashboard-lessons-pages { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 18px; font-size: 12px; }
+.dashboard-lessons-pages button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 640px) { .dashboard-lessons { padding: 20px 17px; } .dashboard-lessons-heading { align-items: flex-start; flex-direction: column; gap: 9px; } }
+
 .student-dashboard {
   --dash-ink: #222427;
   --dash-muted: #777b81;
@@ -158,7 +177,9 @@
 .dashboard-topbar-path {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 7px;
+  min-width: 0;
   color: #777b80;
   font-size: 11px;
 }
@@ -1583,8 +1604,21 @@ a.dashboard-notification-row:hover {
   }
 
   .dashboard-topbar {
+    flex-wrap: wrap;
     min-height: 57px;
-    padding-inline: 20px;
+    padding: 10px 16px;
+    gap: 10px;
+  }
+
+  .dashboard-topbar-path {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .dashboard-topbar-actions {
+    gap: 12px;
+    margin-left: auto;
   }
 
   .dashboard-content {

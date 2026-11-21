@@ -39,6 +39,45 @@ export interface JoinResultRecord {
   requestId: string | null;
 }
 
+export interface InvitationRecord {
+  id: string;
+  classroomId: string;
+  classroomName: string;
+  studentId: string;
+  studentEmail: string;
+  status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'REVOKED' | 'EXPIRED';
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface InvitationNotificationRecord {
+  id: string;
+  type: string;
+  title: string;
+  message: string | null;
+  targetType: string;
+  targetId: string | null;
+  actionUrl: string | null;
+  invitationId: string | null;
+  classroomId: string | null;
+  classroomName: string | null;
+  status: InvitationRecord['status'] | string;
+  expiresAt: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export const classroomKeys = {
+  all: ['classrooms'] as const,
+  list: (pageNumber: number) => [...classroomKeys.all, 'list', pageNumber] as const,
+  detail: (id: string) => [...classroomKeys.all, 'detail', id] as const,
+  members: (id: string, pageNumber: number) => [...classroomKeys.all, 'members', id, pageNumber] as const,
+  requests: (id: string, pageNumber: number) => [...classroomKeys.all, 'requests', id, pageNumber] as const,
+  invitations: (id: string, pageNumber: number) => [...classroomKeys.all, 'invitations', id, pageNumber] as const,
+  myInvitations: (pageNumber: number) => [...classroomKeys.all, 'my-invitations', pageNumber] as const,
+  notifications: (pageNumber: number) => ['notifications', 'invitations', pageNumber] as const,
+};
+
 const unwrap = <T>(response: { data: ApiResponse<T> }): T => response.data.data;
 const page = <T>(response: { data: PageResponse<T> }): PaginatedData<T> => response.data.data;
 
@@ -66,6 +105,15 @@ export const classroomApi = {
   approve: async (id: string, requestId: string) => { await apiClient.post(`/classrooms/${id}/join-requests/${requestId}/approve`); },
   invite: async (id: string, email: string, expiresAt: string) =>
     unwrap(await apiClient.post<ApiResponse<string>>(`/classrooms/${id}/invitations`, { email, expiresAt })),
+  invitations: async (id: string, pageNumber = 0): Promise<PaginatedData<InvitationRecord>> =>
+    page(await apiClient.get<PageResponse<InvitationRecord>>(`/classrooms/${id}/invitations`, { params: { page: pageNumber, size: 20 } })),
+  myInvitations: async (pageNumber = 0): Promise<PaginatedData<InvitationRecord>> =>
+    page(await apiClient.get<PageResponse<InvitationRecord>>('/classrooms/invitations/me', { params: { page: pageNumber, size: 20 } })),
+  notifications: async (pageNumber = 0): Promise<PaginatedData<InvitationNotificationRecord>> =>
+    page(await apiClient.get<PageResponse<InvitationNotificationRecord>>('/notifications', { params: { page: pageNumber, size: 20 } })),
+  markNotificationRead: async (notificationId: string): Promise<void> => {
+    await apiClient.post(`/notifications/${encodeURIComponent(notificationId)}/read`);
+  },
   revoke: async (id: string, invitationId: string) => { await apiClient.post(`/classrooms/${id}/invitations/${invitationId}/revoke`); },
   acceptInvitation: async (invitationId: string) => { await apiClient.post(`/classrooms/invitations/${invitationId}/accept`); },
   declineInvitation: async (invitationId: string) => { await apiClient.post(`/classrooms/invitations/${invitationId}/decline`); },
@@ -74,15 +122,13 @@ export const classroomApi = {
 
 export function classroomError(error: unknown): string {
   if (isAxiosError<ApiErrorResponse>(error)) {
+    if (error.response?.data?.errorCode === 'INVITATION_UNAVAILABLE') return 'Lời mời đã hết hạn.';
     return error.response?.data?.message || (error.response ? `HTTP ${error.response.status}` : 'Cannot connect to the classroom API.');
   }
   return error instanceof Error ? error.message : 'Classroom request failed.';
 }
 
 export function classroomApiUnavailable(error: unknown): boolean {
-  if (!isAxiosError(error)) return false;
-  if (!error.response) return true;
-  if (error.response.status === 404) return true;
-  // Vite returns a plain-text proxy error when its backend target is offline.
-  return import.meta.env.DEV && error.response.status >= 500 && typeof error.response.data === 'string';
+  return isAxiosError(error) && error.response?.headers?.['x-algolearner-source'] === 'mock'
+    && error.response?.data?.errorCode === 'OFFLINE_MOCK';
 }

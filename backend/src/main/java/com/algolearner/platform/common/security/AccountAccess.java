@@ -6,11 +6,13 @@ import java.time.Clock;
 import java.util.UUID;
 @Service
 public class AccountAccess {
-    private final AccountAccessRepository repository;
+    private final AccountRepository repository;
     private final Clock clock;
-    public AccountAccess(AccountAccessRepository repository, Clock clock) { this.repository=repository; this.clock=clock; }
+    public AccountAccess(AccountRepository repository, Clock clock) { this.repository=repository; this.clock=clock; }
     public String activeRole(UUID id) {
-        return repository.activeRole(id, clock.instant()).orElseThrow(() ->
+        return repository.account(id).stream().filter(a -> a.status().equals("ACTIVE"))
+            .filter(a -> repository.restrictions().stream().noneMatch(r -> r.accountId().equals(id) && r.active(clock.instant())))
+            .map(AccountRepository.Account::role).findFirst().orElseThrow(() ->
                 new ApiException(ErrorCode.FORBIDDEN_OPERATION,"Account access denied"));
     }
 }

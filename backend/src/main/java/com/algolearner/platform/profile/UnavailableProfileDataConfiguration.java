@@ -11,7 +11,7 @@ import java.lang.reflect.Proxy;
 
 /** Fail closed until the 4.2 persistence adapters are installed. */
 @Configuration
-@Profile("!mock")
+@Profile("!mock & !internal-auth")
 public class UnavailableProfileDataConfiguration {
     @Bean
     ProfileRepository unavailableProfileRepository() {

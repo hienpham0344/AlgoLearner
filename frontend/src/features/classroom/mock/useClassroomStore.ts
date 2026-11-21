@@ -19,11 +19,34 @@ import {
   INITIAL_MOCK_NOTIFICATIONS,
 } from './classroomMockData';
 
-const STORAGE_KEY_CLASSROOMS = 'algolearn_prototype_classrooms_v1';
+export const STORAGE_KEY_CLASSROOMS = 'algolearner_prototype_classrooms_v3';
 const STORAGE_KEY_ROLE = 'algolearn_prototype_role_v1';
 const STORAGE_KEY_PERSONA = 'algolearn_prototype_persona_v1';
 const STORAGE_KEY_ANNOUNCEMENTS = 'algolearn_prototype_announcements_v1';
 const STORAGE_KEY_NOTIFICATIONS = 'algolearn_prototype_notifications_v1';
+
+export function readStoredClassrooms(): Classroom[] {
+  try {
+    const raw = sessionStorage.getItem(STORAGE_KEY_CLASSROOMS);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // fallback
+  }
+  return INITIAL_MOCK_CLASSROOMS;
+}
+
+export function readStoredPersona(role: DemoRole): DemoPersona {
+  try {
+    const savedId = sessionStorage.getItem(STORAGE_KEY_PERSONA);
+    if (savedId) {
+      const match = DEMO_PERSONAS.find(p => p.id === savedId && p.role === role);
+      if (match) return match;
+    }
+  } catch {
+    // fallback
+  }
+  return DEMO_PERSONAS.find(p => p.role === role) || DEMO_PERSONAS[0];
+}
 
 function generateRandomCode(): string {
   let result = '';
@@ -35,13 +58,7 @@ function generateRandomCode(): string {
 }
 
 function loadInitialClassrooms(): Classroom[] {
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_CLASSROOMS);
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // fallback
-  }
-  return INITIAL_MOCK_CLASSROOMS;
+  return readStoredClassrooms();
 }
 
 function loadInitialAnnouncements(): ClassroomAnnouncement[] {
@@ -88,16 +105,7 @@ function resolveRoleFromUrlOrStorage(): DemoRole {
 }
 
 function loadInitialPersona(role: DemoRole): DemoPersona {
-  try {
-    const savedId = sessionStorage.getItem(STORAGE_KEY_PERSONA);
-    if (savedId) {
-      const match = DEMO_PERSONAS.find(p => p.id === savedId && p.role === role);
-      if (match) return match;
-    }
-  } catch {
-    // fallback
-  }
-  return DEMO_PERSONAS.find(p => p.role === role) || DEMO_PERSONAS[0];
+  return readStoredPersona(role);
 }
 
 export function useClassroomStore(roleOverride?: DemoRole) {
@@ -266,6 +274,22 @@ export function useClassroomStore(roleOverride?: DemoRole) {
               status: 'ARCHIVED',
               joiningOpen: false,
               codeLocked: true,
+              updatedAt: new Date().toISOString(),
+            }
+          : c,
+      ),
+    );
+  }, []);
+
+  const restoreClassroom = useCallback((id: string): void => {
+    setClassrooms(prev =>
+      prev.map(c =>
+        c.id === id
+          ? {
+              ...c,
+              status: 'ACTIVE',
+              joiningOpen: true,
+              codeLocked: false,
               updatedAt: new Date().toISOString(),
             }
           : c,
@@ -909,6 +933,7 @@ export function useClassroomStore(roleOverride?: DemoRole) {
     createClassroom,
     updateClassroom,
     archiveClassroom,
+    restoreClassroom,
     deleteClassroom,
     regenerateCode,
     updateJoinConfig,
