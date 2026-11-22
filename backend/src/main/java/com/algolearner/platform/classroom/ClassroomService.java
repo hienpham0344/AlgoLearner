@@ -4,6 +4,7 @@ import com.algolearner.platform.auth.*;
 import com.algolearner.platform.common.dto.PageResponse;
 import com.algolearner.platform.common.exception.AppException;
 import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import com.algolearner.platform.practice.ClassroomPracticeRepository;
 import com.algolearner.platform.notification.NotificationEntity;
 import com.algolearner.platform.notification.NotificationRepository;
 import jakarta.persistence.EntityManager;
@@ -34,6 +35,7 @@ public class ClassroomService {
     private final ClassroomInvitationRepository invitations;
     private final NotificationRepository notifications;
     private final AccountRepository accounts;
+    private final ClassroomPracticeRepository practices;
     private final ClassroomPairLock pairLock;
     private final EntityManager entityManager;
     private final Clock clock;
@@ -44,11 +46,13 @@ public class ClassroomService {
     public ClassroomService(ClassroomRepository classrooms, ClassroomMembershipRepository memberships,
                             ClassroomJoinRequestRepository requests, ClassroomInvitationRepository invitations,
                             NotificationRepository notifications, AccountRepository accounts, Clock clock,
-                            ClassroomPairLock pairLock, EntityManager entityManager, AuditService audit, AccountIdentityResolver identityResolver) {
+                            ClassroomPairLock pairLock, EntityManager entityManager, AuditService audit, AccountIdentityResolver identityResolver,
+                            ClassroomPracticeRepository practices) {
         this.classrooms = classrooms; this.memberships = memberships; this.requests = requests;
         this.invitations = invitations; this.notifications = notifications; this.accounts = accounts; this.clock = clock;
         this.pairLock = pairLock; this.entityManager = entityManager;
         this.audit = audit; this.identityResolver = identityResolver;
+        this.practices = practices;
     }
 
     public View get(UUID actorId, UUID classroomId) {
@@ -127,7 +131,7 @@ public class ClassroomService {
     public void delete(UUID actorId, UUID classroomId) {
         var classroom = ownedOrAdminWritable(actorId, classroomId);
         if (memberships.existsByClassroomId(classroomId) || requests.existsByClassroomId(classroomId)
-                || invitations.existsByClassroomId(classroomId)) {
+                || invitations.existsByClassroomId(classroomId) || practices.existsByClassroomId(classroomId)) {
             throw conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve related classroom data");
         }
         classrooms.delete(classroom);

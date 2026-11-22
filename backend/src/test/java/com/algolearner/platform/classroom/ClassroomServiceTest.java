@@ -24,7 +24,8 @@ class ClassroomServiceTest {
     private final ClassroomPairLock pairLock = mock(ClassroomPairLock.class);
     private final EntityManager entityManager = mock(EntityManager.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
-    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts));
+    private final com.algolearner.platform.practice.ClassroomPracticeRepository practices = mock(com.algolearner.platform.practice.ClassroomPracticeRepository.class);
+    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts), practices);
 
     @Test
     void invitationCreatesNotificationForInvitedStudent() {
@@ -243,6 +244,16 @@ class ClassroomServiceTest {
         var teacher = account(AccountRole.TEACHER); var classroom = classroom(teacher);
         when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher)); when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(memberships.existsByClassroomId(classroom.getId())).thenReturn(true);
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
+        verify(classrooms, never()).delete(any());
+    }
+
+    @Test
+    void deleteRejectsClassWithPracticesInsteadOfFailingOnTheForeignKey() {
+        var teacher = account(AccountRole.TEACHER); var classroom = classroom(teacher);
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher)); when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(practices.existsByClassroomId(classroom.getId())).thenReturn(true);
         assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
                 .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
         verify(classrooms, never()).delete(any());
