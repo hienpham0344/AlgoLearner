@@ -21,6 +21,13 @@ import { NotificationsPage } from '@/features/dashboard/pages/NotificationsPage'
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { LoadingPreviewPage } from '@/features/dev/LoadingPreviewPage';
 const LessonWorkspacePage = lazy(() => import('@/features/classroom/lessons/pages/LessonWorkspacePage').then(module => ({ default: module.LessonWorkspacePage })));
+const TeacherAssignmentsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentsPage })));
+const TeacherAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentDetailPage })));
+const TeacherSubmissionsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherSubmissionsPage })));
+const StudentAssignmentsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAssignmentsPage })));
+const StudentAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAssignmentDetailPage })));
+const StudentWorkspacePage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentWorkspacePage })));
+const StudentAttemptsHistoryPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAttemptsHistoryPage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -96,6 +103,15 @@ export const App: React.FC = () => {
       <Route path="/teacher/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="TEACHER" /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/lessons" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
+
+      {/* Classroom Assignments Routes (FE 4.6) */}
+      <Route path="/teacher/classrooms/:id/assignments" element={<ProtectedRoute><TeacherAssignmentsPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><TeacherAssignmentDetailPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/assignments/:assignmentId/submissions" element={<ProtectedRoute><TeacherSubmissionsPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments" element={<ProtectedRoute><StudentAssignmentsPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><StudentAssignmentDetailPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments/:assignmentId/workspace" element={<ProtectedRoute><StudentWorkspacePage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments/:assignmentId/attempts" element={<ProtectedRoute><StudentAttemptsHistoryPage /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 

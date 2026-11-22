@@ -8,7 +8,7 @@ import { UserAvatar } from '../../components/UserAvatar';
 import { AvailabilityBadge } from '../../components/AvailabilityBadge';
 import { useClassroomStore } from '../../mock/useClassroomStore';
 import { getLessonCountForClassroom, lessonMockStore } from '../../lessons/mock/lessonMockStore';
-import { ArrowLeft, Users, LogOut, Calendar, BookOpen, BookOpenText, Bell, Pin, CheckCircle2, ArrowUpRight } from 'lucide-react';
+import { ArrowLeft, Users, LogOut, Calendar, BookOpen, BookOpenText, Bell, Pin, CheckCircle2, ArrowUpRight, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 
@@ -188,6 +188,16 @@ export const StudentClassroomDetailPage: React.FC = () => {
           >
             <BookOpenText size={14} className="inline mr-1.5" />
             Class lessons ({getLessonCountForClassroom(classroom.id, 'STUDENT')})
+          </Link>
+        )}
+        {isEnrolled && (
+          <Link
+            to={`/student/classrooms/${encodeURIComponent(classroom.id)}/assignments`}
+            className="classroom-tab-btn"
+            role="tab"
+          >
+            <FileText size={14} className="inline mr-1.5" />
+            Class assignments
           </Link>
         )}
         <button
