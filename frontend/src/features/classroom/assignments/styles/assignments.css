@@ -1,0 +1,22 @@
+/* Custom styles for AlgoLearner Module 4.6 (Classroom Assignments) */
+
+@keyframes pulse-urgent {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.02);
+  }
+}
+
+.animate-pulse-urgent {
+  animation: pulse-urgent 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Accessible focus ring standards */
+.assignment-focus-ring:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}

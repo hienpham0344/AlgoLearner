@@ -18,16 +18,27 @@ import { PublicProfilePage } from '@/features/profile/pages/PublicProfilePage';
 import { AdminAccountsPage } from '@/features/admin/pages/AdminAccountsPage';
 import { PlaceholderPage } from '@/components/common/PlaceholderPage';
 import { NotificationsPage } from '@/features/dashboard/pages/NotificationsPage';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { LoadingPreviewPage } from '@/features/dev/LoadingPreviewPage';
 const LessonWorkspacePage = lazy(() => import('@/features/classroom/lessons/pages/LessonWorkspacePage').then(module => ({ default: module.LessonWorkspacePage })));
+const TeacherAssignmentsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentsPage })));
+const TeacherAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentDetailPage })));
+const TeacherSubmissionsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherSubmissionsPage })));
+const StudentAssignmentsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAssignmentsPage })));
+const StudentAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAssignmentDetailPage })));
+const StudentWorkspacePage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentWorkspacePage })));
+const StudentAttemptsHistoryPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAttemptsHistoryPage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-[#f3f4f6] flex items-center justify-center">
-        <div className="w-8 h-8 rounded-full border-2 border-slate-900 border-t-transparent animate-spin" />
-      </div>
+      <LoadingScreen
+        variant="fullscreen"
+        message="Đang khởi tạo không gian làm việc…"
+        submessage="Đang đồng bộ thông tin phiên làm việc"
+      />
     );
   }
 
@@ -35,7 +46,19 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" replace />;
   }
 
-  return <Suspense fallback={<p role="status" className="p-8">Loading workspace…</p>}>{children}</Suspense>;
+  return (
+    <Suspense
+      fallback={
+        <LoadingScreen
+          variant="page"
+          message="Đang tải dữ liệu trang…"
+          submessage="Vui lòng đợi trong giây lát"
+        />
+      }
+    >
+      {children}
+    </Suspense>
+  );
 };
 
 export const App: React.FC = () => {
@@ -80,6 +103,15 @@ export const App: React.FC = () => {
       <Route path="/teacher/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="TEACHER" /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/lessons" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/lessons/:lessonId" element={<ProtectedRoute><LessonWorkspacePage role="STUDENT" /></ProtectedRoute>} />
+
+      {/* Classroom Assignments Routes (FE 4.6) */}
+      <Route path="/teacher/classrooms/:id/assignments" element={<ProtectedRoute><TeacherAssignmentsPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><TeacherAssignmentDetailPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/assignments/:assignmentId/submissions" element={<ProtectedRoute><TeacherSubmissionsPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments" element={<ProtectedRoute><StudentAssignmentsPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><StudentAssignmentDetailPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments/:assignmentId/workspace" element={<ProtectedRoute><StudentWorkspacePage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/assignments/:assignmentId/attempts" element={<ProtectedRoute><StudentAttemptsHistoryPage /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 
@@ -92,6 +124,9 @@ export const App: React.FC = () => {
       {/* Entry Route Router */}
       <Route path="/classrooms" element={<ClassroomRouterPage />} />
       <Route path="/classrooms/:id" element={<ClassroomRouterPage />} />
+
+      {/* Dev Loading Preview Route */}
+      <Route path="/preview/loading" element={<LoadingPreviewPage />} />
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

@@ -44,6 +44,7 @@ test('backend recovery ends demo session and real login errors never fall back t
   });
   await new Promise<void>((resolve, reject) => { backend.once('error', reject); backend.listen(19999, '127.0.0.1', resolve); });
   try {
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
     await expect(page.getByText('Backend chưa chạy', { exact: false })).toHaveCount(0);
     await page.getByLabel('Username or email').fill('teacher');

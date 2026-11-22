@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsDemoMode } from '@/components/BackendStatusBanner';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import type { ApiErrorResponse } from '@/types/api';
 import { adminAccountKeys, adminAccountsApi, type AdminAccountView } from '../api/adminAccountsApi';
 
@@ -84,7 +85,7 @@ export function AdminAccountsPage() {
     onError: error => setNotice(errorMessage(error)),
   });
 
-  if (isLoading) return <p role="status">Đang tải tài khoản…</p>;
+  if (isLoading) return <LoadingScreen variant="page" message="Đang tải tài khoản quản trị…" />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'ADMIN') return <Navigate to="/dashboard" replace />;
   return <main className="mx-auto min-h-screen max-w-5xl bg-slate-50 px-4 py-8 text-slate-900">
@@ -92,7 +93,7 @@ export function AdminAccountsPage() {
     <h1 className="mt-5 text-3xl font-bold">Quản lý tài khoản</h1>
     <p className="mt-2 text-sm text-slate-600">Đình chỉ, gỡ đình chỉ hoặc kích hoạt lại tài khoản.</p>
     {isDemoMode ? <p role="status" className="mt-6">Cần kết nối backend để quản lý tài khoản.</p>
-      : accounts.isPending ? <p role="status" className="mt-6">Đang tải danh sách…</p>
+      : accounts.isPending ? <LoadingScreen variant="inline" message="Đang tải danh sách tài khoản…" />
         : accounts.isError ? <p role="alert" className="mt-6">{errorMessage(accounts.error)} <button onClick={() => void accounts.refetch()} className="underline">Thử lại</button></p>
           : <><ul className="mt-6 space-y-4">{accounts.data.items.map(account => <AccountRow key={account.id}
             account={account} currentId={user.id} pending={update.isPending}
