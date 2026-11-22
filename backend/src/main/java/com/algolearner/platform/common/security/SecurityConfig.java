@@ -16,7 +16,12 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.*;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,6 +43,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/v1/users/*/profile", "/api/v1/users/*/profile/avatar").permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(oauth -> oauth
+                .bearerTokenResolver(bearerTokenResolver())
                 .jwt(jwt -> jwt.jwtAuthenticationConverter(token -> {
                     try {
                         UUID accountId = UUID.fromString(token.getSubject());
@@ -79,6 +85,21 @@ public class SecurityConfig {
                             .path(request.getRequestURI()).build());
                 }));
         return http.build();
+    }
+
+    private static BearerTokenResolver bearerTokenResolver() {
+        var delegate = new DefaultBearerTokenResolver();
+        var paths = PathPatternRequestMatcher.withDefaults();
+        RequestMatcher publicUnauthenticatedEndpoints = new OrRequestMatcher(
+                paths.matcher(HttpMethod.GET, "/api/v1/status"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/register"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/login"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/verify-otp"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/resend-otp"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/forgot-password"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/reset-password"),
+                paths.matcher(HttpMethod.POST, "/api/v1/auth/refresh-token"));
+        return request -> publicUnauthenticatedEndpoints.matches(request) ? null : delegate.resolve(request);
     }
 
 }

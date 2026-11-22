@@ -86,6 +86,7 @@ test('Teacher revokes a listed invitation without entering a UUID', async ({ pag
   });
   await login(page, 'teacher@example.test');
   await page.goto(`${base}/teacher/classrooms/class-1`);
+  await page.getByRole('tab', { name: /members/i }).click();
   await expect(page.getByText('student@example.test · PENDING')).toBeVisible();
   await page.getByRole('button', { name: 'Thu hồi' }).click();
   await expect(page.getByText('student@example.test · REVOKED')).toBeVisible();

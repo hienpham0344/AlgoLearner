@@ -121,8 +121,16 @@ test('4.1 account security uses session and password endpoints', async ({ page }
 
 test('4.1 reset password sends the verified grant and confirmed password', async ({ page }) => {
   let resetBody: Record<string, unknown> | undefined;
+  let forgotCalls = 0;
   const identity = { usernameOrEmail: user.email, identityType: 'EMAIL' };
   await page.route('**/api/v1/auth/forgot-password', route => {
+    forgotCalls++;
+    if (forgotCalls === 1) {
+      expect(route.request().postDataJSON()).toEqual({ usernameOrEmail: user.email, identityType: 'AUTO' });
+      return route.fulfill({ status: 409, json: { success: false, errorCode: 'AMBIGUOUS_IDENTITY',
+        message: 'Choose email or username to identify the account.', path: '/api/v1/auth/forgot-password',
+        timestamp: '2026-11-10T00:00:00Z' } });
+    }
     expect(route.request().postDataJSON()).toEqual(identity);
     return route.fulfill({ json: envelope({ message: 'Sent' }) });
   });
@@ -135,7 +143,10 @@ test('4.1 reset password sends the verified grant and confirmed password', async
     await route.fulfill({ json: envelope({ message: 'Updated' }) });
   });
   await page.goto(`${base}/forgot-password`);
+  await expect(page.getByLabel('Identify account by')).toHaveCount(0);
   await page.getByLabel('Username or email').fill(user.email);
+  await page.getByRole('button', { name: 'Send reset code' }).click();
+  await expect(page.getByLabel('Identify account by')).toBeVisible();
   await page.getByLabel('Identify account by').selectOption('EMAIL');
   await page.getByRole('button', { name: 'Send reset code' }).click();
   await expect(page).toHaveURL(/\/verify-otp\?/);
@@ -147,6 +158,31 @@ test('4.1 reset password sends the verified grant and confirmed password', async
   await page.getByRole('button', { name: 'Update password' }).click();
   await expect(page).toHaveURL(/\/login\?resetSuccess=true/);
   expect(resetBody).toEqual({ ...identity, resetToken: 'one-use-grant', newPassword: 'NewPass123', confirmPassword: 'NewPass123' });
+});
+
+test('4.1 login hides identity selector by default and reveals it on AMBIGUOUS_IDENTITY', async ({ page }) => {
+  await installBackendFixture(page);
+  let loginCalls = 0;
+  await page.route('**/api/v1/auth/login', route => {
+    loginCalls++;
+    if (loginCalls === 1) {
+      expect(route.request().postDataJSON()).toMatchObject({ usernameOrEmail: user.email, identityType: 'AUTO' });
+      return route.fulfill({ status: 409, json: { success: false, errorCode: 'AMBIGUOUS_IDENTITY',
+        message: 'Choose email or username to identify the account.', path: '/api/v1/auth/login',
+        timestamp: '2026-11-10T00:00:00Z' } });
+    }
+    expect(route.request().postDataJSON()).toMatchObject({ usernameOrEmail: user.email, identityType: 'EMAIL' });
+    return route.fulfill({ json: envelope({ token: 'signed-access', user }) });
+  });
+  await page.goto(`${base}/login`);
+  await expect(page.getByLabel('Identify account by')).toHaveCount(0);
+  await page.getByLabel('Username or email').fill(user.email);
+  await page.getByLabel('Password', { exact: true }).fill('ExamplePass123!');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByLabel('Identify account by')).toBeVisible();
+  await page.getByLabel('Identify account by').selectOption('EMAIL');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'You’re all set.' })).toBeVisible();
 });
 
 test('4.1 sign out revokes the current backend session', async ({ page }) => {

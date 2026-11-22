@@ -24,12 +24,13 @@ import { LessonAttachments } from '../components/LessonAttachments';
 import { LessonProgress } from '../components/LessonProgress';
 import { LessonConfirm, LessonErrorState, LessonPagination } from '../components/LessonState';
 import { InteractiveCourseBackground } from '@/features/dashboard/components/InteractiveCourseBackground';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import 'katex/dist/katex.min.css';
 import '../styles/lessons.css';
 
 export function LessonWorkspacePage({ role }: { role: LessonRole }) {
   const { user, isLoading } = useAuth();
-  if (isLoading) return <p role="status" className="p-8">Loading account…</p>;
+  if (isLoading) return <LoadingScreen variant="page" message="Đang tải thông tin tài khoản…" />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) return <div className="p-8" role="alert">This lesson workspace is for {role.toLowerCase()} accounts. <Link to="/classrooms">Open my classrooms</Link></div>;
   return <LessonScope role={role} userId={user.id} />;
@@ -104,7 +105,7 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
 
   return <ClassroomLayout className="lesson-shell" role={role} persona={layoutPersona} breadcrumbChild={breadcrumbNode}>
     <div className="lesson-workspace" id="lesson-main">
-      {classroom.isPending ? <p role="status">Loading classroom…</p> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
+      {classroom.isPending ? <LoadingScreen variant="page" message="Đang tải thông tin lớp học…" /> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
         : classroom.data && (
           role === 'TEACHER' && classroom.data.ownerId !== effectiveUserId
             ? <LessonErrorState error={new Error('Only the classroom owner can manage these lessons.')} />
@@ -222,7 +223,7 @@ function LessonList({
         ];
 
   return <>
-    {query.isPending ? <div className="lesson-panel lesson-empty" role="status">Loading lessons…</div> : query.isError ? <LessonErrorState error={query.error} retry={() => void query.refetch()} /> : <>
+    {query.isPending ? <LoadingScreen variant="page" message="Đang tải danh sách bài học…" /> : query.isError ? <LessonErrorState error={query.error} retry={() => void query.refetch()} /> : <>
       {items.length === 0 ? (
         <section className="lesson-panel lesson-empty">
           <BookOpen size={32} strokeWidth={1.4} aria-hidden="true" />
@@ -600,7 +601,7 @@ function LessonDetail({
     }); } catch { /* Mutation feedback is rendered below. */ }
   }
 
-  if (!create && detail.isPending) return <p role="status">Loading lesson…</p>;
+  if (!create && detail.isPending) return <LoadingScreen variant="page" message="Đang tải nội dung bài học…" />;
   if (!create && detail.isError) return <LessonErrorState error={detail.error} retry={() => void detail.refetch()} />;
   if (!create && (!lesson || lesson.classroomId !== classId || (role === 'STUDENT' && lesson.status !== 'PUBLISHED'))) return <LessonErrorState error={new Error('This lesson is not available to you.')} />;
   const activities = [...(options.data || []), ...(lesson?.activities || []).filter(activity => !options.data?.some(option => option.id === activity.id))];

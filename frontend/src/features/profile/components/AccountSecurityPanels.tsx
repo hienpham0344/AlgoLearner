@@ -47,60 +47,182 @@ export function SessionManager() {
     } catch (error) { setFeedback({ error: true, text: message(error) }); setBusyId(null); }
   };
 
-  return <section className="folder-settings-list" aria-label="Thiết bị đăng nhập">
-    <div className="folder-editorial-row"><div className="folder-row-info">
-      <strong className="folder-row-title">Thiết bị đăng nhập</strong>
-      <p className="folder-row-desc">Xem và thu hồi các phiên của tài khoản này.</p>
-    </div></div>
-    {isDemoMode ? <p role="status">Cần kết nối backend để quản lý phiên.</p>
-      : sessions.isPending ? <p role="status">Đang tải phiên đăng nhập…</p>
-        : sessions.isError ? <p role="alert">{message(sessions.error)}</p>
-          : sessions.data.length === 0 ? <p>Không có phiên đang hoạt động.</p>
-            : <ul className="space-y-3">{sessions.data.map(session => <li key={session.id} className="rounded-lg border border-slate-200 p-3 text-sm">
-              <strong>{session.current ? 'Thiết bị hiện tại' : session.userAgent || 'Thiết bị khác'}</strong>
-              <p>Đăng nhập: {dateTime.format(new Date(session.createdAt))} · Hết hạn: {dateTime.format(new Date(session.expiresAt))}</p>
-              {!session.current && <button type="button" className="folder-action-pill" disabled={busyId !== null}
-                onClick={() => void revoke(session.id)}>Đăng xuất thiết bị này</button>}
-            </li>)}</ul>}
-    {!isDemoMode && sessions.data && sessions.data.length > 0 &&
-      <button type="button" className="folder-action-pill" disabled={busyId !== null}
-        onClick={() => void logoutAll()}>Đăng xuất tất cả thiết bị</button>}
-    {feedback && <p role={feedback.error ? 'alert' : 'status'}>{feedback.text}</p>}
-  </section>;
+  return (
+    <section className="security-sessions-section" aria-label="Thiết bị đăng nhập">
+      <div className="security-sessions-header">
+        <strong className="security-sessions-title">Thiết bị đăng nhập</strong>
+        {!isDemoMode && sessions.data && sessions.data.length > 0 && (
+          <button
+            type="button"
+            className="security-btn-secondary"
+            disabled={busyId !== null}
+            onClick={() => void logoutAll()}
+          >
+            Đăng xuất tất cả thiết bị
+          </button>
+        )}
+      </div>
+
+      {isDemoMode ? (
+        <p role="status" className="security-empty-text">Cần kết nối backend để quản lý phiên.</p>
+      ) : sessions.isPending ? (
+        <p role="status" className="security-empty-text">Đang tải phiên đăng nhập…</p>
+      ) : sessions.isError ? (
+        <p role="alert" className="security-status-badge is-error">{message(sessions.error)}</p>
+      ) : sessions.data.length === 0 ? (
+        <p className="security-empty-text">Không có phiên đang hoạt động.</p>
+      ) : (
+        <div className="security-sessions-list" role="list">
+          {sessions.data.map(session => (
+            <div key={session.id} className="security-session-row" role="listitem">
+              <div className="security-session-info">
+                <div className="security-session-headline">
+                  <span className={`security-mono-tag ${session.current ? 'is-current' : ''}`}>
+                    {session.current ? 'CURRENT' : 'SESSION'}
+                  </span>
+                  <strong className="security-session-device">
+                    {session.current ? 'Thiết bị hiện tại' : session.userAgent || 'Thiết bị khác'}
+                  </strong>
+                  <span className="security-session-meta">
+                    · Đăng nhập: {dateTime.format(new Date(session.createdAt))} · Hết hạn: {dateTime.format(new Date(session.expiresAt))}
+                  </span>
+                </div>
+                {session.current && (
+                  <span className="security-session-status">
+                    <span className="security-status-dot" aria-hidden="true" />
+                    Active now
+                  </span>
+                )}
+              </div>
+              {!session.current && (
+                <button
+                  type="button"
+                  className="security-btn-danger"
+                  disabled={busyId !== null}
+                  onClick={() => void revoke(session.id)}
+                >
+                  Đăng xuất thiết bị này
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {feedback && (
+        <div
+          role={feedback.error ? 'alert' : 'status'}
+          className={`security-status-badge ${feedback.error ? 'is-error' : 'is-success'}`}
+        >
+          <span className="security-status-dot" aria-hidden="true" />
+          <span>{feedback.text}</span>
+        </div>
+      )}
+    </section>
+  );
 }
 
 export function DeactivateAccountForm() {
   const isDemoMode = useIsDemoMode();
   const navigate = useNavigate();
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending || !confirmed || !password) return;
-    setPending(true); setError('');
+    if (pending || !confirmed || !password || isDemoMode) return;
+    setPending(true);
+    setError('');
     try {
       await authApi.deactivate(password);
       clearSession();
       navigate('/login', { replace: true });
-    } catch (failure) { setError(message(failure)); setPending(false); }
+    } catch (failure) {
+      setError(message(failure));
+      setPending(false);
+    }
   };
 
-  return <form className="folder-settings-list" onSubmit={event => void submit(event)} aria-busy={pending}>
-    <div className="folder-editorial-row"><div className="folder-row-info">
-      <strong className="folder-row-title">Vô hiệu hóa tài khoản</strong>
-      <p className="folder-row-desc">Bạn sẽ đăng xuất khỏi mọi thiết bị; dữ liệu học tập được giữ lại. Chỉ Admin có thể kích hoạt lại.</p>
-    </div></div>
-    <label htmlFor="deactivate-password">Mật khẩu hiện tại</label>
-    <input id="deactivate-password" className="folder-input" type="password" autoComplete="current-password"
-      value={password} onChange={event => setPassword(event.target.value)} disabled={pending || isDemoMode} required />
-    <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirmed}
-      onChange={event => setConfirmed(event.target.checked)} disabled={pending || isDemoMode} />
-      Tôi xác nhận muốn vô hiệu hóa tài khoản.</label>
-    <button className="folder-action-pill" type="submit" disabled={pending || !confirmed || !password || isDemoMode}>Vô hiệu hóa</button>
-    {isDemoMode && <p role="status">Cần kết nối backend để vô hiệu hóa tài khoản.</p>}
-    {error && <p role="alert">{error}</p>}
-  </form>;
+  return (
+    <section className="account-danger-zone" aria-label="Danger Zone">
+      <div className="account-danger-header">
+        <div className="account-danger-copy">
+          <span className="account-danger-badge">Danger Zone</span>
+          <h3 className="account-danger-title">Deactivate account</h3>
+          <p className="account-danger-desc">
+            You will be signed out of all devices; learning data is preserved. Only an Admin can reactivate your account.
+          </p>
+        </div>
+      </div>
+
+      {isDemoMode && (
+        <p className="account-danger-status" role="status">
+          Cần kết nối backend để vô hiệu hóa tài khoản.
+        </p>
+      )}
+
+      <form
+        className="account-danger-form"
+        onSubmit={event => void submit(event)}
+        aria-busy={pending}
+      >
+        <div className="account-danger-field">
+          <label className="account-danger-label" htmlFor="deactivate-password">
+            Mật khẩu hiện tại
+          </label>
+          <div className="account-danger-input-wrap">
+            <input
+              id="deactivate-password"
+              className="account-danger-input"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              placeholder="Enter your current password"
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+              disabled={pending || isDemoMode}
+              required
+            />
+            <button
+              type="button"
+              className="account-danger-toggle-pw"
+              onClick={() => setShowPassword(prev => !prev)}
+              disabled={pending || isDemoMode}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {showPassword ? 'Hide' : 'Show'}
+            </button>
+          </div>
+        </div>
+
+        <label className="account-danger-check">
+          <input
+            type="checkbox"
+            checked={confirmed}
+            onChange={event => setConfirmed(event.target.checked)}
+            disabled={pending || isDemoMode}
+          />
+          <span>I understand that my account will be deactivated until an Admin restores it.</span>
+        </label>
+
+        {error && (
+          <p className="account-danger-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="account-danger-actions">
+          <button
+            type="submit"
+            className="account-danger-btn-solid"
+            disabled={pending || !confirmed || !password || isDemoMode}
+          >
+            {pending ? 'Deactivating…' : 'Deactivate account'}
+          </button>
+        </div>
+      </form>
+    </section>
+  );
 }
