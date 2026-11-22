@@ -16,6 +16,8 @@ public interface AccountRepository extends JpaRepository<AccountEntity, UUID> {
     Optional<AccountEntity> findByEmailIgnoreCase(String email);
     boolean existsByUsernameIgnoreCase(String username);
     boolean existsByEmailIgnoreCase(String email);
+    @Query("select count(a) > 0 from AccountEntity a where lower(a.email) in (:email, :username) or lower(a.username) in (:email, :username)")
+    boolean existsConflictingIdentity(@Param("email") String email, @Param("username") String username);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from AccountEntity a where lower(a.email) = lower(:identity)")
     Optional<AccountEntity> findForLoginByEmail(@Param("identity") String identity);

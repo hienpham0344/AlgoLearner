@@ -2,6 +2,7 @@ package com.algolearner.platform.common.exception;
 
 import com.algolearner.platform.common.dto.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import jakarta.validation.ConstraintViolationException;
@@ -25,7 +26,7 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(AppException.class)
     ResponseEntity<ApiErrorResponse> app(AppException ex, HttpServletRequest request) {
-        return error(ex.getHttpStatus(), ex.getErrorCode(), ex.getMessage(), request, null);
+        return error(ex.getHttpStatus(), ex.getErrorCode(), ex.getMessage(), request, null, ex.getRetryAfterSeconds());
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -80,7 +81,16 @@ public class ApiExceptionHandler {
 
     private ResponseEntity<ApiErrorResponse> error(HttpStatus status, String code, String message,
             HttpServletRequest request, List<ApiErrorResponse.ValidationError> fields) {
-        return ResponseEntity.status(status).body(ApiErrorResponse.builder().errorCode(code).message(message)
+        return error(status, code, message, request, fields, null);
+    }
+
+    private ResponseEntity<ApiErrorResponse> error(HttpStatus status, String code, String message,
+            HttpServletRequest request, List<ApiErrorResponse.ValidationError> fields, Long retryAfterSeconds) {
+        var response = ResponseEntity.status(status);
+        if (retryAfterSeconds != null && retryAfterSeconds > 0) {
+            response.header(HttpHeaders.RETRY_AFTER, Long.toString(retryAfterSeconds));
+        }
+        return response.body(ApiErrorResponse.builder().errorCode(code).message(message)
                 .path(request.getRequestURI()).errors(fields).build());
     }
 }

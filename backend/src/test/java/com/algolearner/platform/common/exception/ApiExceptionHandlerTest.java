@@ -32,10 +32,21 @@ class ApiExceptionHandlerTest {
     @Test void applicationExceptionUsesCatalogWithOptionalBusinessMessage() {
         var response = handler.app(new ApiException(ErrorCode.PROFILE_NOT_FOUND), request);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getHeaders().containsKey("Retry-After")).isFalse();
         assertThat(response.getBody().getErrorCode()).isEqualTo("PROFILE_NOT_FOUND");
         assertThat(response.getBody().getMessage()).isEqualTo("Profile not found");
         assertThat(handler.app(new ApiException(ErrorCode.VALIDATION_FAILED, "Custom detail"), request)
             .getBody().getMessage()).isEqualTo("Custom detail");
+    }
+
+    @Test void applicationExceptionWithRetryAfterEmitsHeaderAndPreservesErrorBody() {
+        var response = handler.app(ApiException.withRetryAfter(ErrorCode.ACCOUNT_TEMP_LOCKED, 900), request);
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.LOCKED);
+        assertThat(response.getHeaders().getFirst("Retry-After")).isEqualTo("900");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getErrorCode()).isEqualTo("ACCOUNT_TEMP_LOCKED");
+        assertThat(response.getBody().getMessage()).isEqualTo(ErrorCode.ACCOUNT_TEMP_LOCKED.getMessage());
+        assertThat(response.getBody().getPath()).isEqualTo("/api/v1/example");
     }
 
     @Test void responseStatusRetainsHttpStatusWithoutExposingInternalReason() {

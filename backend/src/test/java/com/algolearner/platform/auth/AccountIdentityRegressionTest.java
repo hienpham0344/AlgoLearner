@@ -85,13 +85,23 @@ class AccountIdentityRegressionTest {
     void newUsernameValidationAndCanonicalLockOrderPreventNamespaceCollisions() {
         assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("email@example.test"));
         assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("name\u0001"));
+        assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("\u0001abc"));
+        assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("  ab  "));
+        assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("ab"));
+        assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("   "));
+        assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername("a".repeat(51)));
+        assertThrows(AppException.class, () -> AccountIdentityRegistration.validateUsername(null));
+        assertDoesNotThrow(() -> AccountIdentityRegistration.validateUsername("  abc  "));
         var accounts = mock(AccountRepository.class);
         AccountIdentityRegistration.lock(accounts, "Z@EXAMPLE.TEST", "Alpha");
         var order = inOrder(accounts);
         order.verify(accounts).lockIdentity("alpha");
         order.verify(accounts).lockIdentity("z@example.test");
-        when(accounts.existsByUsernameIgnoreCase("z@example.test")).thenReturn(true);
-        assertTrue(AccountIdentityRegistration.conflicts(accounts, "z@example.test", "alpha"));
+        when(accounts.existsConflictingIdentity("z@example.test", "alpha")).thenReturn(true);
+        assertTrue(AccountIdentityRegistration.conflicts(accounts, "Z@EXAMPLE.TEST", "Alpha"));
+        verify(accounts).existsConflictingIdentity("z@example.test", "alpha");
+        verify(accounts, never()).existsByEmailIgnoreCase(any());
+        verify(accounts, never()).existsByUsernameIgnoreCase(any());
     }
 
     private AccountEntity account(String email, String username) {
