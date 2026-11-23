@@ -13,7 +13,7 @@ class QuizPolicyTest {
         assertThat(QuizPolicy.expired(cutoff.plusNanos(1000),cutoff)).isTrue();
     }
     @Test
-    void frozenCutoffUsesEarlierDeadlineAndTimerUnlessLateAllowed() {
+    void frozenCutoffUsesDurationAndIsAbsentWithoutTimer() {
         var start=Instant.parse("2026-11-18T00:00:00Z");
         assertThat(QuizPolicy.cutoff(start,60)).isEqualTo(start.plusSeconds(60));
         assertThat(QuizPolicy.cutoff(start,null)).isNull();
