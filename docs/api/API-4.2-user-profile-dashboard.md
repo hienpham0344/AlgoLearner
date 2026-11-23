@@ -1,12 +1,12 @@
-﻿# API 4.2 — User Profile & Dashboard
+# API 4.2 — User Profile & Dashboard
 
-Backend đã triển khai bằng Spring Boot tại [profile](../../backend/src/main/java/com/algolearner/platform/profile/). Contract này thay bản đề xuất trước theo danh sách API đã yêu cầu. Xem [hướng dẫn chạy và kiểm thử](../../backend/README.md). Swagger/OpenAPI sinh trực tiếp từ code tại `/v3/api-docs`.
+Backend triển khai tại [profile](../../backend/src/main/java/com/algolearner/platform/profile/) và [dashboard](../../backend/src/main/java/com/algolearner/platform/profile/dashboard/), dùng JWT và PostgreSQL. Xem [hướng dẫn chạy và kiểm thử](../../backend/README.md). Swagger/OpenAPI sinh từ code tại `/v3/api-docs`.
 
-Sources: SRS ver 1.1, section 4.2, FR-PRO-001 through FR-PRO-005; docs/rules/API_DESIGN_GUIDELINES.md. Schema documents are reference designs, not runtime requirements.
+Nguồn: SRS ver 1.1 mục 4.2, FR-PRO-001–FR-PRO-005; [API Design Guidelines](../rules/API_DESIGN_GUIDELINES.md) và controller/DTO hiện hành.
 
 ## Endpoint
 
-Tất cả đường dẫn có tiền tố `/api/v1`. Request JSON không bọc envelope; response dùng ApiResponse hoặc ApiErrorResponse. Timestamp là ISO-8601 UTC kết thúc Z; FE hiển thị UTC+7.
+Tất cả đường dẫn có tiền tố `/api/v1`. Request JSON không bọc envelope; JSON response dùng `ApiResponse<T>` hoặc `ApiErrorResponse`. Riêng GET avatar trả bytes `image/png` hoặc `image/jpeg`, không bọc envelope. Timestamp là ISO-8601 UTC kết thúc `Z`; frontend hiển thị UTC+7.
 
 | Method | Endpoint | Request | Quyền |
 | :--- | :--- | :--- | :--- |
@@ -55,7 +55,7 @@ interface PublicUserProfile {
 - PATCH chỉ nhận fullName/shortBio: bỏ trường giữ nguyên, null/blank xóa, trim chuỗi. Giới hạn: 150/200 Unicode code point. PATCH rỗng, sai kiểu, trường lạ/username/email/role/isPublic/trường hệ thống trả 400 và giữ dữ liệu cũ.
 - Privacy chỉ nhận boolean thật, không nhận null, số hoặc chuỗi. Account mục tiêu lấy từ principal, không nhận ID do client gửi.
 - joinedAt lấy accounts.created_at. Solved đếm Public Problem phân biệt có Official Submission ACCEPTED. Streak tính ngày UTC+7 theo submitted_at của submission Accepted, không gồm RUN/Class Practice/Assignment.
-- Avatar kiểm tra bytes JPEG/PNG thực tế, dung lượng và số pixel theo cấu hình, re-encode trước khi lưu. Không nhận URL/storage key từ client. Upload/validation/repository lỗi giữ avatar cũ. Mock: remove the new file on repository failure; delete the old file only after a successful update. Private avatar reads require the owner token.
+- Avatar kiểm tra bytes JPEG/PNG thực tế, dung lượng và số pixel theo cấu hình, chuẩn hóa PNG trước khi lưu vào private storage. Không nhận URL/storage key từ client. Khi thay ảnh, cập nhật con trỏ tài khoản có kiểm tra cạnh tranh; lỗi upload/scan/DB giữ ảnh cũ. Xóa ảnh cũ qua hàng đợi cleanup có retry; đọc ảnh kiểm tra quyền lại mỗi lần và trả `Cache-Control: no-store`. Ảnh local cũ vẫn đọc được trong thời gian chuyển dữ liệu.
 - Public profile chỉ có đúng năm trường đã định nghĩa. Private, Suspended đang hiệu lực, Deactivated hoặc không tồn tại cùng trả 404 PROFILE_NOT_FOUND. Đọc avatar kiểm tra lại cùng chính sách.
 
 ## Dashboard
@@ -81,7 +81,7 @@ from/to chỉ áp dụng charts. Totals đếm tất cả bản ghi còn lưu, g
 
 ## Xác thực, lỗi và truy vết
 
-Mock mode: use Authorization: Bearer mock-student / mock-teacher / mock-admin. See backend/README.md for all demo identities. Mock authentication is a separate profile adapter; AccountRepository supplies current roles and restrictions. Replace the decoder and repository adapters when integrating real JWT authentication and the official schema. Profile updates live in memory and reset on restart; no database is required.
+Các API riêng tư yêu cầu `Authorization: Bearer <access_token>` do luồng 4.1 cấp. Vai trò và trạng thái tài khoản được kiểm tra phía server; profile, quyền riêng tư và dashboard đọc/ghi PostgreSQL. Backend mock chỉ dành cho môi trường phát triển riêng, không phải hợp đồng của API thật. Các kết quả kiểm thử backend cục bộ được ghi trong [báo cáo 4.1–4.6](../test-reports/2026-11-18-backend-implementation-verification.md).
 
 | HTTP | Trường hợp |
 | :--- | :--- |
@@ -94,4 +94,4 @@ Mock mode: use Authorization: Bearer mock-student / mock-teacher / mock-admin. S
 | 500 | Lỗi DB/tổng hợp; không giả dữ liệu thành 0/[] |
 | 503 | File Storage không sẵn sàng |
 
-FR-PRO-001: ProfileController/ProfileService; FR-PRO-002: privacy/public profile/avatar access; FR-PRO-003/004/005: role-scoped dashboards. No automated tests are maintained for this scope. Storage is behind interfaces; replace in-memory adapters with PostgreSQL implementations when the official schema is available. See backend/README.md for manual verification and integration steps.
+FR-PRO-001: ProfileController/ProfileService; FR-PRO-002: privacy/public profile/avatar access; FR-PRO-003/004/005: dashboard theo vai trò. Kết nối Supabase Storage/Gmail thật và UI chưa được chứng minh bởi kiểm thử cục bộ; xem giới hạn trong báo cáo trên.

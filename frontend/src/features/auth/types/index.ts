@@ -1,3 +1,5 @@
+export type IdentityType = 'AUTO' | 'EMAIL' | 'USERNAME';
+
 export type UserRole = 'STUDENT' | 'TEACHER' | 'ADMIN';
 
 export type AccountLifecycleStatus =
@@ -22,6 +24,7 @@ export interface AuthUser {
 }
 
 export interface LoginRequest {
+  identityType?: IdentityType;
   usernameOrEmail: string;
   password: string;
   rememberMe?: boolean;
@@ -37,27 +40,24 @@ export interface RegisterRequest {
   privacyAccepted: boolean;
 }
 
-export interface VerifyOtpRequest {
-  email: string;
+export type AuthIdentity = ({ email: string; usernameOrEmail?: never } | { usernameOrEmail: string; email?: never }) & { identityType?: IdentityType };
+
+export type VerifyOtpRequest = AuthIdentity & {
   code: string;
   purpose: OtpPurpose;
-}
+};
 
-export interface ResendOtpRequest {
-  email: string;
+export type ResendOtpRequest = AuthIdentity & {
   purpose: OtpPurpose;
-}
+};
 
-export interface ForgotPasswordRequest {
-  email: string;
-}
+export type ForgotPasswordRequest = AuthIdentity;
 
-export interface ResetPasswordRequest {
-  email: string;
+export type ResetPasswordRequest = AuthIdentity & {
   resetToken: string;
   newPassword: string;
   confirmPassword?: string;
-}
+};
 
 export interface ResetVerificationData {
   resetToken: string;
@@ -65,7 +65,6 @@ export interface ResetVerificationData {
 
 export interface AuthResponseData {
   token: string;
-  refreshToken?: string;
   user: AuthUser;
   expiresIn?: number;
 }

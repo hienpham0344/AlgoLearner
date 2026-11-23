@@ -11,14 +11,17 @@ import { InviteStudentModal } from '../../components/InviteStudentModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
 import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnouncementsList';
 import { useClassroomStore } from '../../mock/useClassroomStore';
+import { getLessonCountForClassroom, lessonMockStore } from '../../lessons/mock/lessonMockStore';
 import {
   Users,
   KeyRound,
   BookOpen,
+  BookOpenText,
   Settings,
   FileCode,
   CheckCircle2,
   Archive,
+  RotateCcw,
   ShieldAlert,
   Plus,
   Bell,
@@ -36,6 +39,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
     students,
     updateClassroom,
     archiveClassroom,
+    restoreClassroom,
     regenerateCode,
     updateJoinConfig,
     directAddMember,
@@ -76,6 +80,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
   const [isDirectAddModalOpen, setIsDirectAddModalOpen] = useState(false);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false);
+  const [isRestoreConfirmOpen, setIsRestoreConfirmOpen] = useState(false);
   const [isRegenerateConfirmOpen, setIsRegenerateConfirmOpen] = useState(false);
 
   // Edit settings form
@@ -121,6 +126,9 @@ export const TeacherClassroomDetailPage: React.FC = () => {
   }
 
   const classroomAnnouncements = getAnnouncements(classroom.id);
+  const teacherLessons = lessonMockStore.list(classroom.id, 'TEACHER', currentPersona.id, 0).items;
+  const publishedLessonsCount = teacherLessons.filter(l => l.status === 'PUBLISHED').length;
+  const draftLessonsCount = teacherLessons.filter(l => l.status === 'DRAFT').length;
   const isArchived = classroom.status === 'ARCHIVED';
   const pendingRequestsCount = classroom.joinRequests.filter(
     r => r.status === 'PENDING_APPROVAL',
@@ -158,7 +166,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
               </Button>
             )}
 
-            {classroom.status === 'ACTIVE' && (
+            {classroom.status === 'ACTIVE' ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -167,6 +175,16 @@ export const TeacherClassroomDetailPage: React.FC = () => {
               >
                 <Archive size={14} className="mr-1.5 shrink-0" />
                 Archive
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsRestoreConfirmOpen(true)}
+                className="text-xs font-semibold rounded-xl text-emerald-700 hover:text-emerald-900"
+              >
+                <RotateCcw size={14} className="mr-1.5 shrink-0" />
+                Restore
               </Button>
             )}
           </div>
@@ -189,6 +207,27 @@ export const TeacherClassroomDetailPage: React.FC = () => {
           <BookOpen size={16} aria-hidden="true" />
           <span>Overview & Modules</span>
         </button>
+
+        <Link
+          to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
+          className="classroom-subnav-link"
+          role="tab"
+        >
+          <BookOpenText size={16} aria-hidden="true" />
+          <span>Class lessons</span>
+          <span className="classroom-subnav-badge">
+            {getLessonCountForClassroom(classroom.id, 'TEACHER')}
+          </span>
+        </Link>
+
+        <Link
+          to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/assignments`}
+          className="classroom-subnav-link"
+          role="tab"
+        >
+          <FileCode size={16} aria-hidden="true" />
+          <span>Class assignments</span>
+        </Link>
 
         <button
           type="button"
@@ -264,112 +303,176 @@ export const TeacherClassroomDetailPage: React.FC = () => {
       )}
 
       {activeTab === 'OVERVIEW' && (
-        <div className="space-y-8">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="classroom-glass-card p-4">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                Lessons
-              </div>
-              <div className="text-2xl font-black text-slate-900 mt-1">
-                {classroom.stats?.lessonsCount ?? 12}
-              </div>
+        <div>
+          {/* Compact Inline Metrics Strip (Replacing 4 equal-weight stat cards) */}
+          <div className="classroom-metrics-strip">
+            <div className="classroom-metric-item">
+              <strong>{teacherLessons.length}</strong>
+              <span>Lessons ({publishedLessonsCount} published · {draftLessonsCount} drafts)</span>
             </div>
-            <div className="classroom-glass-card p-4">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                Assignments
-              </div>
-              <div className="text-2xl font-black text-slate-900 mt-1">
-                {classroom.stats?.assignmentsCount ?? 5}
-              </div>
+            <span className="text-slate-300" aria-hidden="true">|</span>
+            <div className="classroom-metric-item">
+              <strong>{classroom.stats?.assignmentsCount ?? 5}</strong>
+              <span>Assignments</span>
             </div>
-            <div className="classroom-glass-card p-4">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                Quizzes
-              </div>
-              <div className="text-2xl font-black text-slate-900 mt-1">
-                {classroom.stats?.quizzesCount ?? 3}
-              </div>
+            <span className="text-slate-300" aria-hidden="true">|</span>
+            <div className="classroom-metric-item">
+              <strong>{classroom.stats?.quizzesCount ?? 3}</strong>
+              <span>Quizzes</span>
             </div>
-            <div className="classroom-glass-card p-4">
-              <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                Announcements
-              </div>
-              <div className="text-2xl font-black text-slate-900 mt-1">
-                {classroomAnnouncements.length}
-              </div>
+            <span className="text-slate-300" aria-hidden="true">|</span>
+            <div className="classroom-metric-item">
+              <strong>{classroomAnnouncements.length}</strong>
+              <span>Announcements</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="classroom-glass-card p-6 space-y-3">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">
-                  Course Syllabus & Objectives
-                </h3>
-                <p className="text-sm text-slate-700 leading-relaxed">
-                  {classroom.description}
-                </p>
+          <div className="classroom-detail-grid">
+            {/* Left Primary Column: Live Curriculum + Evaluation Hub */}
+            <div className="classroom-detail-main">
+              <div className="classroom-glass-card p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">
+                      Class lessons curriculum
+                    </h3>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      Manage lessons, draft modules, and published study materials
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!isArchived && (
+                      <Link
+                        to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons/new`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors"
+                      >
+                        <Plus size={14} aria-hidden="true" />
+                        <span>New lesson</span>
+                      </Link>
+                    )}
+                    <Link
+                      to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons`}
+                      className="text-xs font-bold text-slate-900 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors"
+                    >
+                      Manage lessons →
+                    </Link>
+                  </div>
+                </div>
+
+                {teacherLessons.length === 0 ? (
+                  <div className="p-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center">
+                    <p className="text-sm font-semibold text-slate-800">No lessons created yet</p>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Create your first draft lesson to start structuring this classroom.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {teacherLessons.slice(0, 5).map((les, idx) => (
+                      <Link
+                        key={les.id}
+                        to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(les.id)}`}
+                        className="p-3.5 rounded-xl bg-white/70 hover:bg-white border border-slate-200/80 hover:border-slate-300 flex items-center justify-between gap-3 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="classroom-module-number-card shrink-0">
+                            {String(idx + 1).padStart(2, '0')}
+                          </span>
+                          <div className="min-w-0">
+                            <strong className="text-sm font-bold text-slate-900 block truncate">
+                              {les.title}
+                            </strong>
+                            <span className="text-xs text-slate-600">
+                              {les.attachments.length} materials · {les.completionMode === 'MANUAL' ? 'Manual' : 'Activity-linked'}
+                            </span>
+                          </div>
+                        </div>
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md border shrink-0 ${
+                            les.status === 'PUBLISHED'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : les.status === 'DRAFT'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-300'
+                          }`}
+                        >
+                          {les.status === 'PUBLISHED' ? 'Published' : les.status === 'DRAFT' ? 'Draft' : 'Archived'}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="classroom-glass-card p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900">
-                    Teaching & Evaluation Hub
+                    Teaching &amp; Evaluation Hub
                   </h3>
-                  <span className="text-xs text-slate-400">Integrated Modules</span>
+                  <span className="text-xs font-medium text-slate-600">Integrated Modules</span>
                 </div>
 
-                <div className="space-y-3">
-                  <div className="p-3.5 rounded-xl bg-white/50 border border-white/70 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Link
+                    to="/teacher/assignments"
+                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-white border border-slate-200 flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
                         <FileCode size={16} />
                       </div>
-                      <div>
-                        <strong className="text-xs font-bold text-slate-900 block">
-                          Problem Set: Minimum Spanning Trees (Kruskal & Prim)
+                      <div className="min-w-0">
+                        <strong className="text-xs font-bold text-slate-900 block truncate">
+                          Assignments &amp; Code Judge
                         </strong>
-                        <span className="text-[11px] text-slate-500">
-                          Automated Code Judge (Java / Python)
+                        <span className="text-[11px] text-slate-600 block truncate">
+                          Automated test suite &amp; grading
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                      Open for Submission
-                    </span>
-                  </div>
+                  </Link>
 
-                  <div className="p-3.5 rounded-xl bg-white/50 border border-white/70 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-800 flex items-center justify-center">
+                  <Link
+                    to="/teacher/review-queue"
+                    className="p-3.5 rounded-xl bg-slate-50 hover:bg-white border border-slate-200 flex items-center justify-between gap-2 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-800 flex items-center justify-center shrink-0">
                         <CheckCircle2 size={16} />
                       </div>
-                      <div>
-                        <strong className="text-xs font-bold text-slate-900 block">
-                          Quiz 3: Asymptotic Complexity & Recurrence Relations
+                      <div className="min-w-0">
+                        <strong className="text-xs font-bold text-slate-900 block truncate">
+                          Quizzes &amp; Review Queue
                         </strong>
-                        <span className="text-[11px] text-slate-500">
-                          Timed 30 mins · Auto-saving answers enabled
+                        <span className="text-[11px] text-slate-600 block truncate">
+                          Timed quizzes &amp; manual feedback
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-md">
-                      Due Friday
-                    </span>
-                  </div>
+                  </Link>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <div className="classroom-glass-card p-6 space-y-3">
-                <span className="text-[10px] uppercase font-mono tracking-widest text-slate-500 block">
+            {/* Right Supporting Rail: Syllabus + Class Code + Announcements */}
+            <aside className="classroom-detail-rail">
+              <div className="classroom-glass-card p-5 space-y-2.5">
+                <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wide">
+                  Course Syllabus &amp; Objectives
+                </h3>
+                <p className="text-xs text-slate-700 leading-relaxed">
+                  {classroom.description}
+                </p>
+              </div>
+
+              <div className="classroom-glass-card p-5 space-y-2.5">
+                <span className="text-[10.5px] uppercase font-mono font-bold tracking-widest text-slate-600 block">
                   Class Code for Students
                 </span>
                 <div className="font-mono font-bold text-2xl tracking-wider text-slate-900">
                   {classroom.classCode}
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-600">
                   {classroom.joinMode === 'AUTO_JOIN'
                     ? 'Students join immediately using this code.'
                     : 'Requests require your approval.'}
@@ -377,9 +480,9 @@ export const TeacherClassroomDetailPage: React.FC = () => {
               </div>
 
               {/* Announcements Noticeboard Preview (FE 4.4) */}
-              <div className="classroom-glass-card p-6 space-y-3">
+              <div className="classroom-glass-card p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] uppercase font-mono tracking-widest text-slate-500 block">
+                  <span className="text-[10.5px] uppercase font-mono font-bold tracking-widest text-slate-600 block">
                     Announcements Noticeboard
                   </span>
                   <button
@@ -388,7 +491,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
                       setActiveTab('ANNOUNCEMENTS');
                       setSearchParams({ tab: 'announcements' });
                     }}
-                    className="text-xs font-semibold text-slate-900 hover:underline"
+                    className="text-xs font-bold text-slate-900 hover:underline"
                   >
                     View All ({classroomAnnouncements.length}) →
                   </button>
@@ -402,11 +505,11 @@ export const TeacherClassroomDetailPage: React.FC = () => {
                           setActiveTab('ANNOUNCEMENTS');
                           setSearchParams({ tab: 'announcements', announcementId: ann.id });
                         }}
-                        className="p-3 rounded-xl bg-white/60 border border-slate-200/60 hover:bg-white cursor-pointer transition-colors"
+                        className="p-3 rounded-xl bg-slate-50 border border-slate-200 hover:bg-white cursor-pointer transition-colors"
                       >
                         <div className="flex items-center gap-1.5 mb-1">
                           {ann.isPinned && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200/70">
+                            <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
                               <Pin size={9} className="rotate-45" /> Pinned
                             </span>
                           )}
@@ -414,17 +517,17 @@ export const TeacherClassroomDetailPage: React.FC = () => {
                             {ann.title}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-500 line-clamp-1">
+                        <p className="text-[11px] text-slate-600 line-clamp-1">
                           {ann.content.slice(0, 80)}
                         </p>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-slate-500">No announcements published yet.</p>
+                  <p className="text-xs text-slate-600">No announcements published yet.</p>
                 )}
               </div>
-            </div>
+            </aside>
           </div>
         </div>
       )}
@@ -587,26 +690,40 @@ export const TeacherClassroomDetailPage: React.FC = () => {
               Classroom Lifecycle Management
             </h3>
 
-            <div className="flex items-center justify-between py-3 border-t border-rose-100">
+            <div className="flex items-center justify-between gap-4 py-3 border-t border-rose-100">
               <div>
                 <strong className="text-xs font-bold text-slate-900 block">
-                  Archive Classroom
+                  {isArchived ? 'Restore Classroom' : 'Archive Classroom'}
                 </strong>
                 <span className="text-xs text-slate-500">
-                  Transitions this classroom to read-only status while preserving all student submissions and grades.
+                  {isArchived
+                    ? 'Reactivates this classroom so teachers can publish/edit lessons and students can participate again.'
+                    : 'Transitions this classroom to read-only status while preserving all student submissions and grades.'}
                 </span>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={isArchived}
-                onClick={() => setIsArchiveConfirmOpen(true)}
-                className="text-amber-700 hover:bg-amber-50 border-amber-300"
-              >
-                <Archive size={14} className="mr-1.5" />
-                {isArchived ? 'Already Archived' : 'Archive Classroom'}
-              </Button>
+              {isArchived ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsRestoreConfirmOpen(true)}
+                  className="text-emerald-700 hover:bg-emerald-50 border-emerald-300 shrink-0"
+                >
+                  <RotateCcw size={14} className="mr-1.5" />
+                  Restore Classroom
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsArchiveConfirmOpen(true)}
+                  className="text-amber-700 hover:bg-amber-50 border-amber-300 shrink-0"
+                >
+                  <Archive size={14} className="mr-1.5" />
+                  Archive Classroom
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -640,6 +757,19 @@ export const TeacherClassroomDetailPage: React.FC = () => {
           setIsArchiveConfirmOpen(false);
         }}
         onCancel={() => setIsArchiveConfirmOpen(false)}
+      />
+
+      <ConfirmationModal
+        isOpen={isRestoreConfirmOpen}
+        title="Restore Classroom?"
+        description="Restoring reactivates this classroom so teachers can manage lessons and students can join or continue coursework."
+        confirmLabel="Restore Classroom"
+        variant="default"
+        onConfirm={() => {
+          restoreClassroom(classroom.id);
+          setIsRestoreConfirmOpen(false);
+        }}
+        onCancel={() => setIsRestoreConfirmOpen(false)}
       />
 
       <ConfirmationModal

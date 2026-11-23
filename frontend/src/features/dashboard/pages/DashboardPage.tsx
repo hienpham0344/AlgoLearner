@@ -1,36 +1,30 @@
-import { useEffect, useState } from 'react';
+import { useIsDemoMode } from '@/components/BackendStatusBanner';
+import { clearSession } from '@/services/apiClient';
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { useQuery } from '@tanstack/react-query';
-import {
-  ArrowRight,
-  Bell,
-  BookOpen,
-  ChevronRight,
-  Code2,
-  Flame,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  UserRound,
-  X,
-} from 'lucide-react';
+import { useQueries, useQuery } from '@tanstack/react-query';
+import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
+import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { profileApi } from '@/features/profile/api/profileApi';
-import logoMark from '@/assets/logo-mark.svg';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
-import type { EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
+import type { CourseProgress, EnrolledClass, LearningDeadline, PracticeStats, StudentDashboardData } from '../types';
 import { dashboardApi, dashboardKeys, profileKeys } from '../api/dashboardApi';
 import { mapStudentDashboard } from '../mapStudentDashboard';
 import { RoleDashboardPage } from './RoleDashboardPage';
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { PracticePulse } from '../components/PracticePulse';
+import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
+import { getClassroomLessonSummary } from '@/features/classroom/lessons/mock/lessonMockStore';
+import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
+import { lessonApi, lessonKeys } from '@/features/classroom/lessons/api/lessonApi';
 import '../styles/dashboard.css';
 
-const IS_DEMO = import.meta.env.MODE === 'auth-demo';
-const DISPLAY_TIME_ZONE = 'Asia/Bangkok';
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const DISPLAY_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 const EMPTY_DASHBOARD_DATA: StudentDashboardData = {
   courses: [],
@@ -45,15 +39,6 @@ const EMPTY_DASHBOARD_DATA: StudentDashboardData = {
   },
   notifications: [],
 };
-
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, current: true },
-  { label: 'My classes', href: '#classes', icon: BookOpen, current: false },
-  { label: 'Public courses', href: '/courses', icon: Code2, current: false },
-  { label: 'Coding practice', href: '#practice', icon: Flame, current: false },
-  { label: 'Notifications', href: '#notifications', icon: Bell, current: false },
-  { label: 'My profile', href: '/profile', icon: UserRound, current: false },
-] as const;
 
 const shortDateFormatter = new Intl.DateTimeFormat('en', {
   timeZone: DISPLAY_TIME_ZONE,
@@ -87,13 +72,13 @@ const todayFormatter = new Intl.DateTimeFormat('en', {
 type DeadlineUrgency = 'Overdue' | 'Due today' | 'Upcoming';
 type DashboardLoadState = 'ready' | 'loading' | 'restricted' | 'unavailable';
 
-const toBangkokDateKey = (date: Date) =>
-  new Date(date.getTime() + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (date: Date) =>
+  new Date(date.getTime() + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 const getDeadlineUrgency = (dueAt: string): DeadlineUrgency => {
   const due = new Date(dueAt);
   if (due.getTime() < Date.now()) return 'Overdue';
-  return toBangkokDateKey(due) === toBangkokDateKey(new Date()) ? 'Due today' : 'Upcoming';
+  return toVietnamDateKey(due) === toVietnamDateKey(new Date()) ? 'Due today' : 'Upcoming';
 };
 
 const formatDayNumber = (iso: string) => dayNumberFormatter.format(new Date(iso));
@@ -109,7 +94,6 @@ const formatNotificationTimestamp = (iso: string): string => {
 };
 
 const resolveLoadState = (isPending: boolean, isError: boolean, error: unknown): DashboardLoadState => {
-  if (IS_DEMO) return 'ready';
   if (isPending) return 'loading';
   if (!isError) return 'ready';
   return isAxiosError(error) && error.response?.status === 403 ? 'restricted' : 'unavailable';
@@ -135,9 +119,9 @@ const getSegmentState = (index: number, completed: number): 'completed' | 'curre
 };
 
 export const DashboardPage = () => {
+  const IS_DEMO = useIsDemoMode();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [navOpen, setNavOpen] = useState(false);
 
   const isStudent = user?.role === 'STUDENT';
 
@@ -155,33 +139,184 @@ export const DashboardPage = () => {
     retry: false,
   });
 
+  const mappedBackendData = !IS_DEMO && dashboardQuery.data
+    ? mapStudentDashboard(dashboardQuery.data)
+    : EMPTY_DASHBOARD_DATA;
+
+  const classroomLessonQueries = useQueries({
+    queries: (isStudent && !IS_DEMO ? mappedBackendData.classes : []).map(cls => ({
+      queryKey: lessonKeys.list(user?.id || '', cls.id, 0),
+      queryFn: ({ signal }: { signal: AbortSignal }) => lessonApi.list(cls.id, 0, signal),
+      enabled: Boolean(user?.id && cls.id),
+      retry: false,
+      staleTime: 30_000,
+    })),
+  });
+
   useEffect(() => {
     const isUnauthorized = [profileQuery.error, dashboardQuery.error].some(
       error => isAxiosError(error) && error.response?.status === 401,
     );
     if (isUnauthorized) {
-      logout();
+      clearSession();
       navigate('/login', { replace: true });
     }
   }, [profileQuery.error, dashboardQuery.error, logout, navigate]);
-
-  const signOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
 
   if (user?.role !== 'STUDENT') {
     return user?.role === 'TEACHER' || user?.role === 'ADMIN' ? <RoleDashboardPage role={user.role} /> : null;
   }
 
-  const data = IS_DEMO
-    ? dashboardDemoData
-    : dashboardQuery.data
-      ? mapStudentDashboard(dashboardQuery.data)
-      : EMPTY_DASHBOARD_DATA;
+  const { syncedDemoClasses, syncedDemoCourses, primaryClassroomHref } = (() => {
+    if (!IS_DEMO) {
+      return {
+        syncedDemoClasses: dashboardDemoData.classes,
+        syncedDemoCourses: dashboardDemoData.courses,
+        primaryClassroomHref: null as string | null,
+      };
+    }
+    const studentPersona = readStoredPersona('STUDENT');
+    const activeClasses = readStoredClassrooms().filter(
+      c =>
+        c.status === 'ACTIVE'
+        && c.members.some(m => m.studentId === studentPersona.id && m.status === 'ACTIVE'),
+    );
+
+    const summaries = activeClasses.map(c => ({
+      classroom: c,
+      summary: getClassroomLessonSummary(c.id, 'STUDENT', studentPersona.id),
+    }));
+
+    const classes: EnrolledClass[] = summaries.map(({ classroom: c, summary }) => ({
+      id: c.id,
+      name: c.name,
+      code: c.classCode,
+      teacher: c.ownerName,
+      currentActivity: c.description,
+      nextAction:
+        summary.nextLesson && summary.completedCount < summary.publishedCount
+          ? `Up next: ${summary.nextLesson.title}`
+          : summary.publishedCount > 0
+            ? `All ${summary.publishedCount} lessons completed`
+            : 'No published lessons yet',
+      completedModules: summary.completedCount,
+      totalModules: summary.publishedCount,
+      href: `/student/classrooms/${encodeURIComponent(c.id)}`,
+    }));
+
+    const orderedForLearning = [...summaries].sort((a, b) => {
+      const aScore = a.summary.publishedCount > a.summary.completedCount ? 2 : a.summary.publishedCount > 0 ? 1 : 0;
+      const bScore = b.summary.publishedCount > b.summary.completedCount ? 2 : b.summary.publishedCount > 0 ? 1 : 0;
+      return bScore - aScore;
+    });
+
+    const courses: CourseProgress[] = orderedForLearning.map(({ classroom: c, summary }) => {
+      const pct =
+        summary.publishedCount > 0
+          ? Math.round((summary.completedCount / summary.publishedCount) * 100)
+          : 0;
+      return {
+        id: c.id,
+        title: c.name,
+        topic: c.classCode,
+        currentModule: `${summary.completedCount} / ${summary.publishedCount} lessons`,
+        currentLesson: summary.nextLesson?.title || 'View classroom materials',
+        completedUnits: summary.completedCount,
+        totalUnits: summary.publishedCount,
+        progressPercent: pct,
+        href: summary.nextLesson
+          ? `/student/classrooms/${encodeURIComponent(c.id)}/lessons/${encodeURIComponent(summary.nextLesson.id)}`
+          : `/student/classrooms/${encodeURIComponent(c.id)}`,
+      };
+    });
+
+    const primaryClass = orderedForLearning[0]?.classroom;
+    return {
+      syncedDemoClasses: classes,
+      syncedDemoCourses: courses.length > 0 ? courses : dashboardDemoData.courses,
+      primaryClassroomHref: primaryClass ? `/student/classrooms/${encodeURIComponent(primaryClass.id)}` : null,
+    };
+  })();
+
+  const { backendClasses, backendCourses, backendPrimaryClassroomHref } = (() => {
+    if (IS_DEMO || !dashboardQuery.data) {
+      return {
+        backendClasses: mappedBackendData.classes,
+        backendCourses: mappedBackendData.courses,
+        backendPrimaryClassroomHref: null as string | null,
+      };
+    }
+    const summaries = mappedBackendData.classes.map((cls, index) => {
+      const items = classroomLessonQueries[index]?.data?.items || [];
+      const published = items.filter(lesson => lesson.status === 'PUBLISHED');
+      const completedCount = published.filter(lesson => Boolean(lesson.progress?.completed)).length;
+      const nextLesson = published.find(lesson => !lesson.progress?.completed) || null;
+      return {
+        classroom: cls,
+        publishedCount: published.length,
+        completedCount,
+        nextLesson,
+      };
+    });
+
+    const enrichedClasses: EnrolledClass[] = summaries.map(({ classroom, publishedCount, completedCount, nextLesson }) => ({
+      ...classroom,
+      nextAction:
+        nextLesson && completedCount < publishedCount
+          ? `Up next: ${nextLesson.title}`
+          : publishedCount > 0
+            ? `All ${publishedCount} lessons completed`
+            : 'No published lessons yet',
+      completedModules: publishedCount > 0 ? completedCount : undefined,
+      totalModules: publishedCount > 0 ? publishedCount : undefined,
+      href: `/student/classrooms/${encodeURIComponent(classroom.id)}`,
+    }));
+
+    if (mappedBackendData.courses.length > 0) {
+      return {
+        backendClasses: enrichedClasses,
+        backendCourses: mappedBackendData.courses,
+        backendPrimaryClassroomHref: null as string | null,
+      };
+    }
+
+    const orderedForLearning = [...summaries]
+      .filter(s => s.publishedCount > 0)
+      .sort((a, b) => {
+        const aScore = a.publishedCount > a.completedCount ? 2 : 1;
+        const bScore = b.publishedCount > b.completedCount ? 2 : 1;
+        return bScore - aScore;
+      });
+
+    const derivedCourses: CourseProgress[] = orderedForLearning.map(({ classroom, publishedCount, completedCount, nextLesson }) => ({
+      id: classroom.id,
+      title: classroom.name,
+      topic: 'CLASSROOM',
+      currentModule: `${completedCount} / ${publishedCount} lessons`,
+      currentLesson: nextLesson?.title || 'View classroom materials',
+      completedUnits: completedCount,
+      totalUnits: publishedCount,
+      progressPercent: Math.round((completedCount / publishedCount) * 100),
+      href: nextLesson
+        ? `/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(nextLesson.id)}`
+        : `/student/classrooms/${encodeURIComponent(classroom.id)}`,
+    }));
+
+    const primaryClass = orderedForLearning[0]?.classroom;
+    return {
+      backendClasses: enrichedClasses,
+      backendCourses: derivedCourses,
+      backendPrimaryClassroomHref: primaryClass ? `/student/classrooms/${encodeURIComponent(primaryClass.id)}` : null,
+    };
+  })();
+
+  const data: StudentDashboardData = IS_DEMO
+    ? { ...dashboardDemoData, classes: syncedDemoClasses, courses: syncedDemoCourses }
+    : { ...mappedBackendData, classes: backendClasses, courses: backendCourses };
+  const resolvedPrimaryClassroomHref = IS_DEMO ? primaryClassroomHref : backendPrimaryClassroomHref;
 
   const practice: PracticeStats = data.practice;
-  const loadState = resolveLoadState(dashboardQuery.isPending, dashboardQuery.isError, dashboardQuery.error);
+  const loadState = IS_DEMO ? 'ready' : resolveLoadState(dashboardQuery.isPending, dashboardQuery.isError, dashboardQuery.error);
 
   const rawDisplayName = profileQuery.data?.fullName || user.fullName || user.username;
   const displayName = rawDisplayName?.replace(/^Demo\s+/i, '') || user.username;
@@ -193,96 +328,8 @@ export const DashboardPage = () => {
   const sortedDeadlines = [...data.deadlines].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
 
   return (
-    <div className="student-dashboard">
-      <aside className="dashboard-sidebar" data-open={navOpen}>
-        <div className="dashboard-sidebar-top">
-          <Link
-            className="dashboard-brand"
-            to="/dashboard"
-            onClick={() => setNavOpen(false)}
-            aria-label="AlgoLearn dashboard"
-          >
-            <img src={logoMark} alt="" width="38" height="40" />
-            <span>AlgoLearn</span>
-          </Link>
-          <button
-            className="dashboard-menu-toggle"
-            type="button"
-            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
-            aria-expanded={navOpen}
-            onClick={() => setNavOpen(open => !open)}
-          >
-            {navOpen ? <X size={21} /> : <Menu size={21} />}
-          </button>
-        </div>
-
-        <nav className="dashboard-nav" aria-label="Student workspace">
-          <span className="dashboard-nav-label">WORKSPACE</span>
-          {NAV_ITEMS.map(({ label, href, icon: Icon, current }) => (
-            <Link
-              key={label}
-              to={href}
-              className="dashboard-nav-link"
-              aria-current={current ? 'page' : undefined}
-              onClick={() => setNavOpen(false)}
-              title={label}
-            >
-              <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-              <span>{label}</span>
-              {current && <span className="dashboard-nav-current" aria-hidden="true" />}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="dashboard-sidebar-foot">
-          <span>THINK. CODE. REPEAT.</span>
-          <p>Small steps. Real progress.</p>
-        </div>
-      </aside>
-
-      <div className="dashboard-page">
-        <header className="dashboard-topbar">
-          <span className="dashboard-topbar-path">
-            Workspace <ChevronRight size={13} aria-hidden="true" /> Dashboard
-          </span>
-
-          <div className="dashboard-topbar-actions">
-            <a
-              className="dashboard-icon-link"
-              href="#notifications"
-              aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
-            >
-              <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
-              {unreadCount > 0 && <span className="dashboard-notification-dot" />}
-            </a>
-
-            <Link className="dashboard-topbar-profile-link" to="/profile">
-              <UserRound size={16} aria-hidden="true" />
-              <span>My profile</span>
-            </Link>
-
-            <details className="dashboard-profile">
-              <summary aria-label="Account menu">
-                <span className="dashboard-avatar">{firstName.slice(0, 1).toUpperCase()}</span>
-                <span className="dashboard-profile-name">{displayName}</span>
-              </summary>
-              <div className="dashboard-profile-menu">
-                <strong>{displayName}</strong>
-                <span>{user.email}</span>
-                <Link to="/profile" className="dashboard-profile-setting">
-                  Profile settings
-                </Link>
-                <Link to="/account/security" className="dashboard-profile-setting">Account security</Link>
-                <button type="button" onClick={signOut}>
-                  <LogOut size={15} aria-hidden="true" /> Sign out
-                </button>
-              </div>
-            </details>
-          </div>
-        </header>
-
-        <main className="dashboard-content">
-          <div className="dashboard-intro">
+    <WorkspaceLayout role="STUDENT" unreadCount={unreadCount} displayNameOverride={displayName}>
+      <div className="dashboard-intro">
             <div>
               <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
               <h1>Keep building.</h1>
@@ -299,29 +346,29 @@ export const DashboardPage = () => {
             </p>
           )}
 
-          {!IS_DEMO && (dashboardQuery.isPending || dashboardQuery.isError) ? (
-            <div className="dashboard-fetch-state" role={dashboardQuery.isError ? 'alert' : 'status'}>
+          {!IS_DEMO && dashboardQuery.isPending ? (
+            <LoadingScreen
+              variant="page"
+              message="Đang tải dữ liệu học tập…"
+              submessage="Đang đồng bộ lộ trình, bài tập và streak của bạn"
+            />
+          ) : !IS_DEMO && dashboardQuery.isError ? (
+            <div className="dashboard-fetch-state" role="alert">
               <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
               <h2>
-                {dashboardQuery.isPending
-                  ? 'Loading your workspace…'
-                  : loadState === 'restricted'
-                    ? 'Access restricted.'
-                    : 'Learning activity unavailable.'}
+                {loadState === 'restricted'
+                  ? 'Access restricted.'
+                  : 'Learning activity unavailable.'}
               </h2>
-              {dashboardQuery.isError && (
-                <>
-                  <p>
-                    {loadState === 'restricted'
-                      ? 'This account cannot access the student dashboard.'
-                      : 'We could not load your learning data.'}
-                  </p>
-                  {loadState !== 'restricted' && (
-                    <button type="button" onClick={() => dashboardQuery.refetch()}>
-                      Try again
-                    </button>
-                  )}
-                </>
+              <p>
+                {loadState === 'restricted'
+                  ? 'This account cannot access the student dashboard.'
+                  : 'We could not load your learning data.'}
+              </p>
+              {loadState !== 'restricted' && (
+                <button type="button" onClick={() => dashboardQuery.refetch()}>
+                  Try again
+                </button>
               )}
             </div>
           ) : (
@@ -357,11 +404,21 @@ export const DashboardPage = () => {
                           >
                             <span style={{ width: `${featuredCourse.progressPercent}%` }} />
                           </div>
-                          {featuredCourse.href && (
-                            <Link className="dashboard-learning-action" to={featuredCourse.href}>
-                              Continue learning <ArrowRight size={15} aria-hidden="true" />
-                            </Link>
-                          )}
+                          <div className="flex flex-wrap items-center gap-3">
+                            {featuredCourse.href && (
+                              <Link className="dashboard-learning-action" to={featuredCourse.href}>
+                                {resolvedPrimaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
+                              </Link>
+                            )}
+                            {resolvedPrimaryClassroomHref && (
+                              <Link
+                                to={resolvedPrimaryClassroomHref}
+                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 hover:text-white underline underline-offset-4"
+                              >
+                                Open classroom →
+                              </Link>
+                            )}
+                          </div>
                         </div>
                       </>
                     ) : (
@@ -369,10 +426,11 @@ export const DashboardPage = () => {
                         <div className="dashboard-learning-content">
                           <span className="dashboard-learning-label">YOUR NEXT CHAPTER</span>
                           <h3>Your next chapter starts here.</h3>
-                          <p>Choose a topic that interests you and start learning at your pace.</p>
-                          <Link className="dashboard-learning-action" to="/courses">
+                          <p>{IS_DEMO ? 'Choose a topic that interests you and start learning at your pace.'
+                            : 'Public courses will appear here once this module is connected.'}</p>
+                          {IS_DEMO && <Link className="dashboard-learning-action" to="/student/courses">
                             Explore courses <ArrowRight size={16} aria-hidden="true" />
-                          </Link>
+                          </Link>}
                         </div>
                         <img className="dashboard-learning-mascot" src={byteMascot} alt="" width="280" height="280" />
                       </>
@@ -380,7 +438,10 @@ export const DashboardPage = () => {
                   </div>
 
                   {secondaryCourse && (
-                    <div className="dashboard-secondary-course">
+                    <Link
+                      to={secondaryCourse.href || '/student/classrooms'}
+                      className="dashboard-secondary-course hover:border-slate-300 transition-colors"
+                    >
                       <span>ALSO IN PROGRESS</span>
                       <div className="dashboard-secondary-course-main">
                         <strong>{secondaryCourse.title}</strong>
@@ -398,7 +459,7 @@ export const DashboardPage = () => {
                       <span className="dashboard-secondary-course-progress">
                         {secondaryCourse.progressPercent}% complete
                       </span>
-                    </div>
+                    </Link>
                   )}
                 </section>
 
@@ -430,13 +491,12 @@ export const DashboardPage = () => {
                             </div>
                             <div className="dashboard-timeline-body">
                               <div className="dashboard-timeline-head">
-                                {item.href ? (
-                                  <Link className="dashboard-timeline-title" to={item.href}>
-                                    {item.title}
-                                  </Link>
-                                ) : (
-                                  <strong className="dashboard-timeline-title">{item.title}</strong>
-                                )}
+                                <Link
+                                  className="dashboard-timeline-title"
+                                  to={item.href && !item.href.startsWith('#') ? item.href : '/student/classrooms'}
+                                >
+                                  {item.title}
+                                </Link>
                                 <span className="dashboard-timeline-urgency" data-immediate={isImmediate}>
                                   {urgency}
                                 </span>
@@ -457,7 +517,9 @@ export const DashboardPage = () => {
                       <div>
                         <strong>No deadlines to show yet.</strong>
                         <p>
-                          Assignments and quizzes from your enrolled classes will appear here in chronological order.
+                          {IS_DEMO
+                            ? 'Assignments and quizzes from your enrolled classes will appear here in chronological order.'
+                            : 'Assignments and quizzes will appear here once their classroom modules are connected.'}
                         </p>
                       </div>
                     </div>
@@ -465,9 +527,14 @@ export const DashboardPage = () => {
                 </section>
 
                 <section aria-labelledby="classes-title" id="classes" className="dashboard-section">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">03 / YOUR LEARNING</span>
-                    <h2 id="classes-title">My classes</h2>
+                  <div className="dashboard-section-heading flex items-center justify-between">
+                    <div>
+                      <span className="dashboard-eyebrow">03 / YOUR LEARNING</span>
+                      <h2 id="classes-title">My classes</h2>
+                    </div>
+                    <Link to="/student/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                      View all classrooms →
+                    </Link>
                   </div>
 
                   {data.classes.length ? (
@@ -500,7 +567,7 @@ export const DashboardPage = () => {
                                 aria-label={`${classroom.name}: ${moduleCounts.completed} of ${moduleCounts.total} modules completed`}
                               >
                                 <span className="dashboard-class-segments-label">
-                                  {moduleCounts.completed} / {moduleCounts.total} modules
+                                  {moduleCounts.completed} / {moduleCounts.total} lessons
                                 </span>
                                 <div className="dashboard-class-segments-track" aria-hidden="true">
                                   {Array.from({ length: moduleCounts.total }, (_, idx) => (
@@ -512,14 +579,14 @@ export const DashboardPage = () => {
                           </>
                         );
 
-                        return classroom.href ? (
-                          <Link className="dashboard-class-row" key={classroom.id} to={classroom.href}>
+                        const classroomLink = classroom.href && !classroom.href.startsWith('#')
+                          ? classroom.href
+                          : `/student/classrooms/${encodeURIComponent(classroom.id)}`;
+
+                        return (
+                          <Link className="dashboard-class-row" key={classroom.id} to={classroomLink}>
                             {content}
                           </Link>
-                        ) : (
-                          <article className="dashboard-class-row" key={classroom.id} tabIndex={0}>
-                            {content}
-                          </article>
                         );
                       })}
                     </div>
@@ -538,9 +605,14 @@ export const DashboardPage = () => {
 
               <aside className="dashboard-secondary">
                 <section aria-labelledby="practice-title" id="practice" className="dashboard-practice">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">04 / KEEP THE RHYTHM</span>
-                    <h2 id="practice-title">Practice pulse</h2>
+                  <div className="dashboard-section-heading flex items-center justify-between">
+                    <div>
+                      <span className="dashboard-eyebrow">04 / KEEP THE RHYTHM</span>
+                      <h2 id="practice-title">Practice pulse</h2>
+                    </div>
+                    <Link to="/practice" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                      Open practice studio →
+                    </Link>
                   </div>
 
                   <PracticePulse practice={practice} loading={loadState === 'loading'} />
@@ -635,13 +707,7 @@ export const DashboardPage = () => {
               </aside>
             </div>
           )}
-        </main>
-
-        <footer className="dashboard-footer">
-          <span>© {new Date().getFullYear()} AlgoLearn</span>
-          <span>Think. Code. Repeat.</span>
-        </footer>
-      </div>
-    </div>
+          <DashboardLessonLinks role="STUDENT" />
+    </WorkspaceLayout>
   );
 };

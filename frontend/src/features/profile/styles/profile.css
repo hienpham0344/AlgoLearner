@@ -900,6 +900,13 @@ body:has(.account-page)::-webkit-scrollbar {
   gap: 2px;
   position: relative;
   z-index: 2;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.identity-name,
+.identity-handle {
+  overflow-wrap: anywhere;
 }
 
 .identity-name {
@@ -1164,6 +1171,274 @@ body:has(.account-page)::-webkit-scrollbar {
 }
 
 /* ==========================================================================
+   6b. Security Panel (Clean Editorial List - Option B)
+   ========================================================================== */
+
+.security-form-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 6px;
+}
+
+.security-form-row {
+  display: grid;
+  grid-template-columns: 190px 1fr;
+  align-items: center;
+  gap: 20px;
+  padding: 13px 0;
+  border-bottom: 1px solid #ebebea;
+}
+
+.security-label-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.security-form-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  font-weight: 640;
+  color: #222427;
+  letter-spacing: -0.01em;
+}
+
+.security-label-hint {
+  font-size: 11.5px;
+  font-weight: 450;
+  color: #7c8085;
+  letter-spacing: normal;
+}
+
+.security-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 0 24px;
+  border-bottom: 1px solid #dcdcd7;
+}
+
+.security-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.4;
+}
+
+.security-status-badge.is-success {
+  background: #edf3ec;
+  border: 1px solid #d4e4d2;
+  color: #2b592f;
+}
+
+.security-status-badge.is-error {
+  background: #fdebec;
+  border: 1px solid #f3cdcd;
+  color: #9f2f2d;
+}
+
+.security-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.security-sessions-section {
+  padding-top: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.security-sessions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.security-sessions-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1a1c1e;
+  letter-spacing: -0.015em;
+}
+
+.security-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  background: #f4f4f1;
+  border: 1px solid #dcdcd8;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #222427;
+  cursor: pointer;
+  transition: all 160ms ease;
+  text-decoration: none;
+  flex: none;
+}
+
+.security-btn-secondary:hover:not(:disabled) {
+  background: #ebebe6;
+  border-color: #222427;
+}
+
+.security-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.security-sessions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.security-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  background: #faf9f7;
+  border: 1px solid #e1dfda;
+  border-radius: 11px;
+  transition: border-color 160ms ease;
+}
+
+.security-session-row:hover {
+  border-color: #d2d0ca;
+}
+
+.security-session-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.security-session-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.security-mono-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2.5px 7px;
+  border-radius: 5px;
+  background: #ecece8;
+  border: 1px solid #dcdcd6;
+  font: 600 10px / 1.2 'JetBrains Mono', monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #464849;
+}
+
+.security-mono-tag.is-current {
+  background: #edf3ec;
+  border-color: #cce0ca;
+  color: #2b592f;
+}
+
+.security-session-device {
+  font-size: 13.2px;
+  font-weight: 650;
+  color: #1a1c1e;
+}
+
+.security-session-meta {
+  font-size: 12px;
+  color: #72767d;
+}
+
+.security-session-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 11px / 1 'JetBrains Mono', monospace;
+  color: #2b592f;
+  margin-left: 4px;
+}
+
+.security-btn-danger {
+  display: inline-flex;
+  align-items: center;
+  padding: 5.5px 11px;
+  background: #fdebec;
+  border: 1px solid #f3cdcd;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #9f2f2d;
+  cursor: pointer;
+  transition: all 160ms ease;
+  white-space: nowrap;
+  flex: none;
+}
+
+.security-btn-danger:hover:not(:disabled) {
+  background: #fbd6d8;
+  border-color: #e5a4a7;
+}
+
+.security-btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.security-empty-text {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #72767d;
+  font-style: italic;
+}
+
+.security-reset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #ebebea;
+}
+
+.security-reset-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.security-reset-title {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #222427;
+}
+
+.security-reset-meta {
+  font-size: 12px;
+  color: #72767d;
+}
+
+/* ==========================================================================
    7. Feedback Toast & State Panes
    ========================================================================== */
 
@@ -1421,6 +1696,30 @@ body:has(.account-page)::-webkit-scrollbar {
 
   .folder-value-text {
     overflow-wrap: anywhere;
+  }
+
+  .security-form-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 11px 0;
+  }
+
+  .security-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .security-session-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .security-reset-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 }
 
@@ -2053,5 +2352,244 @@ body:has(.account-page)::-webkit-scrollbar {
     animation: none !important;
     transition: none !important;
     transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   10. Account Tab — Danger Zone (Two-Step Deactivation)
+   ========================================================================== */
+
+.account-danger-zone {
+  margin-top: 24px;
+  padding: 18px 20px;
+  border-radius: 14px;
+  border: 1px solid #fecaca;
+  background: linear-gradient(180deg, #fffafa 0%, #fef2f2 100%);
+}
+
+.account-danger-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.account-danger-copy {
+  min-width: 0;
+}
+
+.account-danger-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.account-danger-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #7f1d1d;
+}
+
+.account-danger-desc {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #7f1d1d;
+}
+
+.account-danger-status {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #991b1b;
+}
+
+.account-danger-form {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #fecaca;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-danger-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.account-danger-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #450a0a;
+}
+
+.account-danger-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.account-danger-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 64px 0 12px;
+  border-radius: 10px;
+  border: 1px solid #e5b4b4;
+  background: #ffffff;
+  font-size: 13.5px;
+  color: #171717;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.account-danger-input:focus {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.12);
+}
+
+.account-danger-input:disabled {
+  background: #f9fafb;
+  opacity: 0.7;
+}
+
+.account-danger-toggle-pw {
+  position: absolute;
+  right: 10px;
+  border: 0;
+  background: transparent;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #525252;
+  cursor: pointer;
+}
+
+.account-danger-toggle-pw:hover:not(:disabled) {
+  color: #171717;
+}
+
+.account-danger-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #450a0a;
+  cursor: pointer;
+  user-select: none;
+}
+
+.account-danger-check input {
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  accent-color: #b91c1c;
+  flex-shrink: 0;
+}
+
+.account-danger-error {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #b91c1c;
+}
+
+.account-danger-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.account-danger-btn-outline {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #fca5a5;
+  background: #ffffff;
+  color: #b91c1c;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.account-danger-btn-outline:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+.account-danger-btn-outline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.account-danger-btn-ghost {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #e6e4dd;
+  background: #ffffff;
+  color: #171717;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.account-danger-btn-ghost:hover:not(:disabled) {
+  background: #f5f4ef;
+}
+
+.account-danger-btn-solid {
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 0;
+  background: #b91c1c;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.account-danger-btn-solid:hover:not(:disabled) {
+  background: #991b1b;
+}
+
+.account-danger-btn-solid:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .account-danger-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .account-danger-btn-outline {
+    align-self: flex-start;
+  }
+
+  .account-danger-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .account-danger-btn-ghost,
+  .account-danger-btn-solid {
+    width: 100%;
+    text-align: center;
   }
 }

@@ -1,0 +1,5 @@
+app:
+  mail:
+    async: false
+  security:
+    otp-hmac-secret: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=

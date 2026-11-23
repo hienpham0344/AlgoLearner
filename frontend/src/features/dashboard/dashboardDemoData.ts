@@ -1,12 +1,12 @@
 import type { DailyPracticeActivity, StudentDashboardData } from './types';
 
-const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const VIETNAM_OFFSET_MS = 7 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
-const toBangkokDateKey = (timestampMs: number) =>
-  new Date(timestampMs + BANGKOK_OFFSET_MS).toISOString().slice(0, 10);
+const toVietnamDateKey = (timestampMs: number) =>
+  new Date(timestampMs + VIETNAM_OFFSET_MS).toISOString().slice(0, 10);
 
 // Chronological 12-week (84-day) daily coding history for `vite --mode auth-demo`.
 // The last 7 consecutive days (daysAgo 0..6) are active to match `currentStreak: 7`,
@@ -35,7 +35,7 @@ const buildDemoActivityHistory = (totalDays = 84): DailyPracticeActivity[] => {
 
   for (let daysAgo = totalDays - 1; daysAgo >= 0; daysAgo -= 1) {
     history.push({
-      date: toBangkokDateKey(now - daysAgo * DAY_MS),
+      date: toVietnamDateKey(now - daysAgo * DAY_MS),
       solvedCount: DEMO_SOLVED_BY_DAYS_AGO[daysAgo] ?? 0,
     });
   }
@@ -55,7 +55,7 @@ export const dashboardDemoData: StudentDashboardData = {
       completedUnits: 8,
       totalUnits: 13,
       progressPercent: 62,
-      href: '/courses',
+      href: '/student/courses',
     },
     {
       id: 'demo-algorithms',
@@ -66,7 +66,7 @@ export const dashboardDemoData: StudentDashboardData = {
       completedUnits: 3,
       totalUnits: 11,
       progressPercent: 28,
-      href: '/courses',
+      href: '/student/courses',
     },
   ],
   deadlines: [
@@ -124,7 +124,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Functions and reusable logic · Python foundations',
       createdAt: hoursFromNow(-2),
       read: false,
-      href: '/courses',
+      href: '/student/courses',
     },
     {
       id: 'demo-note-2',
@@ -134,7 +134,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Comparison-based sorting & complexity · Algorithms & Data Structures',
       createdAt: hoursFromNow(-19),
       read: true,
-      href: '#classes',
+      href: '/student/classrooms',
     },
     {
       id: 'demo-note-3',
@@ -144,7 +144,7 @@ export const dashboardDemoData: StudentDashboardData = {
       detail: 'Core data structures · Programming Fundamentals',
       createdAt: hoursFromNow(-42),
       read: true,
-      href: '#deadlines',
+      href: '/student/classrooms',
     },
   ],
 };

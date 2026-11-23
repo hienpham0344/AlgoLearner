@@ -1,0 +1,2513 @@
+{
+  "source": "docs/SRS ver 1.1.docx",
+  "scope": "SRS 4.6 / 17 FR / 127 AC",
+  "updated": "2026-11-18",
+  "verificationPolicy": "VERIFIED_LOCAL chỉ dùng cho assertion cụ thể đã quan sát PASS trên snapshot có SHA. Các mức khác không phải kết luận hoàn thành.",
+  "acceptanceCriteria": [
+    {
+      "fr": "FR-ASG-001",
+      "criterion": "AC-01: Teacher chủ sở hữu Class có thể tạo Assignment loại Graded hoặc Ungraded.",
+      "sourceParagraph": 1343,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentLessonProgressProvider.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/PG: Graded và Ungraded được tạo; Ungraded nộp không cần điểm và tạo submitted completion; Teacher khác bị từ chối đổi type."
+    },
+    {
+      "fr": "FR-ASG-001",
+      "criterion": "AC-02: Assignment Graded được áp dụng cơ chế tính điểm theo cấu hình hợp lệ.",
+      "sourceParagraph": 1344,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#equalDefaultWeightsNormalizeDifferentQuestionMaximaBeforeAggregation"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentLessonProgressProvider.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Assertion điểm tổng chuẩn hóa theo maximum/weight cấu hình, không cộng thô các câu có maximum khác nhau."
+    },
+    {
+      "fr": "FR-ASG-001",
+      "criterion": "AC-03: Assignment Ungraded không yêu cầu điểm số nhưng có thể ghi nhận trạng thái hoàn thành theo quy tắc được cấu hình.",
+      "sourceParagraph": 1345,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentLessonProgressProvider.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/PG: Graded và Ungraded được tạo; Ungraded nộp không cần điểm và tạo submitted completion; Teacher khác bị từ chối đổi type."
+    },
+    {
+      "fr": "FR-ASG-001",
+      "criterion": "AC-04: Student chỉ được thực hiện Assignment khi đáp ứng các điều kiện truy cập và nộp bài.",
+      "sourceParagraph": 1346,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentSafetyTest#closedAssignmentRejectsExistingAttemptSubmission",
+        "AssignmentSafetyTest#archivedClassroomRejectsExistingAttemptSubmission",
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentLessonProgressProvider.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Server kiểm trạng thái/lớp/thời gian và membership; chưa có một assertion Assignment-specific bao phủ toàn bộ trạng thái tài khoản ở tiêu chí tổng hợp này."
+    },
+    {
+      "fr": "FR-ASG-001",
+      "criterion": "AC-05: Teacher không sở hữu Class không thể thay đổi loại Assignment của Class đó khi không có quyền tương ứng.",
+      "sourceParagraph": 1347,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentLessonProgressProvider.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/PG: Graded và Ungraded được tạo; Ungraded nộp không cần điểm và tạo submitted completion; Teacher khác bị từ chối đổi type."
+    },
+    {
+      "fr": "FR-ASG-002",
+      "criterion": "AC-01: Teacher có thể tạo Assignment gồm một hoặc nhiều loại câu hỏi được hỗ trợ.",
+      "sourceParagraph": 1362,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG/HTTP: cùng Assignment có Essay, Code, Single Choice; lưu order xác định và đọc đúng; Teacher khác không đổi được thứ tự."
+    },
+    {
+      "fr": "FR-ASG-002",
+      "criterion": "AC-02: Một Assignment có thể kết hợp Code Question, Multiple Choice và Essay.",
+      "sourceParagraph": 1363,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG/HTTP: cùng Assignment có Essay, Code, Single Choice; lưu order xác định và đọc đúng; Teacher khác không đổi được thứ tự."
+    },
+    {
+      "fr": "FR-ASG-002",
+      "criterion": "AC-03: Teacher có thể thay đổi thứ tự các câu hỏi trong danh sách.",
+      "sourceParagraph": 1364,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG/HTTP: cùng Assignment có Essay, Code, Single Choice; lưu order xác định và đọc đúng; Teacher khác không đổi được thứ tự."
+    },
+    {
+      "fr": "FR-ASG-002",
+      "criterion": "AC-04: Thứ tự câu hỏi hợp lệ được lưu và áp dụng khi hiển thị Assignment.",
+      "sourceParagraph": 1365,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG/HTTP: cùng Assignment có Essay, Code, Single Choice; lưu order xác định và đọc đúng; Teacher khác không đổi được thứ tự."
+    },
+    {
+      "fr": "FR-ASG-002",
+      "criterion": "AC-05: Hệ thống không yêu cầu tổ chức câu hỏi thành các Section trong MVP.",
+      "sourceParagraph": 1366,
+      "status": "CODE_REVIEW_ONLY",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Không có Section trong DTO/schema authoring. Tiêu chí là miễn yêu cầu MVP, không suy ra kiểm chứng giao diện."
+    },
+    {
+      "fr": "FR-ASG-002",
+      "criterion": "AC-06: Người dùng không có quyền không thể thay đổi nội dung hoặc thứ tự câu hỏi.",
+      "sourceParagraph": 1367,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG/HTTP: cùng Assignment có Essay, Code, Single Choice; lưu order xác định và đọc đúng; Teacher khác không đổi được thứ tự."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-01: Student được di chuyển giữa các câu hỏi và chỉnh sửa câu trả lời trước Submit.",
+      "sourceParagraph": 1387,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentServiceTest#saveDraftAnswer_Idempotent_SavesAnswer",
+        "AssignmentAcceptanceIntegrationTest#shuffledSnapshotRemainsStableAndDoesNotChangeCorrectAnswersOrScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Server hỗ trợ sửa đáp án trước Submit và trả snapshot câu hỏi; điều hướng câu hỏi của client chưa kiểm chứng."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-02: Student có quyền và còn lượt làm có thể Submit toàn bộ Assignment.",
+      "sourceParagraph": 1388,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#directCodeRunAndOfficialSubmitReachTheRealPersistentJudge"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP Submit hợp lệ tạo official attempt; JDBC Code tạo đúng một tbl_submission, retry không tạo evaluation/official trùng."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-03: Mỗi thao tác Submit thành công tạo một Official Attempt/Submission tương ứng.",
+      "sourceParagraph": 1389,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#directCodeRunAndOfficialSubmitReachTheRealPersistentJudge"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP Submit hợp lệ tạo official attempt; JDBC Code tạo đúng một tbl_submission, retry không tạo evaluation/official trùng."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-04: Attempt đã Submit không được chỉnh sửa hoặc ghi đè bởi Attempt mới.",
+      "sourceParagraph": 1390,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentConcurrencyTest#autosaveWaitingBehindSubmitCannotOverwriteTheOfficialAnswer",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Race PG cho thấy autosave đợi sau Submit không ghi đè official; official history giữ nội dung snapshot cũ sau authoring edit."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-05: Student còn lượt làm có thể bắt đầu Attempt mới theo cấu hình.",
+      "sourceParagraph": 1391,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#extraAndResetQuotaKeepAllOfficialSubmissionsAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Sau extra/reset, bắt đầu attempt tiếp theo với sequence tăng, giữ các official attempt trước đó."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-06: Hệ thống từ chối Submit khi Student không đáp ứng điều kiện tài khoản, Class, thời gian, trạng thái hoặc lượt làm.",
+      "sourceParagraph": 1392,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentSafetyTest#closedAssignmentRejectsExistingAttemptSubmission",
+        "AssignmentSafetyTest#archivedClassroomRejectsExistingAttemptSubmission",
+        "AssignmentServiceTest#startAttempt_ThrowsWhenMaxAttemptsExceeded",
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Có assertion trạng thái, lớp, timing và quota; account-state combinations không được suy ra từ các assertion này."
+    },
+    {
+      "fr": "FR-ASG-003",
+      "criterion": "AC-07: Yêu cầu Submit không thành công không được ghi nhận như một Official Submission thành công.",
+      "sourceParagraph": 1393,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#closedAssignmentRejectsExistingAttemptSubmission",
+        "AssignmentTimeoutIntegrationTest#schedulerLocksPersistedDraftWithoutCreatingOfficialSubmission"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Submit bị chặn không gọi save; LOCK timeout không có submitted_at/official record."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-01: Hệ thống tự động lưu các loại dữ liệu bản nháp được quy định trong quá trình Student làm Assignment.",
+      "sourceParagraph": 1410,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#directCodeRunAndOfficialSubmitReachTheRealPersistentJudge",
+        "AssignmentTimeoutIntegrationTest#expiredAutosaveCommitsAutoSubmissionAndDoesNotPersistIncomingPayload"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Objective/Code/text draft có assertion persist/recovery. Chưa có exact Assignment essay-file autosave end-to-end trong batch này."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-02: Student có thể khôi phục bản nháp đã lưu thành công sau khi tải lại trang.",
+      "sourceParagraph": 1411,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "GET active attempt khôi phục bản nháp đã lưu. Browser page reload và client restoration chưa được điều khiển trực tiếp."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-03: Sau khi kết nối mạng tạm thời bị gián đoạn và được khôi phục, Student có thể tiếp tục với dữ liệu bản nháp đã được lưu thành công.",
+      "sourceParagraph": 1412,
+      "status": "CLIENT_NOT_VERIFIED",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Không chạy browser/network interruption; server persistence không đủ chứng minh UX tiếp tục sau reconnect."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-04: Bản nháp không xuất hiện dưới dạng Official Submission trước khi có thao tác Submit thành công hoặc Auto Submit on Timeout.",
+      "sourceParagraph": 1413,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#directCodeRunAndOfficialSubmitReachTheRealPersistentJudge"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Sau RUN và sau autosave Code, tbl_submission vẫn 0; sau Submit mới là 1."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-05: Autosave không làm thay đổi các Attempt đã được Submit.",
+      "sourceParagraph": 1414,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentConcurrencyTest#autosaveWaitingBehindSubmitCannotOverwriteTheOfficialAnswer"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Race PG xác minh autosave sau Submit không sửa official answer."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-06: Khi Auto Submit on Timeout được áp dụng, hệ thống sử dụng trạng thái bản nháp đã lưu gần nhất theo quy tắc của FR-ASG-010.",
+      "sourceParagraph": 1415,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentTimeoutIntegrationTest#expiredAutosaveCommitsAutoSubmissionAndDoesNotPersistIncomingPayload"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Timeout commit dùng saved payload trước đó; incoming autosave sau cutoff không thay dữ liệu/chấm điểm."
+    },
+    {
+      "fr": "FR-ASG-004",
+      "criterion": "AC-07: Khi lưu bản nháp thất bại, hệ thống không được ghi nhận thao tác đó là đã lưu thành công.",
+      "sourceParagraph": 1416,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentSafetyTest#staleAutosaveCannotOverwriteANewerAnswer",
+        "AssignmentSafetyTest#retriedAutosaveMutationReturnsSavedVersionWithoutApplyingPayloadAgain"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Server từ chối stale version/giữ phiên bản cũ; trạng thái lỗi hiển thị cho client chưa kiểm chứng."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-01: Teacher có thể cấu hình Start Time và Deadline hoặc No Deadline.",
+      "sourceParagraph": 1435,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentConfigurationPolicyTest#validatesSchedulesAndUnlimitedAttemptsWithoutSideEffects",
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart",
+        "AssignmentAcceptanceIntegrationTest#allowLateUntimedAttemptCanStartAndSubmitAfterDeadlineWithoutPenalty",
+        "AssignmentAcceptanceIntegrationTest#lateAllowedTimerUsesDurationAndSchedulerDoesNotExpireAtDeadline"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Có no-deadline, future start, deadline hợp lệ và các trường hợp cấu hình không hợp lệ."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-02: Trước Start Time, Student chỉ được xem tên Assignment và thời điểm mở bài; không thể truy cập nội dung chi tiết hoặc làm bài.",
+      "sourceParagraph": 1436,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Trước start: list ẩn type/deadline/duration/quota/grade/createdAt; detail/start bị chặn, title/start và định danh/trạng thái còn dùng được."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-03: Sau Deadline, nếu Assignment vẫn cho phép nộp, hệ thống chấp nhận Submission hợp lệ và đánh dấu Late.",
+      "sourceParagraph": 1437,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#allowLateUntimedAttemptCanStartAndSubmitAfterDeadlineWithoutPenalty",
+        "AssignmentAcceptanceIntegrationTest#lateAllowedTimerUsesDurationAndSchedulerDoesNotExpireAtDeadline"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Late allowed: start sau deadline được, submission Late=true, submittedAt=serverNow; điểm 10 không bị trừ. Timer theo duration khi cho Late."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-04: Submission Late không bị hệ thống tự động trừ điểm chỉ vì nộp trễ.",
+      "sourceParagraph": 1438,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#allowLateUntimedAttemptCanStartAndSubmitAfterDeadlineWithoutPenalty",
+        "AssignmentAcceptanceIntegrationTest#lateAllowedTimerUsesDurationAndSchedulerDoesNotExpireAtDeadline"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Late allowed: start sau deadline được, submission Late=true, submittedAt=serverNow; điểm 10 không bị trừ. Timer theo duration khi cho Late."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-05: Khi Assignment đã khóa hoặc Closed đối với Submission mới, hệ thống từ chối Submit.",
+      "sourceParagraph": 1439,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#closedAssignmentRejectsExistingAttemptSubmission"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Closed chặn Submit của attempt đã bắt đầu trước đó."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-06: Hệ thống không tạo Official Submission từ yêu cầu nộp bài không hợp lệ về thời gian hoặc trạng thái.",
+      "sourceParagraph": 1440,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#closedAssignmentRejectsExistingAttemptSubmission",
+        "AssignmentTimeoutIntegrationTest#schedulerLocksPersistedDraftWithoutCreatingOfficialSubmission"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Các yêu cầu không hợp lệ không ghi nhận official; LOCK có submittedAt null."
+    },
+    {
+      "fr": "FR-ASG-005",
+      "criterion": "AC-07: Thời gian bắt đầu, Deadline và thời điểm nộp được xử lý theo quy tắc thời gian của hệ thống.",
+      "sourceParagraph": 1441,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart",
+        "AssignmentAcceptanceIntegrationTest#allowLateUntimedAttemptCanStartAndSubmitAfterDeadlineWithoutPenalty",
+        "AssignmentAcceptanceIntegrationTest#lateAllowedTimerUsesDurationAndSchedulerDoesNotExpireAtDeadline"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentConfigurationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Instant/UTC ISO output và thời điểm server có assertion; chuyển hiển thị UTC+7 phía client chưa kiểm chứng."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-01: Hệ thống hỗ trợ các trạng thái Draft, Scheduled, Published và Closed.",
+      "sourceParagraph": 1463,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/PG quan sát Draft, Scheduled, Published và Closed trong lifecycle thật."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-02: Student không thể thực hiện Assignment đang ở Draft.",
+      "sourceParagraph": 1464,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAuthorizationAcceptanceTest#studentCannotStartDraftAndNoAttemptIsCreated"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-authorization-ac-default2.json",
+        "backend/target/verification/assignment-authorization-ac-main2.json"
+      ],
+      "reason": "Active Student gọi POST start trên Draft bị ASSIGNMENT_CLOSED; PostgreSQL tbl_assignment_attempt vẫn 0, không tạo draft/official attempt."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-03: Assignment Scheduled áp dụng thời điểm mở bài theo cấu hình và không cho phép làm trước Start Time.",
+      "sourceParagraph": 1465,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart",
+        "AssignmentAcceptanceIntegrationTest#blockedSchedulesCannotStarveAnActiveAssignmentOutsideTheFirstHundredRows"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Scheduled dùng server start, activations lặp không nhân đôi notification; 100 lịch thuộc lớp blocked không chặn lịch active thứ 101."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-04: Assignment Published cho phép Student hợp lệ thực hiện theo các quy tắc truy cập tương ứng.",
+      "sourceParagraph": 1466,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#futurePublicationIsPersistedScheduledAndActivatesAtExactServerStart",
+        "AssignmentAcceptanceIntegrationTest#blockedSchedulesCannotStarveAnActiveAssignmentOutsideTheFirstHundredRows"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Scheduled dùng server start, activations lặp không nhân đôi notification; 100 lịch thuộc lớp blocked không chặn lịch active thứ 101."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-05: Assignment Closed không chấp nhận Attempt hoặc Submission mới.",
+      "sourceParagraph": 1467,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#closedAssignmentRejectsExistingAttemptSubmission",
+        "AssignmentSafetyTest#closedAssignmentRejectsAutosaveBeforeModifyingAnswer"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Closed từ chối Submit/autosave trước khi sửa answer. Cùng guard áp dụng start."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-06: Student có thể xem Assignment và Submission cũ khi Closed nếu còn quyền truy cập.",
+      "sourceParagraph": 1468,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Student đọc được own official history/detail khi Closed; draft bị loại, Student khác bị từ chối và dữ liệu giữ snapshot."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-07: Teacher không sở hữu Class không thể thay đổi trạng thái Assignment.",
+      "sourceParagraph": 1469,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Owner guard chung đã được HTTP kiểm cho đổi type/order; chưa có exact assertion Teacher khác gọi publish/close riêng."
+    },
+    {
+      "fr": "FR-ASG-006",
+      "criterion": "AC-08: Hệ thống không bắt buộc chức năng Preview as Student trong MVP.",
+      "sourceParagraph": 1470,
+      "status": "CLIENT_NOT_VERIFIED",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Preview as Student là không bắt buộc MVP; không kiểm giao diện."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-01: Teacher chủ sở hữu có thể chỉnh sửa Assignment Published khi thao tác hợp lệ.",
+      "sourceParagraph": 1488,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Owner sửa question sau khi đã publish/nộp, trong khi own submission vẫn trả Original question."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-02: Khi Assignment chưa có Submission, các thay đổi hợp lệ được lưu theo cấu hình.",
+      "sourceParagraph": 1489,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentServiceTest#updateAssignment_ModifiesFields"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Assignment Published chưa có attempts cho phép cập nhật cấu hình hợp lệ và trả DTO đúng."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-03: Khi Assignment đã có Submission, việc chỉnh sửa không ghi đè câu hỏi, kết quả hoặc quy tắc chấm điểm lịch sử đã được áp dụng.",
+      "sourceParagraph": 1490,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#retiredWorkingQuestionDoesNotChangePublishedOrStartedRevision",
+        "AssignmentPersistenceSafetyTest#manualGradeAndOverrideAppendDistinctImmutableEvaluations"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Old revision/options/answer và evaluation đã áp dụng được giữ; publish revision mới chỉ áp dụng attempt mới."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-04: Submission cũ giữ liên kết với phiên bản Test Case đã sử dụng.",
+      "sourceParagraph": 1491,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Old evaluation giữ original judgeRevisionId/score; publish V2 và working V3 không tự ghi đè result cũ; chỉ explicit target/release mới đổi official."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-05: Khi Test Case đã được sử dụng bị thay đổi, hệ thống hiển thị cảnh báo và yêu cầu xác nhận về Rejudge.",
+      "sourceParagraph": 1492,
+      "status": "CLIENT_NOT_VERIFIED",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Chưa kiểm UI cảnh báo/xác nhận khi đổi testcase đã dùng; backend chưa enforce confirmation handshake cho thao tác authoring. Không coi Rejudge target API là bằng chứng cảnh báo."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-06: Thay đổi Test Case không tự động thay đổi kết quả Submission cũ nếu chưa có thao tác Rejudge tương ứng.",
+      "sourceParagraph": 1493,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Old evaluation giữ original judgeRevisionId/score; publish V2 và working V3 không tự ghi đè result cũ; chỉ explicit target/release mới đổi official."
+    },
+    {
+      "fr": "FR-ASG-007",
+      "criterion": "AC-07: Người dùng không có quyền không thể chỉnh sửa Assignment.",
+      "sourceParagraph": 1494,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#mixedQuestionOrderAndUngradedCompletionPersistWithOwnerOnlyAuthoring",
+        "AssignmentSafetyTest#cannotDeleteQuestionThroughAnotherOwnedClassroom"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentRevisionEntity.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Owner/scope guard được kiểm ở update và retire; không tuyên bố mọi authoring endpoint có assertion trái quyền riêng."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-01: Teacher có thể nhân bản Assignment đến Class mình được phép quản lý.",
+      "sourceParagraph": 1523,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: clone giữ deadline/mode/duration/shuffle/feedback và testcase snapshot, question UUID độc lập, Draft; không copy attempts/rejudge logs; source retire không sửa copy; wrong target owner bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-02: Bản sao chứa nội dung, câu hỏi, Test Case và các cấu hình được quy định.",
+      "sourceParagraph": 1524,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: clone giữ deadline/mode/duration/shuffle/feedback và testcase snapshot, question UUID độc lập, Draft; không copy attempts/rejudge logs; source retire không sửa copy; wrong target owner bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-03: Bản sao không chứa Submission, Grade, Feedback, Student History hoặc Audit History của Assignment nguồn.",
+      "sourceParagraph": 1525,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: clone giữ deadline/mode/duration/shuffle/feedback và testcase snapshot, question UUID độc lập, Draft; không copy attempts/rejudge logs; source retire không sửa copy; wrong target owner bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-04: Assignment được nhân bản tồn tại độc lập với Assignment nguồn.",
+      "sourceParagraph": 1526,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: clone giữ deadline/mode/duration/shuffle/feedback và testcase snapshot, question UUID độc lập, Draft; không copy attempts/rejudge logs; source retire không sửa copy; wrong target owner bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-05: Khi sao chép Public Problem vào Class, hệ thống tạo phiên bản độc lập.",
+      "sourceParagraph": 1527,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Direct Code clone độc lập có assertion. PublicProblemCatalog copy vào Assignment có code và producer integration khác, nhưng chưa có exact Assignment publicProblemId end-to-end assertion trong batch này."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-06: Thay đổi Public Problem nguồn không tự động cập nhật phiên bản đã sao chép.",
+      "sourceParagraph": 1528,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Direct Code clone độc lập có assertion. PublicProblemCatalog copy vào Assignment có code và producer integration khác, nhưng chưa có exact Assignment publicProblemId end-to-end assertion trong batch này."
+    },
+    {
+      "fr": "FR-ASG-008",
+      "criterion": "AC-07: Teacher không thể nhân bản Assignment vào Class không thuộc phạm vi quản lý của mình.",
+      "sourceParagraph": 1529,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#cloneKeepsSettingsAndIndependentQuestionSnapshotsWithoutLearnerHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: clone giữ deadline/mode/duration/shuffle/feedback và testcase snapshot, question UUID độc lập, Draft; không copy attempts/rejudge logs; source retire không sửa copy; wrong target owner bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-01: Teacher có thể cấu hình Maximum Attempts hợp lệ.",
+      "sourceParagraph": 1545,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentConfigurationPolicyTest#validatesSchedulesAndUnlimitedAttemptsWithoutSideEffects"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Maximum Attempts 0 hợp lệ (unlimited), số âm bị từ chối trước persistence."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-02: Student còn lượt làm hợp lệ có thể bắt đầu Attempt mới khi các điều kiện khác được đáp ứng.",
+      "sourceParagraph": 1546,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#extraAndResetQuotaKeepAllOfficialSubmissionsAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: extra cho lượt thứ hai, reset cho lượt thứ ba, giữ 2 official/evaluation cũ và đúng 2 audit extra/reset."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-03: Student đã hết lượt làm không thể bắt đầu hoặc Submit Attempt mới nếu chưa được cấp thêm hoặc đặt lại.",
+      "sourceParagraph": 1547,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#grantedAttemptStartingAtTheExactGrantInstantStillLocksAfterItsOwnTimeout"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Hết quota bị từ chối; exact grant instant không bypass LOCK sau timeout mới."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-04: Teacher có thể cấp thêm hoặc đặt lại lượt làm theo quyền được cấp.",
+      "sourceParagraph": 1548,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#extraAndResetQuotaKeepAllOfficialSubmissionsAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: extra cho lượt thứ hai, reset cho lượt thứ ba, giữ 2 official/evaluation cũ và đúng 2 audit extra/reset."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-05: Sau khi thay đổi quyền thực hiện Attempt hợp lệ, Student có thể tiếp tục theo giới hạn mới.",
+      "sourceParagraph": 1549,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#extraAndResetQuotaKeepAllOfficialSubmissionsAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: extra cho lượt thứ hai, reset cho lượt thứ ba, giữ 2 official/evaluation cũ và đúng 2 audit extra/reset."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-06: Give Extra Attempt hoặc Reset Attempt Count không xóa hoặc thay đổi Submission cũ.",
+      "sourceParagraph": 1550,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#extraAndResetQuotaKeepAllOfficialSubmissionsAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: extra cho lượt thứ hai, reset cho lượt thứ ba, giữ 2 official/evaluation cũ và đúng 2 audit extra/reset."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-07: Các thao tác thay đổi lượt làm được ghi nhận trong lịch sử/Audit.",
+      "sourceParagraph": 1551,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#extraAndResetQuotaKeepAllOfficialSubmissionsAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "PG: extra cho lượt thứ hai, reset cho lượt thứ ba, giữ 2 official/evaluation cũ và đúng 2 audit extra/reset."
+    },
+    {
+      "fr": "FR-ASG-009",
+      "criterion": "AC-08: Teacher không sở hữu Class không thể thay đổi lượt làm của Student thuộc Class đó.",
+      "sourceParagraph": 1552,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAuthorizationAcceptanceTest#otherTeacherCannotGrantAttemptsOrMutateAllowanceAndAudit"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentParticipationPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-authorization-ac-default2.json",
+        "backend/target/verification/assignment-authorization-ac-main2.json"
+      ],
+      "reason": "Teacher khác gọi attempt-grants bị403; PostgreSQL không tạo participation/allowance và audit count của actor giữ nguyên."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-01: Teacher có thể cấu hình Time Limit và một trong hai hành vi xử lý khi hết giờ.",
+      "sourceParagraph": 1569,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentTimeoutIntegrationTest#schedulerAutoSubmitsPersistedDraftAtExpiryBeforeDeadlineAndIsIdempotent",
+        "AssignmentTimeoutIntegrationTest#schedulerLocksPersistedDraftWithoutCreatingOfficialSubmission"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Cả AUTO_SUBMIT và LOCK_WITHOUT_SUBMIT với duration được chạy trên persisted draft thật."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-02: Timer dựa trên thời gian Server, không phụ thuộc vào bộ đếm phía trình duyệt.",
+      "sourceParagraph": 1570,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#lockModeStillAllowsSubmissionOneNanosecondBeforeExpiry",
+        "AssignmentTimeoutIntegrationTest#schedulerAutoSubmitsPersistedDraftAtExpiryBeforeDeadlineAndIsIdempotent"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Clock server quyết định cutoff, cho nộp trước 1ns và xử lý đúng tại expiry."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-03: Tải lại trang không đặt lại thời gian làm bài.",
+      "sourceParagraph": 1571,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentConcurrencyTest#simultaneousStartsResumeTheSameAttemptInsteadOfCreatingTwo",
+        "AssignmentAcceptanceIntegrationTest#lateAllowedTimerUsesDurationAndSchedulerDoesNotExpireAtDeadline"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Resume giữ cùng attempt/startedAt/base expiry; chưa điều khiển browser reload trực tiếp."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-04: Đóng tab hoặc mất kết nối tạm thời không đặt lại thời gian làm bài.",
+      "sourceParagraph": 1572,
+      "status": "CLIENT_NOT_VERIFIED",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Không chạy đóng tab/network reconnect của client; server scheduler chạy không phụ thuộc browser đã được kiểm riêng."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-05: Khi hết giờ với Auto Submit, hệ thống tạo Official Submission từ dữ liệu đã Autosave gần nhất.",
+      "sourceParagraph": 1573,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentTimeoutIntegrationTest#schedulerAutoSubmitsPersistedDraftAtExpiryBeforeDeadlineAndIsIdempotent"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Scheduler tạo official từ saved draft tại expiry và repeat poll không tạo thêm."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-06: Khi hết giờ với Lock without Submit, hệ thống khóa Attempt và không chuyển bản nháp thành Official Submission.",
+      "sourceParagraph": 1574,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentTimeoutIntegrationTest#schedulerLocksPersistedDraftWithoutCreatingOfficialSubmission"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "LOCK giữ draft, không có submittedAt/finalScore/official."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-07: Student không thể tiếp tục sửa hoặc Submit Attempt đã hết giờ trái với cấu hình.",
+      "sourceParagraph": 1575,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentTimeoutIntegrationTest#expiredAutosaveCommitsLockWithoutSubmittingOrOverwritingDraft",
+        "AssignmentSafetyTest#lockModeStillAllowsSubmissionOneNanosecondBeforeExpiry"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Autosave sau cutoff bị chặn và khóa persisted attempt; submission trước cutoff vẫn hợp lệ."
+    },
+    {
+      "fr": "FR-ASG-010",
+      "criterion": "AC-08: Hành vi khi Timeout không làm thay đổi các Attempt đã hoàn tất trước đó.",
+      "sourceParagraph": 1576,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentTimeoutIntegrationTest#schedulerAutoSubmitsPersistedDraftAtExpiryBeforeDeadlineAndIsIdempotent"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAttemptRepository.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentTimeoutScheduler.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Lặp expiry không thay official timestamp/answer/score đã hoàn tất."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-01: Teacher có thể bật hoặc tắt Shuffle Questions.",
+      "sourceParagraph": 1589,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#shuffledSnapshotRemainsStableAndDoesNotChangeCorrectAnswersOrScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Enabled flags và persisted permutation/reload được kiểm; không có assertion deterministic riêng bật/tắt/random permutation từng cấu hình. Identity permutation vẫn là kết quả xáo trộn hợp lệ."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-02: Teacher có thể bật hoặc tắt Shuffle Answers.",
+      "sourceParagraph": 1590,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#shuffledSnapshotRemainsStableAndDoesNotChangeCorrectAnswersOrScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Enabled flags và persisted permutation/reload được kiểm; không có assertion deterministic riêng bật/tắt/random permutation từng cấu hình. Identity permutation vẫn là kết quả xáo trộn hợp lệ."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-03: Khi Shuffle Questions được bật, hệ thống áp dụng thứ tự câu hỏi được xáo trộn theo cấu hình.",
+      "sourceParagraph": 1591,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#shuffledSnapshotRemainsStableAndDoesNotChangeCorrectAnswersOrScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Enabled flags và persisted permutation/reload được kiểm; không có assertion deterministic riêng bật/tắt/random permutation từng cấu hình. Identity permutation vẫn là kết quả xáo trộn hợp lệ."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-04: Khi Shuffle Answers được bật, hệ thống áp dụng xáo trộn thứ tự lựa chọn của câu hỏi trắc nghiệm.",
+      "sourceParagraph": 1592,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#shuffledSnapshotRemainsStableAndDoesNotChangeCorrectAnswersOrScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Enabled flags và persisted permutation/reload được kiểm; không có assertion deterministic riêng bật/tắt/random permutation từng cấu hình. Identity permutation vẫn là kết quả xáo trộn hợp lệ."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-05: Việc xáo trộn không làm thay đổi nội dung câu hỏi, đáp án đúng hoặc kết quả chấm điểm hợp lệ.",
+      "sourceParagraph": 1593,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#shuffledSnapshotRemainsStableAndDoesNotChangeCorrectAnswersOrScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Question set/nội dung/options frozen qua reload; chọn original correct UUID vẫn đạt score 20 sau shuffle."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-06: Student không được thay đổi cấu hình Shuffle của Assignment.",
+      "sourceParagraph": 1594,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAuthorizationAcceptanceTest#studentAndOtherTeacherCannotChangeEitherShuffleFlag"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-authorization-ac-default2.json",
+        "backend/target/verification/assignment-authorization-ac-main2.json"
+      ],
+      "reason": "Student gửi update cả shuffleQuestions/shuffleAnswers=true bị403; DB giữ hai flags false, title và audit count không đổi."
+    },
+    {
+      "fr": "FR-ASG-011",
+      "criterion": "AC-07: Người dùng không có quyền không thể thay đổi cấu hình Shuffle.",
+      "sourceParagraph": 1595,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAuthorizationAcceptanceTest#studentAndOtherTeacherCannotChangeEitherShuffleFlag"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentSnapshotPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-authorization-ac-default2.json",
+        "backend/target/verification/assignment-authorization-ac-main2.json"
+      ],
+      "reason": "Teacher khác gửi update cả shuffle flags bị403; DB giữ nguyên cấu hình/title và không có audit mutation."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-01: Teacher có thể cấu hình quyền hiển thị kết quả, đáp án và lời giải.",
+      "sourceParagraph": 1614,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Feedback config và current NEVER answer hiding có assertion; chưa kiểm đủ ViewAnswersMode/lời giải qua Teacher API cho mọi mode."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-02: Student chỉ được xem những thông tin mà cấu hình hiện hành cho phép.",
+      "sourceParagraph": 1615,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Current NEVER ẩn đáp án; policy Summary hiện hành hạ mức tiết lộ và permissive update không nâng baseline snapshot."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-03: Hệ thống hỗ trợ các mức phản hồi Code Question theo yêu cầu.",
+      "sourceParagraph": 1616,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/JDBC đủ PASS_FAIL(cases=0), TESTCASE_STATUS(cases có verdict, không IO), FULL_DETAILS(sample/allowDetails mới lộ IO; hidden mặc định bị che)."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-04: Ở mức chỉ hiển thị Pass/Fail, hệ thống không cung cấp chi tiết Test Case vượt quá mức được phép.",
+      "sourceParagraph": 1617,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/JDBC đủ PASS_FAIL(cases=0), TESTCASE_STATUS(cases có verdict, không IO), FULL_DETAILS(sample/allowDetails mới lộ IO; hidden mặc định bị che)."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-05: Ở mức trạng thái từng Test Case, Hidden Test Case không bị lộ Input/Output.",
+      "sourceParagraph": 1618,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/JDBC đủ PASS_FAIL(cases=0), TESTCASE_STATUS(cases có verdict, không IO), FULL_DETAILS(sample/allowDetails mới lộ IO; hidden mặc định bị che)."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-06: Thông tin Test Case chi tiết chỉ được hiển thị khi được cấu hình cho phép.",
+      "sourceParagraph": 1619,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "HTTP/JDBC đủ PASS_FAIL(cases=0), TESTCASE_STATUS(cases có verdict, không IO), FULL_DETAILS(sample/allowDetails mới lộ IO; hidden mặc định bị che)."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-07: Cấu hình hiển thị kết quả không cho phép Student truy cập điểm chưa được công bố trái với FR-ASG-013.",
+      "sourceParagraph": 1620,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Direct official job chưa release trả403, released job đọc được, generation mới chưa công bố bị chặn; grade chưa release null và IDOR bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-012",
+      "criterion": "AC-08: Các yêu cầu truy cập thông tin bị ẩn phải được kiểm soát tại backend.",
+      "sourceParagraph": 1621,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/CodeFeedbackLevel.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Direct official job chưa release trả403, released job đọc được, generation mới chưa công bố bị chặn; grade chưa release null và IDOR bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-01: Grade mặc định được ẩn đối với Student trước khi Publish Grade.",
+      "sourceParagraph": 1636,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Mặc định submit grade null; Publish Grade mới trả10; pointer công bố giữ grade cũ sau override chưa release và direct own-history áp owner/privacy."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-02: Teacher có thể Publish Grade theo quyền được cấp.",
+      "sourceParagraph": 1637,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Mặc định submit grade null; Publish Grade mới trả10; pointer công bố giữ grade cũ sau override chưa release và direct own-history áp owner/privacy."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-03: Assignment chỉ có các phần tự động chấm có thể sử dụng Auto Publish Grade khi Teacher bật cấu hình.",
+      "sourceParagraph": 1638,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAuthorizationAcceptanceTest#immediateAutoOnlyObjectiveGradePublishesWithoutTeacherRelease"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-authorization-ac-default2.json",
+        "backend/target/verification/assignment-authorization-ac-main2.json"
+      ],
+      "reason": "Assignment IMMEDIATE chỉ có objective: Submit tự chấm10, currentEvaluationId=publishedEvaluationId khác null; DB evaluation complete/score10 và Student own view thấy10 mà không gọi Publish Grade."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-04: Assignment có Essay chưa được chấm không được coi là đã có Final Grade hoàn tất.",
+      "sourceParagraph": 1639,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#unansweredEssayMustNotPublishFalseFinalScore",
+        "AssignmentSafetyTest#gradingOneEssayCannotFinalizeWhenAnotherEssayIsUnanswered"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Essay chưa chấm hoặc còn Essay chưa trả lời giữ finalScore null/status SUBMITTED."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-05: Khi toàn bộ phần Essay đã được chấm, hệ thống có thể xác định Final Grade theo quy tắc tính điểm.",
+      "sourceParagraph": 1640,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#retiredWorkingQuestionDoesNotChangePublishedOrStartedRevision"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Sau chấm hai Essay (kể cả unanswered=0), final score xác định đúng 50 theo original frozen weights."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-06: Student chỉ được xem Grade khi điều kiện công bố và quyền hiển thị được đáp ứng.",
+      "sourceParagraph": 1641,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Mặc định submit grade null; Publish Grade mới trả10; pointer công bố giữ grade cũ sau override chưa release và direct own-history áp owner/privacy."
+    },
+    {
+      "fr": "FR-ASG-013",
+      "criterion": "AC-07: Student không thể truy cập Grade riêng tư hoặc Grade chưa được phép công bố thông qua yêu cầu trực tiếp.",
+      "sourceParagraph": 1642,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow",
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Mặc định submit grade null; Publish Grade mới trả10; pointer công bố giữ grade cũ sau override chưa release và direct own-history áp owner/privacy."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-01: Teacher có thể tạo câu hỏi Single Choice, Multiple Choice và True/False.",
+      "sourceParagraph": 1660,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentQuestionAuthoringTest#singleChoiceRequiresExactlyOneCorrectOption",
+        "AssignmentQuestionAuthoringTest#multipleChoiceAllowsSeveralCorrectOptions",
+        "ObjectiveQuestionGraderTest#singleChoiceAndTrueFalseRequireExactlyOneCorrectOption",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Authoring SC/MC và grader SC/TF có assertion, Student SC HTTP có; chưa có full authoring→Student HTTP cả3 type."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-02: Student có thể trả lời các loại câu hỏi tương ứng khi thực hiện Assignment.",
+      "sourceParagraph": 1661,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentQuestionAuthoringTest#singleChoiceRequiresExactlyOneCorrectOption",
+        "AssignmentQuestionAuthoringTest#multipleChoiceAllowsSeveralCorrectOptions",
+        "ObjectiveQuestionGraderTest#singleChoiceAndTrueFalseRequireExactlyOneCorrectOption",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Authoring SC/MC và grader SC/TF có assertion, Student SC HTTP có; chưa có full authoring→Student HTTP cả3 type."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-03: Hệ thống chấm All-or-Nothing theo điều kiện đáp án đúng đã cấu hình.",
+      "sourceParagraph": 1662,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "ObjectiveQuestionGraderTest#allOrNothingRequiresTheExactCorrectSet"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "All-or-nothing chỉ full point khi exact correct set; selection thiếu/thừa sai không nhận điểm."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-04: Hệ thống hỗ trợ Partial Credit, trong đó lựa chọn đúng được cộng điểm và lựa chọn sai không bị trừ điểm.",
+      "sourceParagraph": 1663,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "ObjectiveQuestionGraderTest#partialCreditKeepsPointsForCorrectSelectionsAlongsideWrongSelections"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Chọn đúng cùng lựa chọn sai vẫn giữ điểm đúng, không trừ điểm sai."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-05: Điểm câu hỏi được tính theo cấu hình chấm điểm áp dụng.",
+      "sourceParagraph": 1664,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "ObjectiveQuestionGraderTest#partialCreditRoundsOnlyAfterMultiplyingTheCorrectRatio",
+        "AssignmentSafetyTest#equalDefaultWeightsNormalizeDifferentQuestionMaximaBeforeAggregation"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Điểm ratio/rounding và maximum/weight cấu hình được assert."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-06: Phần giải thích của True/False chỉ được hiển thị khi Teacher cho phép.",
+      "sourceParagraph": 1665,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Current NEVER che correct options/explanation của generic question; chưa có exact True/False explanation API assertion."
+    },
+    {
+      "fr": "FR-ASG-014",
+      "criterion": "AC-07: Student không được xem đáp án hoặc giải thích chưa được phép công khai.",
+      "sourceParagraph": 1666,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentQuestionAuthoring.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/ObjectiveQuestionGrader.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Current NEVER che correct options/explanation của generic question; chưa có exact True/False explanation API assertion."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-01: Teacher có thể cấu hình Essay theo ba hình thức Text Only, File Only hoặc Text + File.",
+      "sourceParagraph": 1681,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAuthorizationAcceptanceTest#teacherAuthorsAllThreeEssayFormatsAndAttemptsKeepTheirFrozenFormats"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-authorization-ac-default2.json",
+        "backend/target/verification/assignment-authorization-ac-main2.json"
+      ],
+      "reason": "Teacher POST tạo Text Only/File Only/Text+File đều201; DB essay_format đúng từng câu, revision và Student attempt giữ đủ3format; sửa working File Only thành Text Only không đổi frozen attempt."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-02: Student có thể nhập văn bản và tải tệp theo hình thức đã được cấu hình.",
+      "sourceParagraph": 1682,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#retiredWorkingQuestionDoesNotChangePublishedOrStartedRevision"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Text Essay persist/chấm có assertion; managed fileId validation/access có code, chưa có exact Assignment text+file upload-submit integration trong batch này."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-03: Hệ thống từ chối tệp không hợp lệ theo chính sách loại tệp, kích thước hoặc bảo mật.",
+      "sourceParagraph": 1683,
+      "status": "PARTIAL",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "ManagedFileService được gọi để kiểm file Ready/purpose/owner; file validator/scanner có bộ test riêng, không chứng minh Supabase/ClamAV thật hoặc Assignment upload end-to-end ở đây."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-04: Lỗi tải tệp không được làm mất dữ liệu câu trả lời đã được Autosave thành công.",
+      "sourceParagraph": 1684,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentSafetyTest#staleAutosaveCannotOverwriteANewerAnswer"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Version/failure không ghi đè saved draft có assertion; chưa fault-inject upload failure sau saved Essay answer riêng."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-05: Essay được đánh dấu cần chấm thủ công sau khi Official Submission được tạo.",
+      "sourceParagraph": 1685,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#unansweredEssayMustNotPublishFalseFinalScore",
+        "AssignmentSafetyTest#gradingOneEssayCannotFinalizeWhenAnotherEssayIsUnanswered"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Official có Essay chưa chấm giữ pending manual và không có final false."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-06: Teacher chủ sở hữu có thể chấm điểm và cung cấp Feedback cho Essay.",
+      "sourceParagraph": 1686,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#manualGradeAndOverrideAppendDistinctImmutableEvaluations",
+        "AssignmentSafetyTest#essayScoreCannotExceedTheQuestionMaximum"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Owner chấm, bound maximum và immutable evaluation có assertion; chưa assert literal Essay feedback round-trip riêng."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-07: Student chỉ được xem Grade/Feedback theo cấu hình công bố và quyền truy cập.",
+      "sourceParagraph": 1687,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy",
+        "AssignmentPersistenceSafetyTest#manualGradeAndOverrideAppendDistinctImmutableEvaluations"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Own-history grade/release/IDOR có assertion; riêng literal Essay feedback công bố chưa kiểm end-to-end."
+    },
+    {
+      "fr": "FR-ASG-015",
+      "criterion": "AC-08: MVP không bắt buộc hỗ trợ Rubric.",
+      "sourceParagraph": 1688,
+      "status": "CLIENT_NOT_VERIFIED",
+      "tests": [],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentAnswerPolicy.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Rubric là không bắt buộc MVP; không suy ra UI từ backend."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-01: Hệ thống tự động chấm các câu hỏi trắc nghiệm theo cấu hình.",
+      "sourceParagraph": 1713,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "ObjectiveQuestionGraderTest#allOrNothingRequiresTheExactCorrectSet",
+        "ObjectiveQuestionGraderTest#partialCreditKeepsPointsForCorrectSelectionsAlongsideWrongSelections",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Objective grading chạy cả pure rules và HTTP official submission."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-02: Code Question được chấm dựa trên kết quả Test Case và trọng số áp dụng.",
+      "sourceParagraph": 1714,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory",
+        "AssignmentCodeJudgeTest#codeTestcaseWeightsDeterminePartialCreditInsteadOfRawPassedCount"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Result V2 dùng case weights 1:3:0, original maxpoints10 tạo2.5; không dùng raw passed count hay new maxpoints100."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-03: Essay được chuyển đến Teacher để chấm thủ công.",
+      "sourceParagraph": 1715,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#unansweredEssayMustNotPublishFalseFinalScore"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Essay được giữ pending manual/final null."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-04: Hệ thống phân bổ trọng số mặc định theo quy tắc chia đều.",
+      "sourceParagraph": 1716,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentSafetyTest#equalDefaultWeightsNormalizeDifferentQuestionMaximaBeforeAggregation"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Hai câu maximum khác nhau nhưng default question weights bằng nhau được chuẩn hóa rồi chia đều."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-05: Teacher có thể điều chỉnh trọng số Question/Part trong phạm vi quyền quản lý Assignment.",
+      "sourceParagraph": 1717,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Authoring target questionWeight=5/maxpoints100 có code persist, original grading vẫn được giữ; chưa có exact Teacher edit-weight mới áp future attempt và điểm tương ứng riêng."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-06: Teacher/Admin có thể điều chỉnh trọng số Test Case theo quyền được cấp.",
+      "sourceParagraph": 1718,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAdministrationApiTest#activeAdminUsesSeparateGradingContextAndRetainsActualActor"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Admin/Owner weights routes, denial cho role khác/disabled/wrong scope, snapshot weights và actor audit được HTTP/PG assert."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-07: Teacher có thể thực hiện Grade Override hợp lệ.",
+      "sourceParagraph": 1719,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#manualGradeAndOverrideAppendDistinctImmutableEvaluations",
+        "AssignmentServiceTest#overrideGrade_PreservesOriginalScore",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Manual/Override append evaluations khác nhau; original auto score/evaluation giữ nguyên; current override không tự đổi released score."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-08: Grade Override không ghi đè hoặc xóa Original Auto Score và lịch sử chấm điểm.",
+      "sourceParagraph": 1720,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#manualGradeAndOverrideAppendDistinctImmutableEvaluations",
+        "AssignmentServiceTest#overrideGrade_PreservesOriginalScore",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Manual/Override append evaluations khác nhau; original auto score/evaluation giữ nguyên; current override không tự đổi released score."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-09: Hệ thống lưu Overridden Score, Final Score và lịch sử thay đổi.",
+      "sourceParagraph": 1721,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#manualGradeAndOverrideAppendDistinctImmutableEvaluations",
+        "AssignmentServiceTest#overrideGrade_PreservesOriginalScore",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Manual/Override append evaluations khác nhau; original auto score/evaluation giữ nguyên; current override không tự đổi released score."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-10: Student chỉ được xem Final Score khi điều kiện công bố được đáp ứng.",
+      "sourceParagraph": 1722,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#studentReadsOnlyOwnOfficialHistoryAndFrozenClosedSubmissionUnderReleasePolicy",
+        "AssignmentApiTest#assignmentAttemptAutosaveSubmitAndGradingFlow"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Student finalScore null trước release, đúng published final sau release, override chưa release không bị lộ."
+    },
+    {
+      "fr": "FR-ASG-016",
+      "criterion": "AC-11: Teacher/Admin có quyền phù hợp có thể xem lịch sử điểm; người dùng không có quyền không thể truy cập dữ liệu chấm điểm riêng tư.",
+      "sourceParagraph": 1723,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAdministrationApiTest#activeAdminUsesSeparateGradingContextAndRetainsActualActor",
+        "AssignmentAdministrationApiTest#gradingRoutesRejectOtherRolesDisabledAdminsAndInvalidScope"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentScoreCalculator.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Teacher Owner/Admin namespace đọc history; Student/other Teacher/disabled Admin/wrong scope bị từ chối."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-01: Teacher chủ sở hữu hoặc Admin được cấp quyền có thể thực hiện Rejudge.",
+      "sourceParagraph": 1741,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAdministrationApiTest#activeAdminUsesSeparateGradingContextAndRetainsActualActor",
+        "AssignmentAdministrationApiTest#gradingRoutesRejectOtherRolesDisabledAdminsAndInvalidScope",
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Actual Teacher/Admin routes thực hiện rejudge; unauthorized role/scope bị từ chối; Admin không dùng Teacher context."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-02: Hệ thống từ chối yêu cầu Rejudge từ người dùng không có quyền.",
+      "sourceParagraph": 1742,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAdministrationApiTest#activeAdminUsesSeparateGradingContextAndRetainsActualActor",
+        "AssignmentAdministrationApiTest#gradingRoutesRejectOtherRolesDisabledAdminsAndInvalidScope",
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Actual Teacher/Admin routes thực hiện rejudge; unauthorized role/scope bị từ chối; Admin không dùng Teacher context."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-03: Rejudge tạo kết quả mới mà không xóa hoặc ghi đè kết quả lịch sử.",
+      "sourceParagraph": 1743,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory",
+        "AssignmentPersistenceSafetyTest#sameScoreJudgeGenerationsAppendEvaluationsOnceWithoutRepeatedPolling"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "ORIGINAL mặc định và LATEST_PUBLISHED dùng immutable selected revision; working V3 bị bỏ qua, same official/source/language/attempt preserved; parts lưu revision/job/generation, old evaluation/score giữ nguyên; DB cấm đổi codejob context."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-04: Hệ thống lưu được kết quả cũ, kết quả mới và lịch sử các lần Rejudge.",
+      "sourceParagraph": 1744,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory",
+        "AssignmentPersistenceSafetyTest#sameScoreJudgeGenerationsAppendEvaluationsOnceWithoutRepeatedPolling"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "ORIGINAL mặc định và LATEST_PUBLISHED dùng immutable selected revision; working V3 bị bỏ qua, same official/source/language/attempt preserved; parts lưu revision/job/generation, old evaluation/score giữ nguyên; DB cấm đổi codejob context."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-05: Rejudge phải tuân thủ cơ chế Test Case Snapshot và phiên bản Test Case của Code Judge.",
+      "sourceParagraph": 1745,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory",
+        "AssignmentPersistenceSafetyTest#sameScoreJudgeGenerationsAppendEvaluationsOnceWithoutRepeatedPolling"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "ORIGINAL mặc định và LATEST_PUBLISHED dùng immutable selected revision; working V3 bị bỏ qua, same official/source/language/attempt preserved; parts lưu revision/job/generation, old evaluation/score giữ nguyên; DB cấm đổi codejob context."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-06: Khi kết quả hoặc điểm chính thức thay đổi, Student liên quan nhận được In-app Notification.",
+      "sourceParagraph": 1746,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#rejudgeNotifiesOnlyWhenChangedOfficialGradeIsPublished",
+        "AssignmentPersistenceSafetyTest#changedOfficialCodeVerdictNotifiesEvenWhenQuestionHasZeroPoints"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Notify chỉ khi kết quả/điểm thay đổi được publish, kể cả verdict đổi score0; đúng recipient và count, không lặp khi publish/result không đổi."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-07: Notification không được gửi cho Student khác không liên quan đến Submission.",
+      "sourceParagraph": 1747,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#rejudgeNotifiesOnlyWhenChangedOfficialGradeIsPublished",
+        "AssignmentPersistenceSafetyTest#changedOfficialCodeVerdictNotifiesEvenWhenQuestionHasZeroPoints"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Notify chỉ khi kết quả/điểm thay đổi được publish, kể cả verdict đổi score0; đúng recipient và count, không lặp khi publish/result không đổi."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-08: Student chỉ được xem kết quả chính thức theo cấu hình công bố và quyền hiển thị.",
+      "sourceParagraph": 1748,
+      "status": "VERIFIED_LOCAL",
+      "tests": [
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory",
+        "AssignmentAcceptanceIntegrationTest#threeTeacherFeedbackLevelsAreAcceptedPersistedAndSnapshotted",
+        "AssignmentAcceptanceIntegrationTest#ownCodePollingRequiresPublishedGenerationAndRedactsHiddenIo"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Old published result tiếp tục đọc khi new generation pending; new result bị chặn trước release và visible sau release theo own/context policy."
+    },
+    {
+      "fr": "FR-ASG-017",
+      "criterion": "AC-09: Lỗi Rejudge không được làm mất kết quả và lịch sử trước đó.",
+      "sourceParagraph": 1749,
+      "status": "PARTIAL",
+      "tests": [
+        "AssignmentPersistenceSafetyTest#judgePollingSkipsAppliedEssayPendingAndUnavailableLatestJobs",
+        "AssignmentAcceptanceIntegrationTest#rejudgeSelectsLatestPublishedCasesAndWeightsButKeepsOriginalIdentitySourceAndHistory"
+      ],
+      "code": [
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentService.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentCodeJudge.java",
+        "backend/src/main/java/com/algolearner/platform/assignment/AssignmentEvaluationHistory.java"
+      ],
+      "evidence": [
+        "backend/target/verification/assignment-formal-final2-default.json",
+        "backend/target/verification/assignment-formal-final2-main.json"
+      ],
+      "reason": "Pending/infra jobs bị bỏ qua, old released pointer/result giữ; chưa có exact end-to-end failure injection rollback giữa enqueue/evaluation/rejudge log trên committed Assignment."
+    }
+  ],
+  "openFindings": [],
+  "verificationRuns": [
+    {
+      "source_sha256": "aa7963c64ed12fa0003ab81af394453466c6fec1335c305acdc60670f5de9234",
+      "snapshot": "/home/hien/Project/AlgoLearner/backend/target/verification/assignment-formal-final2-default-crb_18ef",
+      "selector": "Assignment*Test,ObjectiveQuestionGraderTest",
+      "phase": "test",
+      "track": "migration",
+      "exit": 0,
+      "tests": 114,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidenceFile": "backend/target/verification/assignment-formal-final2-default.json"
+    },
+    {
+      "source_sha256": "aa7963c64ed12fa0003ab81af394453466c6fec1335c305acdc60670f5de9234",
+      "snapshot": "/home/hien/Project/AlgoLearner/backend/target/verification/assignment-formal-final2-main-cwnx562t",
+      "selector": "Assignment*Test,ObjectiveQuestionGraderTest",
+      "phase": "test",
+      "track": "main-auth",
+      "exit": 0,
+      "tests": 114,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidenceFile": "backend/target/verification/assignment-formal-final2-main.json"
+    },
+    {
+      "source_sha256": "35f461c842c6d2400ab3a79c7e5f7d05c068006f5f2a0e653e66c9bf48a6d399",
+      "snapshot": "/home/hien/Project/AlgoLearner/backend/target/verification/assignment-authorization-ac-default2-fm_gqnow",
+      "selector": "AssignmentAuthorizationAcceptanceTest",
+      "phase": "test",
+      "track": "migration",
+      "exit": 0,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidenceFile": "backend/target/verification/assignment-authorization-ac-default2.json"
+    },
+    {
+      "source_sha256": "35f461c842c6d2400ab3a79c7e5f7d05c068006f5f2a0e653e66c9bf48a6d399",
+      "snapshot": "/home/hien/Project/AlgoLearner/backend/target/verification/assignment-authorization-ac-main2-de6bdnup",
+      "selector": "AssignmentAuthorizationAcceptanceTest",
+      "phase": "test",
+      "track": "main-auth",
+      "exit": 0,
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "evidenceFile": "backend/target/verification/assignment-authorization-ac-main2.json"
+    }
+  ],
+  "limitations": [
+    "Không xác minh browser/offline/reload/rendering/confirmation UI.",
+    "Không xác minh Docker worker thực thi source thật, live Supabase/ClamAV/SMTP.",
+    "PARTIAL/CODE_REVIEW_ONLY/CLIENT_NOT_VERIFIED không phải kết luận AC hoàn tất.",
+    "FR-ASG-007 AC05: chưa có UI warning/confirmation evidence; authoring chưa enforce server confirmation handshake.",
+    "FR-ASG-017 AC09: pending/infra persistence có proof; committed transaction fault injection chưa thực hiện.",
+    "Evaluation parts cũ thiếu judgeRevisionId bị fail-closed tại code result endpoint; grade và official history cũ vẫn đọc theo published snapshot, không suy đoán testcase context mới."
+  ],
+  "statusCounts": {
+    "VERIFIED_LOCAL": 93,
+    "PARTIAL": 28,
+    "CODE_REVIEW_ONLY": 1,
+    "CLIENT_NOT_VERIFIED": 5
+  },
+  "semanticsReview": "Mỗi dòng đã đối chiếu nội dung criterion với named assertion; không suy ra toàn bộ AC từ tổng số test. VERIFIED_LOCAL là phần backend có exact named assertions đã quan sát, không chứng nhận hệ thống triển khai bên ngoài.",
+  "verificationUpdates": [
+    {
+      "batch": "AssignmentAuthorizationAcceptanceTest",
+      "scope": "TEST_ONLY: six backend CODE_REVIEW_ONLY criteria",
+      "criteria": [
+        "FR-ASG-006 AC-02",
+        "FR-ASG-009 AC-08",
+        "FR-ASG-011 AC-06",
+        "FR-ASG-011 AC-07",
+        "FR-ASG-013 AC-03",
+        "FR-ASG-015 AC-01"
+      ],
+      "source_sha256": "35f461c842c6d2400ab3a79c7e5f7d05c068006f5f2a0e653e66c9bf48a6d399",
+      "result": "5/5 PASS on migration and main-auth; no production changes",
+      "fixtureCorrection": "First runs failed before business assertions because username prefix made >50 chars. Corrected test fixture only; these errors are not business RED evidence."
+    }
+  ]
+}

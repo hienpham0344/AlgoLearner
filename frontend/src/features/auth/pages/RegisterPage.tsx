@@ -33,7 +33,9 @@ export const RegisterPage = () => {
     const nextErrors: FieldErrors = {};
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) nextErrors.email = 'Enter a valid email address.';
     if (username.trim().length < 3) nextErrors.username = 'Use at least 3 characters.';
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) nextErrors.password = 'Use at least 8 characters, including a letter and a number.';
+    if (password.length < 8) nextErrors.password = 'Use at least 8 characters.';
+    else if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) nextErrors.password = 'Use at least one letter and one number.';
+    else if (new TextEncoder().encode(password).length > 72) nextErrors.password = 'Password is too long. Use at most 72 UTF-8 bytes.';
     if (password !== confirmPassword || !confirmPassword) nextErrors.confirmPassword = 'Passwords must match.';
     setErrors(nextErrors);
     const firstError = (Object.keys(nextErrors) as FieldName[])[0];
@@ -54,8 +56,10 @@ export const RegisterPage = () => {
     } catch (failure: unknown) {
       if (isAxiosError<ApiErrorResponse>(failure) && failure.response?.data) {
         const response = failure.response.data;
-        if (import.meta.env.MODE === 'backend-mock' && failure.response.status === 401 && response.errorCode === 'UNAUTHORIZED_ACCESS') {
+        if (import.meta.env.DEV && failure.response.status === 401 && response.errorCode === 'UNAUTHORIZED_ACCESS') {
           setNotice('Account creation isn’t available in this preview yet. Sign in with a demo account to try profiles and classrooms.');
+        } else if (response.errorCode === 'BACKEND_UNREACHABLE' || failure.response.status === 504) {
+          setNotice('The request took too long. Check your inbox before trying again; your account may already have been created.');
         } else {
           const serverErrors: FieldErrors = {};
           for (const item of response.errors || []) {
@@ -64,6 +68,8 @@ export const RegisterPage = () => {
           setErrors(serverErrors);
           setNotice(response.message || 'We couldn’t create your account. Please try again.');
         }
+      } else if (isAxiosError(failure) && (failure.code === 'ECONNABORTED' || failure.code === 'ETIMEDOUT')) {
+        setNotice('The request took too long. Check your inbox before trying again; your account may already have been created.');
       } else {
         setNotice('We couldn’t create your account. Please try again.');
       }
@@ -86,7 +92,7 @@ export const RegisterPage = () => {
       <AuthField id="reg-email" label="Email address" type="email" autoComplete="email" placeholder="you@example.com" required value={email} onChange={event => { setEmail(event.target.value); clearField('email'); }} disabled={isSubmitting} message={errors.email} />
       <AuthField id="reg-username" label="Username" autoComplete="username" placeholder="Choose a username" required value={username} onChange={event => { setUsername(event.target.value); clearField('username'); }} disabled={isSubmitting} message={errors.username} />
       <div className="auth-field-row">
-        <AuthField id="reg-password" label="Password" type="password" autoComplete="new-password" placeholder="8+ characters" required value={password} onChange={event => { setPassword(event.target.value); clearField('password'); }} disabled={isSubmitting} message={errors.password} />
+        <AuthField id="reg-password" label="Password" type="password" autoComplete="new-password" placeholder="8+ characters" hint="At least 8 characters, including a letter and a number." required value={password} onChange={event => { setPassword(event.target.value); clearField('password'); }} disabled={isSubmitting} message={errors.password} />
         <AuthField id="reg-confirm-password" label="Confirm password" type="password" autoComplete="new-password" placeholder="Repeat password" required value={confirmPassword} onChange={event => { setConfirmPassword(event.target.value); clearField('confirmPassword'); }} disabled={isSubmitting} message={errors.confirmPassword} />
       </div>
       <div className="auth-consents" aria-label="Agreements">
@@ -94,6 +100,7 @@ export const RegisterPage = () => {
         <label htmlFor="reg-privacy"><input id="reg-privacy" type="checkbox" checked={privacyAccepted} onChange={event => { setPrivacyAccepted(event.target.checked); setNotice(null); }} disabled={isSubmitting} required /><span>I accept the <strong>Privacy Policy</strong></span></label>
       </div>
       <AuthSubmit loading={isSubmitting}>{isSubmitting ? 'Creating account…' : 'Create account'}</AuthSubmit>
+      {isSubmitting && <p className="auth-description" role="status">Creating your account and sending a verification code. This can take a few seconds.</p>}
     </form>
     <div className="auth-secondary"><span className="auth-description">Already have an account? </span><Link to="/login" className="auth-text-link">Sign in</Link></div>
   </>;

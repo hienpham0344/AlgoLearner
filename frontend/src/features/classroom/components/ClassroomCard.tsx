@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Classroom, DemoRole, DemoPersona } from '../types';
 import { UserAvatar } from './UserAvatar';
+import { getClassroomLessonSummary } from '../lessons/mock/lessonMockStore';
 import {
+  BookOpenText,
   Users,
   Copy,
   Check,
@@ -42,6 +44,11 @@ export const ClassroomCard: React.FC<ClassroomCardProps> = ({
   );
 
   const activeMembersCount = classroom.members.filter(m => m.status === 'ACTIVE').length;
+  const lessonSummary = getClassroomLessonSummary(
+    classroom.id,
+    currentRole === 'ADMIN' ? 'TEACHER' : currentRole,
+    currentPersona.id,
+  );
 
   const handleCopyCode = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -131,11 +138,24 @@ export const ClassroomCard: React.FC<ClassroomCardProps> = ({
             <span className="font-semibold text-slate-800 truncate text-xs">{classroom.ownerName}</span>
           </div>
 
-          <div className="flex items-center gap-1.5 shrink-0 text-xs text-slate-600 font-medium ml-auto" title="Active Enrolled Students">
-            <Users size={13} className="text-slate-400 shrink-0" aria-hidden="true" />
-            <span>
-              <strong className="font-semibold text-slate-900">{activeMembersCount}</strong>{' '}
-              {activeMembersCount === 1 ? 'student' : 'students'}
+          <div className="flex items-center gap-3 shrink-0 text-xs text-slate-600 font-medium ml-auto">
+            <span className="inline-flex items-center gap-1" title="Classroom Lessons">
+              <BookOpenText size={13} className="text-slate-400 shrink-0" aria-hidden="true" />
+              <strong className="font-semibold text-slate-900">{lessonSummary.totalCount}</strong>{' '}
+              {lessonSummary.totalCount === 1 ? 'lesson' : 'lessons'}
+              {currentRole === 'STUDENT' && isEnrolled && lessonSummary.publishedCount > 0 && (
+                <span className="text-slate-400">
+                  ({lessonSummary.completedCount}/{lessonSummary.publishedCount})
+                </span>
+              )}
+            </span>
+
+            <span className="inline-flex items-center gap-1" title="Active Enrolled Students">
+              <Users size={13} className="text-slate-400 shrink-0" aria-hidden="true" />
+              <span>
+                <strong className="font-semibold text-slate-900">{activeMembersCount}</strong>{' '}
+                {activeMembersCount === 1 ? 'student' : 'students'}
+              </span>
             </span>
           </div>
         </div>
@@ -188,7 +208,7 @@ export const ClassroomCard: React.FC<ClassroomCardProps> = ({
             to={destinationUrl}
             className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-900 hover:text-slate-700 px-3 py-1.5 rounded-lg bg-white/80 hover:bg-white transition-all border border-slate-200/80 shadow-2xs"
           >
-            <span>Open Workspace</span>
+            <span>Open Classroom</span>
             <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
           </Link>
         </div>

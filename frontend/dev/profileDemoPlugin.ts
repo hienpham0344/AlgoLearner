@@ -1,3 +1,4 @@
+import { isOfflineRequest } from './backendFirstPlugin';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 
@@ -61,6 +62,7 @@ export function profileDemoPlugin(): Plugin {
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
+        if (!isOfflineRequest(request)) { next(); return; }
         const route = request.url?.split('?')[0];
         const publicMatch = route?.match(/^\/api\/v1\/users\/(learner|teacher)\/profile(\/avatar)?$/);
         const ownerRoute = route ? [ownerPath, `${ownerPath}/privacy`, `${ownerPath}/avatar`].includes(route) : false;
