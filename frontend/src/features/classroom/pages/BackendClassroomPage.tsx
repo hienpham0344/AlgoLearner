@@ -6,10 +6,21 @@ import { ClassroomLayout } from '../components/ClassroomLayout';
 import { BackendClassroomListView } from '../components/BackendClassroomListView';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { classroomApi, classroomError, classroomKeys } from '../api/classroomApi';
+import { announcementError } from '../api/announcementApi';
+import {
+  useAnnouncementDetailQuery,
+  useAnnouncementsQuery,
+  useCreateAnnouncementMutation,
+  useDeleteAnnouncementMutation,
+  useTogglePinAnnouncementMutation,
+  useUpdateAnnouncementMutation,
+} from '../hooks/useAnnouncements';
 import { lessonApi, lessonKeys } from '../lessons/api/lessonApi';
 import { AvailabilityBadge } from '../components/AvailabilityBadge';
+import { ClassroomAnnouncementsList } from '../components/ClassroomAnnouncementsList';
 import type { DemoPersona, DemoRole, JoinMode } from '../types';
 import {
+  Bell,
   BookOpen,
   BookOpenText,
   Users,
@@ -44,7 +55,9 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab')?.toUpperCase();
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'LESSONS' | 'MEMBERS' | 'SETTINGS'>(() => {
+  const announcementIdParam = searchParams.get('announcementId');
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ANNOUNCEMENTS' | 'LESSONS' | 'MEMBERS' | 'SETTINGS'>(() => {
+    if ((tabParam === 'ANNOUNCEMENTS' || announcementIdParam) && role !== 'ADMIN') return 'ANNOUNCEMENTS';
     if (tabParam === 'SETTINGS') return 'SETTINGS';
     if (tabParam === 'MEMBERS') return 'MEMBERS';
     if (tabParam === 'LESSONS') return 'LESSONS';
@@ -52,11 +65,12 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   });
 
   useEffect(() => {
-    if (tabParam === 'SETTINGS') setActiveTab('SETTINGS');
+    if ((tabParam === 'ANNOUNCEMENTS' || announcementIdParam) && role !== 'ADMIN') setActiveTab('ANNOUNCEMENTS');
+    else if (tabParam === 'SETTINGS') setActiveTab('SETTINGS');
     else if (tabParam === 'MEMBERS') setActiveTab('MEMBERS');
     else if (tabParam === 'LESSONS') setActiveTab('LESSONS');
     else if (tabParam === 'OVERVIEW') setActiveTab('OVERVIEW');
-  }, [tabParam]);
+  }, [tabParam, announcementIdParam, role]);
 
   const [copiedCode, setCopiedCode] = useState(false);
   const copyCode = (code: string) => {
@@ -69,6 +83,7 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [pageNumber, setPageNumber] = useState(0);
+  const [announcementPage, setAnnouncementPage] = useState(0);
   const [memberPage, setMemberPage] = useState(0);
   const [requestPage, setRequestPage] = useState(0);
   const [invitationPage, setInvitationPage] = useState(0);
@@ -127,6 +142,32 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
     enabled: Boolean(id && user?.id) && role !== 'ADMIN',
     retry: false,
   });
+  const announcementsQuery = useAnnouncementsQuery(
+    id || '',
+    announcementPage,
+    20,
+    Boolean(id) && role !== 'ADMIN',
+  );
+  const announcementInCurrentPage = Boolean(
+    announcementIdParam &&
+      announcementsQuery.data?.items.some(item => item.id === announcementIdParam),
+  );
+  const announcementDetailQuery = useAnnouncementDetailQuery(
+    id || '',
+    announcementIdParam,
+    Boolean(id && announcementIdParam) &&
+      role !== 'ADMIN' &&
+      !announcementsQuery.isPending &&
+      !announcementInCurrentPage,
+  );
+  const createAnnouncementMutation = useCreateAnnouncementMutation(id || '');
+  const updateAnnouncementMutation = useUpdateAnnouncementMutation(id || '');
+  const deleteAnnouncementMutation = useDeleteAnnouncementMutation(id || '');
+  const togglePinAnnouncementMutation = useTogglePinAnnouncementMutation(id || '');
+
+  useEffect(() => {
+    setAnnouncementPage(0);
+  }, [id]);
 
   useEffect(() => {
     const classroom = detail.data;
@@ -331,6 +372,28 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
               >
                 <BookOpenText size={16} aria-hidden="true" />
                 <span>Lessons</span>
+              </button>
+            )}
+
+            {role !== 'ADMIN' && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'ANNOUNCEMENTS'}
+                className="classroom-subnav-link"
+                data-active={activeTab === 'ANNOUNCEMENTS'}
+                onClick={() => {
+                  setActiveTab('ANNOUNCEMENTS');
+                  setSearchParams({ tab: 'announcements' });
+                }}
+              >
+                <Bell size={16} aria-hidden="true" />
+                <span>Announcements</span>
+                {announcementsQuery.data && (
+                  <span className="classroom-subnav-badge">
+                    {announcementsQuery.data.pagination.totalElements}
+                  </span>
+                )}
               </button>
             )}
 
@@ -558,6 +621,95 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
                     )}
                   </section>
                 </aside>
+              </div>
+            );
+          })()}
+
+          {/* Tab: ANNOUNCEMENTS */}
+          {activeTab === 'ANNOUNCEMENTS' && role !== 'ADMIN' && (() => {
+            const canManageAnnouncements =
+              role === 'TEACHER' &&
+              Boolean(user?.id && content.ownerId === user.id) &&
+              content.status === 'ACTIVE';
+            const readOnlyNotice =
+              role === 'TEACHER' && content.status !== 'ACTIVE'
+                ? 'This classroom is archived. Announcements are read-only and cannot be created, edited, deleted, or pinned.'
+                : null;
+            const currentItems = announcementsQuery.data?.items ?? [];
+            const linkedFallback =
+              announcementIdParam && !announcementInCurrentPage
+                ? announcementDetailQuery.data ?? null
+                : null;
+
+            return (
+              <div className="mt-6">
+                <ClassroomAnnouncementsList
+                  classroomId={id}
+                  isTeacherOrAdmin={canManageAnnouncements}
+                  announcements={currentItems}
+                  highlightedId={announcementIdParam}
+                  highlightedAnnouncement={linkedFallback}
+                  isLoading={announcementsQuery.isPending}
+                  isFetching={announcementsQuery.isFetching}
+                  error={announcementsQuery.isError ? announcementError(announcementsQuery.error) : null}
+                  onRetry={() => void announcementsQuery.refetch()}
+                  pagination={announcementsQuery.data?.pagination}
+                  onPageChange={setAnnouncementPage}
+                  isCreating={createAnnouncementMutation.isPending}
+                  isUpdating={updateAnnouncementMutation.isPending}
+                  isDeleting={deleteAnnouncementMutation.isPending}
+                  pinningId={
+                    togglePinAnnouncementMutation.isPending
+                      ? togglePinAnnouncementMutation.variables?.id ?? null
+                      : null
+                  }
+                  readOnlyNotice={readOnlyNotice}
+                  onCreate={
+                    canManageAnnouncements
+                      ? async data => {
+                          await createAnnouncementMutation.mutateAsync({
+                            title: data.title,
+                            content: data.content,
+                          });
+                          setAnnouncementPage(0);
+                        }
+                      : undefined
+                  }
+                  onUpdate={
+                    canManageAnnouncements
+                      ? async (annId, data) => {
+                          await updateAnnouncementMutation.mutateAsync({
+                            announcementId: annId,
+                            input: { title: data.title, content: data.content },
+                          });
+                        }
+                      : undefined
+                  }
+                  onDelete={
+                    canManageAnnouncements
+                      ? async annId => {
+                          await deleteAnnouncementMutation.mutateAsync(annId);
+                          if (announcementPage > 0 && currentItems.length <= 1) {
+                            setAnnouncementPage(prev => Math.max(0, prev - 1));
+                          }
+                        }
+                      : undefined
+                  }
+                  onTogglePin={
+                    canManageAnnouncements
+                      ? async annId => {
+                          const target =
+                            currentItems.find(item => item.id === annId) ||
+                            (linkedFallback?.id === annId ? linkedFallback : undefined);
+                          if (!target) return;
+                          await togglePinAnnouncementMutation.mutateAsync({
+                            id: target.id,
+                            isPinned: target.isPinned,
+                          });
+                        }
+                      : undefined
+                  }
+                />
               </div>
             );
           })()}
