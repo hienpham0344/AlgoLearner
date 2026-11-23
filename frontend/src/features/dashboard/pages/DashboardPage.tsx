@@ -7,7 +7,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import { profileApi } from '@/features/profile/api/profileApi';
 import byteMascot from '@/assets/mascot-byte.svg';
 import { dashboardDemoData } from '../dashboardDemoData';
@@ -247,22 +247,25 @@ export const DashboardPage = () => {
       };
     }
     const summaries = mappedBackendData.classes.map((cls, index) => {
-      const items = classroomLessonQueries[index]?.data?.items || [];
+      const lessonQuery = classroomLessonQueries[index];
+      const items = lessonQuery?.data?.items || [];
       const published = items.filter(lesson => lesson.status === 'PUBLISHED');
       const completedCount = published.filter(lesson => Boolean(lesson.progress?.completed)).length;
       const nextLesson = published.find(lesson => !lesson.progress?.completed) || null;
       return {
         classroom: cls,
+        isPending: Boolean(lessonQuery?.isPending),
         publishedCount: published.length,
         completedCount,
         nextLesson,
       };
     });
 
-    const enrichedClasses: EnrolledClass[] = summaries.map(({ classroom, publishedCount, completedCount, nextLesson }) => ({
+    const enrichedClasses: EnrolledClass[] = summaries.map(({ classroom, isPending, publishedCount, completedCount, nextLesson }) => ({
       ...classroom,
-      nextAction:
-        nextLesson && completedCount < publishedCount
+      nextAction: isPending
+        ? 'Loading lessons…'
+        : nextLesson && completedCount < publishedCount
           ? `Up next: ${nextLesson.title}`
           : publishedCount > 0
             ? `All ${publishedCount} lessons completed`
@@ -281,22 +284,23 @@ export const DashboardPage = () => {
     }
 
     const orderedForLearning = [...summaries]
-      .filter(s => s.publishedCount > 0)
       .sort((a, b) => {
-        const aScore = a.publishedCount > a.completedCount ? 2 : 1;
-        const bScore = b.publishedCount > b.completedCount ? 2 : 1;
+        const aScore = a.publishedCount > a.completedCount ? 3 : a.publishedCount > 0 ? 2 : 1;
+        const bScore = b.publishedCount > b.completedCount ? 3 : b.publishedCount > 0 ? 2 : 1;
         return bScore - aScore;
       });
 
-    const derivedCourses: CourseProgress[] = orderedForLearning.map(({ classroom, publishedCount, completedCount, nextLesson }) => ({
+    const derivedCourses: CourseProgress[] = orderedForLearning.map(({ classroom, isPending, publishedCount, completedCount, nextLesson }) => ({
       id: classroom.id,
       title: classroom.name,
       topic: 'CLASSROOM',
-      currentModule: `${completedCount} / ${publishedCount} lessons`,
-      currentLesson: nextLesson?.title || 'View classroom materials',
+      currentModule: isPending ? 'Syncing lessons…' : `${completedCount} / ${publishedCount} lessons`,
+      currentLesson: isPending
+        ? 'Loading next lesson…'
+        : nextLesson?.title || (publishedCount > 0 ? 'View classroom materials' : 'No published lessons yet — open classroom'),
       completedUnits: completedCount,
       totalUnits: publishedCount,
-      progressPercent: Math.round((completedCount / publishedCount) * 100),
+      progressPercent: publishedCount > 0 ? Math.round((completedCount / publishedCount) * 100) : 0,
       href: nextLesson
         ? `/student/classrooms/${encodeURIComponent(classroom.id)}/lessons/${encodeURIComponent(nextLesson.id)}`
         : `/student/classrooms/${encodeURIComponent(classroom.id)}`,
@@ -330,384 +334,386 @@ export const DashboardPage = () => {
   return (
     <WorkspaceLayout role="STUDENT" unreadCount={unreadCount} displayNameOverride={displayName}>
       <div className="dashboard-intro">
-            <div>
-              <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
-              <h1>Keep building.</h1>
-              <p>Pick up where you left off, {firstName}.</p>
-            </div>
-            <span className="dashboard-today">{todayFormatter.format(new Date())}</span>
-          </div>
+        <div>
+          <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
+          <h1>Keep building.</h1>
+          <p>Pick up where you left off, {firstName}.</p>
+        </div>
+        <span className="dashboard-today">{todayFormatter.format(new Date())}</span>
+      </div>
 
-          {!IS_DEMO && dashboardQuery.data && (
-            <p className="dashboard-availability-note" role="status">
-              {profileQuery.isError
-                ? 'Profile details could not be loaded; your learning data is still available.'
-                : 'Your learning activity is up to date.'}
-            </p>
+      {!IS_DEMO && dashboardQuery.data && (
+        <p className="dashboard-availability-note" role="status">
+          {profileQuery.isError
+            ? 'Profile details could not be loaded; your learning data is still available.'
+            : 'Your learning activity is up to date.'}
+        </p>
+      )}
+
+      {!IS_DEMO && dashboardQuery.isPending ? (
+        <DashboardSkeleton role="STUDENT" />
+      ) : !IS_DEMO && dashboardQuery.isError ? (
+        <div className="dashboard-fetch-state" role="alert">
+          <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
+          <h2>
+            {loadState === 'restricted'
+              ? 'Access restricted.'
+              : 'Learning activity unavailable.'}
+          </h2>
+          <p>
+            {loadState === 'restricted'
+              ? 'This account cannot access the student dashboard.'
+              : 'We could not load your learning data.'}
+          </p>
+          {loadState !== 'restricted' && (
+            <button type="button" onClick={() => dashboardQuery.refetch()}>
+              Try again
+            </button>
           )}
-
-          {!IS_DEMO && dashboardQuery.isPending ? (
-            <LoadingScreen
-              variant="page"
-              message="Đang tải dữ liệu học tập…"
-              submessage="Đang đồng bộ lộ trình, bài tập và streak của bạn"
-            />
-          ) : !IS_DEMO && dashboardQuery.isError ? (
-            <div className="dashboard-fetch-state" role="alert">
-              <span className="dashboard-eyebrow">YOUR LEARNING SPACE</span>
-              <h2>
-                {loadState === 'restricted'
-                  ? 'Access restricted.'
-                  : 'Learning activity unavailable.'}
-              </h2>
-              <p>
-                {loadState === 'restricted'
-                  ? 'This account cannot access the student dashboard.'
-                  : 'We could not load your learning data.'}
-              </p>
-              {loadState !== 'restricted' && (
-                <button type="button" onClick={() => dashboardQuery.refetch()}>
-                  Try again
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="dashboard-grid">
-              <div className="dashboard-primary">
-                <section aria-labelledby="learning-title" id="learning" className="dashboard-learning-section">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">01 / THE NEXT STEP</span>
-                    <h2 id="learning-title">Continue learning</h2>
-                  </div>
-
-                  <div className="dashboard-learning-card">
-                    {featuredCourse ? (
-                      <>
-                        <InteractiveCourseBackground />
-                        <div className="dashboard-learning-content">
-                          <span className="dashboard-learning-label">
-                            CURRENT COURSE · {featuredCourse.topic}
-                          </span>
-                          <h3>{featuredCourse.title}</h3>
-                          {featuredCourse.currentLesson && <p>Up next: {featuredCourse.currentLesson}</p>}
-                          <div className="dashboard-progress-info">
-                            <span>Course progress</span>
-                            <strong>{featuredCourse.progressPercent}%</strong>
-                          </div>
-                          <div
-                            className="dashboard-progress-track"
-                            role="progressbar"
-                            aria-label={`${featuredCourse.title} progress`}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-valuenow={featuredCourse.progressPercent}
-                          >
-                            <span style={{ width: `${featuredCourse.progressPercent}%` }} />
-                          </div>
-                          <div className="flex flex-wrap items-center gap-3">
-                            {featuredCourse.href && (
-                              <Link className="dashboard-learning-action" to={featuredCourse.href}>
-                                {resolvedPrimaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
-                              </Link>
-                            )}
-                            {resolvedPrimaryClassroomHref && (
-                              <Link
-                                to={resolvedPrimaryClassroomHref}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 hover:text-white underline underline-offset-4"
-                              >
-                                Open classroom →
-                              </Link>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="dashboard-learning-content">
-                          <span className="dashboard-learning-label">YOUR NEXT CHAPTER</span>
-                          <h3>Your next chapter starts here.</h3>
-                          <p>{IS_DEMO ? 'Choose a topic that interests you and start learning at your pace.'
-                            : 'Public courses will appear here once this module is connected.'}</p>
-                          {IS_DEMO && <Link className="dashboard-learning-action" to="/student/courses">
-                            Explore courses <ArrowRight size={16} aria-hidden="true" />
-                          </Link>}
-                        </div>
-                        <img className="dashboard-learning-mascot" src={byteMascot} alt="" width="280" height="280" />
-                      </>
-                    )}
-                  </div>
-
-                  {secondaryCourse && (
-                    <Link
-                      to={secondaryCourse.href || '/student/classrooms'}
-                      className="dashboard-secondary-course hover:border-slate-300 transition-colors"
-                    >
-                      <span>ALSO IN PROGRESS</span>
-                      <div className="dashboard-secondary-course-main">
-                        <strong>{secondaryCourse.title}</strong>
-                        {(secondaryCourse.currentModule || secondaryCourse.currentLesson) && (
-                          <span>
-                            {[
-                              secondaryCourse.currentModule,
-                              secondaryCourse.currentLesson && `Next: ${secondaryCourse.currentLesson}`,
-                            ]
-                              .filter(Boolean)
-                              .join(' · ')}
-                          </span>
-                        )}
-                      </div>
-                      <span className="dashboard-secondary-course-progress">
-                        {secondaryCourse.progressPercent}% complete
-                      </span>
-                    </Link>
-                  )}
-                </section>
-
-                <section aria-labelledby="deadlines-title" id="deadlines" className="dashboard-section">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">02 / WHAT'S AHEAD</span>
-                    <h2 id="deadlines-title">Upcoming deadlines</h2>
-                  </div>
-
-                  {sortedDeadlines.length ? (
-                    <div className="dashboard-timeline" role="list">
-                      {sortedDeadlines.map((item: LearningDeadline) => {
-                        const urgency = getDeadlineUrgency(item.dueAt);
-                        const isImmediate = urgency === 'Overdue' || urgency === 'Due today';
-
-                        return (
-                          <div
-                            className="dashboard-timeline-item"
-                            key={item.id}
-                            role="listitem"
-                            data-urgency={urgency}
-                          >
-                            <time className="dashboard-timeline-date" dateTime={item.dueAt}>
-                              <strong>{formatDayNumber(item.dueAt)}</strong>
-                              <span>{formatMonth(item.dueAt)}</span>
-                            </time>
-                            <div className="dashboard-timeline-axis" aria-hidden="true">
-                              <span className="dashboard-timeline-node" data-immediate={isImmediate} />
-                            </div>
-                            <div className="dashboard-timeline-body">
-                              <div className="dashboard-timeline-head">
-                                <Link
-                                  className="dashboard-timeline-title"
-                                  to={item.href && !item.href.startsWith('#') ? item.href : '/student/classrooms'}
-                                >
-                                  {item.title}
-                                </Link>
-                                <span className="dashboard-timeline-urgency" data-immediate={isImmediate}>
-                                  {urgency}
-                                </span>
-                              </div>
-                              <p className="dashboard-timeline-meta">
-                                <span>{item.className}</span>
-                                <span>{item.kind}</span>
-                                <span>Due {formatScheduleTime(item.dueAt)}</span>
-                                {item.status && <span className="dashboard-timeline-status">{item.status}</span>}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="dashboard-empty dashboard-empty-line">
-                      <div>
-                        <strong>No deadlines to show yet.</strong>
-                        <p>
-                          {IS_DEMO
-                            ? 'Assignments and quizzes from your enrolled classes will appear here in chronological order.'
-                            : 'Assignments and quizzes will appear here once their classroom modules are connected.'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </section>
-
-                <section aria-labelledby="classes-title" id="classes" className="dashboard-section">
-                  <div className="dashboard-section-heading flex items-center justify-between">
-                    <div>
-                      <span className="dashboard-eyebrow">03 / YOUR LEARNING</span>
-                      <h2 id="classes-title">My classes</h2>
-                    </div>
-                    <Link to="/student/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
-                      View all classrooms →
-                    </Link>
-                  </div>
-
-                  {data.classes.length ? (
-                    <div className="dashboard-class-list">
-                      {data.classes.map(classroom => {
-                        const nextClassDeadline = sortedDeadlines.find(item => item.className === classroom.name);
-                        const moduleText =
-                          classroom.currentActivity || (classroom.teacher ? `Instructor: ${classroom.teacher}` : undefined);
-                        const nextActionText =
-                          classroom.nextAction
-                          || (nextClassDeadline
-                            ? `Complete ${nextClassDeadline.kind.toLowerCase()}: ${nextClassDeadline.title}`
-                            : undefined);
-                        const moduleCounts = resolveModuleCounts(classroom);
-
-                        const content = (
-                          <>
-                            <div className="dashboard-class-main">
-                              <div className="dashboard-class-header">
-                                <strong>{classroom.name}</strong>
-                                {classroom.code && <span className="dashboard-class-code">{classroom.code}</span>}
-                              </div>
-                              {moduleText && <p className="dashboard-class-module">{moduleText}</p>}
-                              {nextActionText && <span className="dashboard-class-next">Next: {nextActionText}</span>}
-                            </div>
-                            {moduleCounts && (
-                              <div
-                                className="dashboard-class-segments"
-                                role="img"
-                                aria-label={`${classroom.name}: ${moduleCounts.completed} of ${moduleCounts.total} modules completed`}
-                              >
-                                <span className="dashboard-class-segments-label">
-                                  {moduleCounts.completed} / {moduleCounts.total} lessons
-                                </span>
-                                <div className="dashboard-class-segments-track" aria-hidden="true">
-                                  {Array.from({ length: moduleCounts.total }, (_, idx) => (
-                                    <span key={idx} data-state={getSegmentState(idx, moduleCounts.completed)} />
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        );
-
-                        const classroomLink = classroom.href && !classroom.href.startsWith('#')
-                          ? classroom.href
-                          : `/student/classrooms/${encodeURIComponent(classroom.id)}`;
-
-                        return (
-                          <Link className="dashboard-class-row" key={classroom.id} to={classroomLink}>
-                            {content}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="dashboard-empty dashboard-empty-line">
-                      <div>
-                        <strong>Your classes will show up here.</strong>
-                        <p>
-                          Enrolled classrooms, active modules, and coursework steps will appear once you join a class.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </section>
+        </div>
+      ) : (
+        <div className="dashboard-grid">
+          <div className="dashboard-primary">
+            <section aria-labelledby="learning-title" id="learning" className="dashboard-learning-section">
+              <div className="dashboard-section-heading">
+                <span className="dashboard-eyebrow">01 / THE NEXT STEP</span>
+                <h2 id="learning-title">Continue learning</h2>
               </div>
 
-              <aside className="dashboard-secondary">
-                <section aria-labelledby="practice-title" id="practice" className="dashboard-practice">
-                  <div className="dashboard-section-heading flex items-center justify-between">
-                    <div>
-                      <span className="dashboard-eyebrow">04 / KEEP THE RHYTHM</span>
-                      <h2 id="practice-title">Practice pulse</h2>
+              <div className="dashboard-learning-card">
+                <InteractiveCourseBackground />
+                {featuredCourse ? (
+                  <>
+                    <div className="dashboard-learning-content">
+                      <span className="dashboard-learning-label">
+                        CURRENT COURSE · {featuredCourse.topic}
+                      </span>
+                      <h3>{featuredCourse.title}</h3>
+                      {featuredCourse.currentLesson && <p>Up next: {featuredCourse.currentLesson}</p>}
+                      <div className="dashboard-progress-info">
+                        <span>Course progress</span>
+                        <strong>{featuredCourse.progressPercent}%</strong>
+                      </div>
+                      <div
+                        className="dashboard-progress-track"
+                        role="progressbar"
+                        aria-label={`${featuredCourse.title} progress`}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={featuredCourse.progressPercent}
+                      >
+                        <span style={{ width: `${featuredCourse.progressPercent}%` }} />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        {featuredCourse.href && (
+                          <Link className="dashboard-learning-action" to={featuredCourse.href}>
+                            {resolvedPrimaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
+                          </Link>
+                        )}
+                        {resolvedPrimaryClassroomHref && (
+                          <Link
+                            to={resolvedPrimaryClassroomHref}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 hover:text-white underline underline-offset-4"
+                          >
+                            Open classroom →
+                          </Link>
+                        )}
+                      </div>
                     </div>
-                    <Link to="/practice" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
-                      Open practice studio →
-                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div className="dashboard-learning-content">
+                      <span className="dashboard-learning-label">YOUR NEXT CHAPTER</span>
+                      <h3>Your next chapter starts here.</h3>
+                      <p>
+                        {IS_DEMO
+                          ? 'Choose a topic that interests you and start learning at your pace.'
+                          : 'Join a classroom with a class code from your instructor to start learning.'}
+                      </p>
+                      <Link
+                        className="dashboard-learning-action"
+                        to={IS_DEMO ? '/student/courses' : '/student/classrooms'}
+                      >
+                        {IS_DEMO ? 'Explore courses' : 'Join a classroom'} <ArrowRight size={16} aria-hidden="true" />
+                      </Link>
+                    </div>
+                    <img className="dashboard-learning-mascot" src={byteMascot} alt="" width="280" height="280" />
+                  </>
+                )}
+              </div>
+
+              {secondaryCourse && (
+                <Link
+                  to={secondaryCourse.href || '/student/classrooms'}
+                  className="dashboard-secondary-course hover:border-slate-300 transition-colors"
+                >
+                  <span>ALSO IN PROGRESS</span>
+                  <div className="dashboard-secondary-course-main">
+                    <strong>{secondaryCourse.title}</strong>
+                    {(secondaryCourse.currentModule || secondaryCourse.currentLesson) && (
+                      <span>
+                        {[
+                          secondaryCourse.currentModule,
+                          secondaryCourse.currentLesson && `Next: ${secondaryCourse.currentLesson}`,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    )}
                   </div>
+                  <span className="dashboard-secondary-course-progress">
+                    {secondaryCourse.progressPercent}% complete
+                  </span>
+                </Link>
+              )}
+            </section>
 
-                  <PracticePulse practice={practice} loading={loadState === 'loading'} />
-                </section>
+            <section aria-labelledby="deadlines-title" id="deadlines" className="dashboard-section">
+              <div className="dashboard-section-heading">
+                <span className="dashboard-eyebrow">02 / WHAT'S AHEAD</span>
+                <h2 id="deadlines-title">Upcoming deadlines</h2>
+              </div>
 
-                <section aria-labelledby="notifications-title" id="notifications" className="dashboard-notifications">
-                  <div className="dashboard-section-heading">
-                    <span className="dashboard-eyebrow">05 / STAY IN THE LOOP</span>
-                    <h2 id="notifications-title">Recent notifications</h2>
-                  </div>
+              {sortedDeadlines.length ? (
+                <div className="dashboard-timeline" role="list">
+                  {sortedDeadlines.map((item: LearningDeadline) => {
+                    const urgency = getDeadlineUrgency(item.dueAt);
+                    const isImmediate = urgency === 'Overdue' || urgency === 'Due today';
 
-                  {data.notifications.length ? (
-                    <div className="dashboard-notification-list" role="list">
-                      {data.notifications.map(notification => {
-                        const isInternalRoute = Boolean(notification.href && notification.href.startsWith('/'));
-
-                        const inner = (
-                          <>
-                            <span
-                              className="dashboard-notification-indicator"
-                              data-unread={!notification.read}
-                              aria-label={notification.read ? 'Read' : 'Unread'}
-                            />
-                            <div className="dashboard-notification-body">
-                              <div className="dashboard-notification-head">
-                                <strong>{notification.title}</strong>
-                                <time dateTime={notification.createdAt}>
-                                  {formatNotificationTimestamp(notification.createdAt)}
-                                </time>
-                              </div>
-                              {(notification.content || notification.course || notification.detail) && (
-                                <p className="dashboard-notification-sub">
-                                  {notification.content ? (
-                                    <>
-                                      <span className="dashboard-notification-topic">{notification.content}</span>
-                                      {notification.course && (
-                                        <span className="dashboard-notification-course">{notification.course}</span>
-                                      )}
-                                    </>
-                                  ) : (
-                                    <span>{notification.course || notification.detail}</span>
-                                  )}
-                                </p>
-                              )}
-                            </div>
-                          </>
-                        );
-
-                        if (isInternalRoute && notification.href) {
-                          return (
+                    return (
+                      <div
+                        className="dashboard-timeline-item"
+                        key={item.id}
+                        role="listitem"
+                        data-urgency={urgency}
+                      >
+                        <time className="dashboard-timeline-date" dateTime={item.dueAt}>
+                          <strong>{formatDayNumber(item.dueAt)}</strong>
+                          <span>{formatMonth(item.dueAt)}</span>
+                        </time>
+                        <div className="dashboard-timeline-axis" aria-hidden="true">
+                          <span className="dashboard-timeline-node" data-immediate={isImmediate} />
+                        </div>
+                        <div className="dashboard-timeline-body">
+                          <div className="dashboard-timeline-head">
                             <Link
-                              className="dashboard-notification-row"
-                              key={notification.id}
-                              to={notification.href}
-                              role="listitem"
-                              data-unread={!notification.read}
+                              className="dashboard-timeline-title"
+                              to={item.href && !item.href.startsWith('#') ? item.href : '/student/classrooms'}
                             >
-                              {inner}
+                              {item.title}
                             </Link>
-                          );
-                        }
-
-                        return notification.href ? (
-                          <a
-                            className="dashboard-notification-row"
-                            key={notification.id}
-                            href={notification.href}
-                            role="listitem"
-                            data-unread={!notification.read}
-                          >
-                            {inner}
-                          </a>
-                        ) : (
-                          <div
-                            className="dashboard-notification-row"
-                            key={notification.id}
-                            role="listitem"
-                            data-unread={!notification.read}
-                          >
-                            {inner}
+                            <span className="dashboard-timeline-urgency" data-immediate={isImmediate}>
+                              {urgency}
+                            </span>
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="dashboard-empty dashboard-empty-notifications">
-                      <strong>All caught up.</strong>
-                      <p>New lessons and classroom updates will appear here.</p>
-                    </div>
-                  )}
-                </section>
-              </aside>
-            </div>
-          )}
-          <DashboardLessonLinks role="STUDENT" />
+                          <p className="dashboard-timeline-meta">
+                            <span>{item.className}</span>
+                            <span>{item.kind}</span>
+                            <span>Due {formatScheduleTime(item.dueAt)}</span>
+                            {item.status && <span className="dashboard-timeline-status">{item.status}</span>}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="dashboard-empty dashboard-empty-line">
+                  <div>
+                    <strong>No deadlines to show yet.</strong>
+                    <p>
+                      {IS_DEMO
+                        ? 'Assignments and quizzes from your enrolled classes will appear here in chronological order.'
+                        : 'Assignments and quizzes will appear here once their classroom modules are connected.'}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section aria-labelledby="classes-title" id="classes" className="dashboard-section">
+              <div className="dashboard-section-heading flex items-center justify-between">
+                <div>
+                  <span className="dashboard-eyebrow">03 / YOUR LEARNING</span>
+                  <h2 id="classes-title">My classes</h2>
+                </div>
+                <Link to="/student/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                  View all classrooms →
+                </Link>
+              </div>
+
+              {data.classes.length ? (
+                <div className="dashboard-class-list">
+                  {data.classes.map(classroom => {
+                    const nextClassDeadline = sortedDeadlines.find(item => item.className === classroom.name);
+                    const moduleText =
+                      classroom.currentActivity || (classroom.teacher ? `Instructor: ${classroom.teacher}` : undefined);
+                    const nextActionText =
+                      classroom.nextAction
+                      || (nextClassDeadline
+                        ? `Complete ${nextClassDeadline.kind.toLowerCase()}: ${nextClassDeadline.title}`
+                        : undefined);
+                    const moduleCounts = resolveModuleCounts(classroom);
+
+                    const content = (
+                      <>
+                        <div className="dashboard-class-main">
+                          <div className="dashboard-class-header">
+                            <strong>{classroom.name}</strong>
+                            {classroom.code && <span className="dashboard-class-code">{classroom.code}</span>}
+                          </div>
+                          {moduleText && <p className="dashboard-class-module">{moduleText}</p>}
+                          {nextActionText && <span className="dashboard-class-next">Next: {nextActionText}</span>}
+                        </div>
+                        {moduleCounts && (
+                          <div
+                            className="dashboard-class-segments"
+                            role="img"
+                            aria-label={`${classroom.name}: ${moduleCounts.completed} of ${moduleCounts.total} modules completed`}
+                          >
+                            <span className="dashboard-class-segments-label">
+                              {moduleCounts.completed} / {moduleCounts.total} lessons
+                            </span>
+                            <div className="dashboard-class-segments-track" aria-hidden="true">
+                              {Array.from({ length: moduleCounts.total }, (_, idx) => (
+                                <span key={idx} data-state={getSegmentState(idx, moduleCounts.completed)} />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+
+                    const classroomLink = classroom.href && !classroom.href.startsWith('#')
+                      ? classroom.href
+                      : `/student/classrooms/${encodeURIComponent(classroom.id)}`;
+
+                    return (
+                      <Link className="dashboard-class-row" key={classroom.id} to={classroomLink}>
+                        {content}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="dashboard-empty dashboard-empty-line">
+                  <div>
+                    <strong>Your classes will show up here.</strong>
+                    <p>
+                      Enrolled classrooms, active modules, and coursework steps will appear once you join a class.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </section>
+          </div>
+
+          <aside className="dashboard-secondary">
+            <section aria-labelledby="practice-title" id="practice" className="dashboard-practice">
+              <div className="dashboard-section-heading flex items-center justify-between">
+                <div>
+                  <span className="dashboard-eyebrow">04 / KEEP THE RHYTHM</span>
+                  <h2 id="practice-title">Practice pulse</h2>
+                </div>
+                <Link to="/practice" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+                  Open practice studio →
+                </Link>
+              </div>
+
+              <PracticePulse practice={practice} loading={loadState === 'loading'} />
+            </section>
+
+            <section aria-labelledby="notifications-title" id="notifications" className="dashboard-notifications">
+              <div className="dashboard-section-heading">
+                <span className="dashboard-eyebrow">05 / STAY IN THE LOOP</span>
+                <h2 id="notifications-title">Recent notifications</h2>
+              </div>
+
+              {data.notifications.length ? (
+                <div className="dashboard-notification-list" role="list">
+                  {data.notifications.map(notification => {
+                    const isInternalRoute = Boolean(notification.href && notification.href.startsWith('/'));
+
+                    const inner = (
+                      <>
+                        <span
+                          className="dashboard-notification-indicator"
+                          data-unread={!notification.read}
+                          aria-label={notification.read ? 'Read' : 'Unread'}
+                        />
+                        <div className="dashboard-notification-body">
+                          <div className="dashboard-notification-head">
+                            <strong>{notification.title}</strong>
+                            <time dateTime={notification.createdAt}>
+                              {formatNotificationTimestamp(notification.createdAt)}
+                            </time>
+                          </div>
+                          {(notification.content || notification.course || notification.detail) && (
+                            <p className="dashboard-notification-sub">
+                              {notification.content ? (
+                                <>
+                                  <span className="dashboard-notification-topic">{notification.content}</span>
+                                  {notification.course && (
+                                    <span className="dashboard-notification-course">{notification.course}</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span>{notification.course || notification.detail}</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      </>
+                    );
+
+                    if (isInternalRoute && notification.href) {
+                      return (
+                        <Link
+                          className="dashboard-notification-row"
+                          key={notification.id}
+                          to={notification.href}
+                          role="listitem"
+                          data-unread={!notification.read}
+                        >
+                          {inner}
+                        </Link>
+                      );
+                    }
+
+                    return notification.href ? (
+                      <a
+                        className="dashboard-notification-row"
+                        key={notification.id}
+                        href={notification.href}
+                        role="listitem"
+                        data-unread={!notification.read}
+                      >
+                        {inner}
+                      </a>
+                    ) : (
+                      <div
+                        className="dashboard-notification-row"
+                        key={notification.id}
+                        role="listitem"
+                        data-unread={!notification.read}
+                      >
+                        {inner}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="dashboard-empty dashboard-empty-notifications">
+                  <strong>All caught up.</strong>
+                  <p>New lessons and classroom updates will appear here.</p>
+                </div>
+              )}
+            </section>
+          </aside>
+        </div>
+      )}
+      <DashboardLessonLinks role="STUDENT" />
     </WorkspaceLayout>
   );
 };
