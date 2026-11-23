@@ -49,5 +49,31 @@ public class QuizController {
     public ApiResponse<Void> adjust(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@Valid @RequestBody QuizDtos.AdjustAttempts request){
         quizzes.adjustAttempts(actor(auth),classId,quizId,request.studentId(),request.action(),request.additionalAttempts(),request.reason());return ApiResponse.success(null);
     }
+    @PostMapping("/{quizId}/duplicate") @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary="Duplicate quiz configuration into a new draft (Teacher owner)")
+    public ApiResponse<QuizDtos.QuizView> duplicate(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId){
+        return ApiResponse.success(quizzes.duplicate(actor(auth),classId,quizId));
+    }
+    @GetMapping("/{quizId}/attempts/{attemptId}/review")
+    @Operation(summary="Read released correct answers and explanations")
+    public ApiResponse<List<QuizDtos.ReviewQuestion>> review(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@PathVariable UUID attemptId){
+        return ApiResponse.success(quizzes.review(actor(auth),classId,quizId,attemptId));
+    }
+    @GetMapping("/{quizId}/students/{studentId}/result")
+    @Operation(summary="Read official quiz result and completion")
+    public ApiResponse<QuizDtos.Result> result(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@PathVariable UUID studentId){
+        return ApiResponse.success(quizzes.result(actor(auth),classId,quizId,studentId));
+    }
+    @PostMapping("/{quizId}/students/{studentId}/grade-overrides") @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary="Override the official quiz score with an audit record (Teacher owner)")
+    public ApiResponse<QuizDtos.GradeChange> override(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@PathVariable UUID studentId,
+            @Valid @RequestBody QuizDtos.GradeOverride request){
+        return ApiResponse.success(quizzes.overrideGrade(actor(auth),classId,quizId,studentId,request));
+    }
+    @GetMapping("/{quizId}/students/{studentId}/grade-overrides")
+    @Operation(summary="Read grade change history (Teacher owner)")
+    public ApiResponse<List<QuizDtos.GradeChange>> gradeHistory(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@PathVariable UUID studentId){
+        return ApiResponse.success(quizzes.gradeHistory(actor(auth),classId,quizId,studentId));
+    }
     private UUID actor(Authentication auth){return UUID.fromString(auth.getName());}
 }

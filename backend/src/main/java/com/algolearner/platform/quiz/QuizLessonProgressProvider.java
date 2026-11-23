@@ -33,7 +33,19 @@ public class QuizLessonProgressProvider implements LessonProgressProvider {
         Result highest=null;var source=new StringBuilder();
         for(var row:rows){source.append(row.id).append(':').append(row.version).append(':').append(row.score).append(':').append(row.published).append(';');
             if(row.published&&row.score!=null&&(highest==null||row.score.compareTo(highest.score)>0))highest=row;}
+        var override=jdbc.query("""
+                select g.id,g.final_score,g.attempt_id from (
+                    select id,final_score,attempt_id from tbl_quiz_grade_override where quiz_id=? and student_id=? order by id desc limit 1
+                ) g join tbl_quiz_attempt a on a.id=g.attempt_id where a.grade_published
+                """,(rs,n)->new GradeOverride(rs.getLong(1),rs.getBigDecimal(2),rs.getObject(3,UUID.class)),item,student)
+                .stream().findFirst();
+        if(override.isPresent()){
+            var grade=override.get();
+            source.append("override:").append(grade.id());
+            return new LessonProgressSource(true,true,grade.score(),grade.attempt(),QuizHashes.hash(source.toString()));
+        }
         return new LessonProgressSource(!rows.isEmpty(),highest!=null,highest==null?null:highest.score,highest==null?null:highest.id,QuizHashes.hash(source.toString()));
     }
+    private record GradeOverride(long id,BigDecimal score,UUID attempt){}
     private record Result(UUID id,BigDecimal score,boolean published,long version){}
 }

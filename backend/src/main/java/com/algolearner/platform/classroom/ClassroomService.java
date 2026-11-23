@@ -131,7 +131,8 @@ public class ClassroomService {
     public void delete(UUID actorId, UUID classroomId) {
         var classroom = ownedOrAdminWritable(actorId, classroomId);
         if (memberships.existsByClassroomId(classroomId) || requests.existsByClassroomId(classroomId)
-                || invitations.existsByClassroomId(classroomId) || practices.existsByClassroomId(classroomId)) {
+                || invitations.existsByClassroomId(classroomId) || practices.existsByClassroomId(classroomId)
+                || classrooms.hasQuizData(classroomId)) {
             throw conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve related classroom data");
         }
         classrooms.delete(classroom);
