@@ -1,6 +1,6 @@
 import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { clearSession } from '@/services/apiClient';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { useQueries, useQuery } from '@tanstack/react-query';
@@ -328,6 +328,18 @@ export const DashboardPage = () => {
 
   const featuredCourse = data.courses[0];
   const secondaryCourse = data.courses[1];
+  const isLessonCoursesLoading = !IS_DEMO && classroomLessonQueries.some(query => query.isPending);
+  const [progressEntered, setProgressEntered] = useState(false);
+
+  useEffect(() => {
+    if (!featuredCourse || (!IS_DEMO && dashboardQuery.isPending)) {
+      setProgressEntered(false);
+      return;
+    }
+    const frame = window.requestAnimationFrame(() => setProgressEntered(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [featuredCourse, IS_DEMO, dashboardQuery.isPending]);
+
   const unreadCount = data.notifications.filter(notification => !notification.read).length;
   const sortedDeadlines = [...data.deadlines].sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt));
 
@@ -380,7 +392,7 @@ export const DashboardPage = () => {
                 <h2 id="learning-title">Continue learning</h2>
               </div>
 
-              <div className="dashboard-learning-card">
+              <div className="dashboard-learning-card" data-entered={progressEntered ? 'true' : 'false'}>
                 <InteractiveCourseBackground />
                 {featuredCourse ? (
                   <>
@@ -392,10 +404,11 @@ export const DashboardPage = () => {
                       {featuredCourse.currentLesson && <p>Up next: {featuredCourse.currentLesson}</p>}
                       <div className="dashboard-progress-info">
                         <span>Course progress</span>
-                        <strong>{featuredCourse.progressPercent}%</strong>
+                        <strong>{isLessonCoursesLoading ? 'Syncing…' : `${featuredCourse.progressPercent}%`}</strong>
                       </div>
                       <div
                         className="dashboard-progress-track"
+                        data-loading={isLessonCoursesLoading ? 'true' : 'false'}
                         role="progressbar"
                         aria-label={`${featuredCourse.title} progress`}
                         aria-valuemin={0}
@@ -404,7 +417,7 @@ export const DashboardPage = () => {
                       >
                         <span style={{ width: `${featuredCourse.progressPercent}%` }} />
                       </div>
-                      <div className="flex flex-wrap items-center gap-3">
+                      <div className="dashboard-learning-actions">
                         {featuredCourse.href && (
                           <Link className="dashboard-learning-action" to={featuredCourse.href}>
                             {resolvedPrimaryClassroomHref ? 'Continue lesson' : 'Continue learning'} <ArrowRight size={15} aria-hidden="true" />
@@ -413,7 +426,7 @@ export const DashboardPage = () => {
                         {resolvedPrimaryClassroomHref && (
                           <Link
                             to={resolvedPrimaryClassroomHref}
-                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-white/85 hover:text-white underline underline-offset-4"
+                            className="dashboard-learning-secondary"
                           >
                             Open classroom →
                           </Link>
