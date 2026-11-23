@@ -79,4 +79,10 @@ Chạy PostgreSQL và cấu hình theo `backend/.env.example`, rồi `cd backend
 
 Kiểm thử Quiz: `./mvn-local.ps1 '-Dtest=Quiz*Test' test`. Toàn bộ build: `./mvn-local.ps1 clean verify`.
 
-Test PostgreSQL tùy chọn: đặt `QUIZ_TEST_POSTGRES_URL` (JDBC URL database test), `QUIZ_TEST_POSTGRES_USERNAME`, `QUIZ_TEST_POSTGRES_PASSWORD`, rồi chạy `./mvn-local.ps1 '-Dtest=QuizPostgresMigrationTest' test`. Test tạo schema `quiz_test_<UUID>` ngẫu nhiên, migrate toàn bộ lịch sử Flyway, validate/re-run và thử unique ACTIVE/attempt number, CHECK kết quả/điểm và FK bảo toàn Classroom, rồi xóa đúng schema test. Không đọc `DB_URL` hoặc credentials production của ứng dụng. Khi thiếu URL test sẽ SKIPPED.
+Để kiểm tra migration và concurrency trên PostgreSQL, đặt `QUIZ_TEST_POSTGRES_URL` (JDBC URL của database test), `QUIZ_TEST_POSTGRES_USERNAME` và `QUIZ_TEST_POSTGRES_PASSWORD`, rồi chạy:
+
+```powershell
+./mvn-local.ps1 '-Dtest=QuizConcurrencyTest,QuizPostgresMigrationTest' test
+```
+
+Mỗi bộ test tạo và dọn schema ngẫu nhiên riêng trên database test. `QuizPostgresMigrationTest` chạy toàn bộ migration Flyway, kiểm tra validate/re-run, unique ACTIVE/attempt number, CHECK kết quả/điểm và FK của Classroom. `QuizConcurrencyTest` chạy trên schema Flyway với Hibernate validate, kiểm tra start, autosave, submit, expiry và grade override đồng thời. Nếu thiếu URL, bộ migration được skip và bộ concurrency chạy trên H2.

@@ -2,12 +2,18 @@ package com.algolearner.platform.quiz;
 
 import com.algolearner.platform.auth.*;
 import com.algolearner.platform.classroom.*;
+import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import java.math.BigDecimal;
@@ -26,6 +32,38 @@ import static org.assertj.core.api.Assertions.*;
         "app.security.jwt.jwk-set-uri=https://issuer.example.test/.well-known/jwks.json"})
 @ActiveProfiles("test") @Import(QuizApiTest.Config.class)
 class QuizConcurrencyTest {
+    private static Flyway postgresCleanup;
+
+    @DynamicPropertySource
+    static void configurePostgres(DynamicPropertyRegistry properties) {
+        String url = System.getenv("QUIZ_TEST_POSTGRES_URL");
+        if (url == null || url.isBlank()) {
+            return;
+        }
+        if (!url.startsWith("jdbc:postgresql:")) {
+            throw new IllegalArgumentException("QUIZ_TEST_POSTGRES_URL must be a PostgreSQL JDBC URL");
+        }
+        String username = System.getenv("QUIZ_TEST_POSTGRES_USERNAME");
+        String password = System.getenv("QUIZ_TEST_POSTGRES_PASSWORD");
+        String schema = "quiz_concurrency_" + UUID.randomUUID().toString().replace("-", "");
+        postgresCleanup = Flyway.configure().dataSource(url, username, password)
+                .schemas(schema).defaultSchema(schema).cleanDisabled(false).load();
+        properties.add("spring.datasource.url", () -> url);
+        properties.add("spring.datasource.username", () -> username == null ? "" : username);
+        properties.add("spring.datasource.password", () -> password == null ? "" : password);
+        properties.add("spring.flyway.enabled", () -> true);
+        properties.add("spring.flyway.default-schema", () -> schema);
+        properties.add("spring.jpa.properties.hibernate.default_schema", () -> schema);
+        properties.add("spring.jpa.hibernate.ddl-auto", () -> "validate");
+    }
+
+    @AfterAll
+    static void cleanPostgresSchema() {
+        if (postgresCleanup != null) {
+            postgresCleanup.clean();
+        }
+    }
+
     @Autowired QuizService service;
     @Autowired com.algolearner.platform.auth.AccountRepository accounts;
     @Autowired ClassroomRepository classrooms;
@@ -86,6 +124,42 @@ class QuizConcurrencyTest {
         clock.now=NOW.plusSeconds(60); scheduler.expire();
         var persisted=attempts.findById(a.id()).orElseThrow();
         assertThat(persisted.getStatus()).isEqualTo("SUBMITTED");assertThat(persisted.getScore()).isEqualByComparingTo("100");
+    }
+    @Test
+    void concurrentSubmitAndExpiryPreserveTheSameResult() throws Exception {
+        var attempt = service.start(student, classId, quizId);
+        service.autosave(student, classId, quizId, attempt.id(), QUESTION, new Answer(List.of(CORRECT)));
+        clock.now = NOW.plusSeconds(60);
+
+        parallel(() -> service.submit(student, classId, quizId, attempt.id()), () -> {
+            scheduler.expire();
+            return service.resume(student, classId, quizId, attempt.id());
+        }).forEach(result -> {
+            assertThat(result.status()).isEqualTo("SUBMITTED");
+            assertThat(result.score()).isEqualByComparingTo("50");
+            assertThat(result.submittedAt()).isEqualTo(clock.now);
+        });
+        assertThat(attempts.findByQuizIdAndStudentIdOrderByNumberAsc(quizId, student)).hasSize(1);
+    }
+
+    @Test
+    void concurrentGradeOverridesKeepBothRevisions() throws Exception {
+        var attempt = service.start(student, classId, quizId);
+        service.autosave(student, classId, quizId, attempt.id(), QUESTION, new Answer(List.of(CORRECT)));
+        service.submit(student, classId, quizId, attempt.id());
+
+        var changes = parallel(
+                () -> service.overrideGrade(teacher, classId, quizId, student, new GradeOverride(new BigDecimal("70"), "Review A")),
+                () -> service.overrideGrade(teacher, classId, quizId, student, new GradeOverride(new BigDecimal("80"), "Review B")));
+
+        var page = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "revision"));
+        var history = service.gradeHistory(teacher, classId, quizId, student, page)
+                .getData().getItems();
+        assertThat(history).extracting(GradeChange::id)
+                .containsExactlyInAnyOrderElementsOf(changes.stream().map(GradeChange::id).toList());
+        assertThat(history).allSatisfy(change -> assertThat(change.originalScore()).isEqualByComparingTo("50"));
+        assertThat(service.result(teacher, classId, quizId, student).finalScore())
+                .isEqualByComparingTo(history.getFirst().finalScore());
     }
     @Test void concurrentAutosaveAndSubmitProduceConsistentSavedAnswerAndScore() throws Exception {
         var a=service.start(student,classId,quizId);

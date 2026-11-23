@@ -94,6 +94,8 @@ public class QuizService {
         for(var a:history) if(a.getStatus().equals("ACTIVE")) {
             expire(a);
             if(a.getStatus().equals("ACTIVE")) return attemptView(q,a,false);
+            // Persist the closed status before Hibernate queues a new ACTIVE insert.
+            attempts.flush();
         }
         var cfg=config(q); var now=clock.instant(); var override=overrides.findByQuizIdAndStudentId(quizId,actor).orElse(null);
         Instant due=override!=null && override.getDeadline()!=null ? override.getDeadline():cfg.deadline();
