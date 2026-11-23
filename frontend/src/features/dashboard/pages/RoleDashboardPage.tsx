@@ -17,7 +17,6 @@ import {
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
 import { getClassroomLessonSummary, getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
-import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
@@ -467,7 +466,6 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
           </section>
         </aside>
       </div>
-      <DashboardLessonLinks role="TEACHER" />
     </>
   );
 }

@@ -19,7 +19,6 @@ import { InteractiveCourseBackground } from '../components/InteractiveCourseBack
 import { PracticePulse } from '../components/PracticePulse';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
 import { getClassroomLessonSummary } from '@/features/classroom/lessons/mock/lessonMockStore';
-import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import { lessonApi, lessonKeys } from '@/features/classroom/lessons/api/lessonApi';
 import '../styles/dashboard.css';
 
@@ -726,7 +725,6 @@ export const DashboardPage = () => {
           </aside>
         </div>
       )}
-      <DashboardLessonLinks role="STUDENT" />
     </WorkspaceLayout>
   );
 };
