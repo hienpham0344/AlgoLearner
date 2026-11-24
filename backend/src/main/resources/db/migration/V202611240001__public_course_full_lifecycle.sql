@@ -70,7 +70,7 @@ UPDATE tbl_public_course SET status = 'DRAFT' WHERE status IN ('PENDING_REVIEW',
 ALTER TABLE tbl_public_course DROP CONSTRAINT IF EXISTS tbl_public_course_status_check;
 ALTER TABLE tbl_public_course ADD CONSTRAINT tbl_public_course_status_check
     CHECK (status IN ('DRAFT','PUBLISHED','UNPUBLISHED','ARCHIVED'));
-ALTER TABLE tbl_public_course ADD CONSTRAINT tbl_public_course_unpublish_policy_check
+ALTER TABLE tbl_public_course ADD CONSTRAINT tbl_public_course_unpublished_policy_required
     CHECK (status <> 'UNPUBLISHED' OR unpublish_policy IS NOT NULL);
 ALTER TABLE tbl_public_course DROP COLUMN review_reason;
 CREATE INDEX idx_public_course_catalog ON tbl_public_course(status, level, topic);
