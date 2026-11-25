@@ -64,6 +64,8 @@ public class ClassroomController {
     }
     @PostMapping("/{classroomId}/join-requests/{requestId}/approve") @ResponseStatus(HttpStatus.NO_CONTENT)
     public void approve(Authentication auth, @PathVariable UUID classroomId, @PathVariable UUID requestId) { service.approve(actor(auth), classroomId, requestId); }
+    @PostMapping("/{classroomId}/join-requests/{requestId}/reject") @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void reject(Authentication auth, @PathVariable UUID classroomId, @PathVariable UUID requestId) { service.reject(actor(auth), classroomId, requestId); }
     @PostMapping("/{classroomId}/invitations") @ResponseStatus(HttpStatus.CREATED)
     public ApiResponse<UUID> invite(Authentication auth, @PathVariable UUID classroomId, @Valid @RequestBody Invite input) { return ApiResponse.success(service.invite(actor(auth), classroomId, input)); }
     @GetMapping("/{classroomId}/invitations")

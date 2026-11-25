@@ -21,6 +21,7 @@ Nguồn: SRS ver 1.1 mục 4.3, [ClassroomController](../../backend/src/main/jav
 | GET | `/{classroomId}/members` | `page`, `size`, `sort` | 200 `PageResponse<Member>` | Chủ lớp hoặc Admin active |
 | GET | `/{classroomId}/join-requests` | `page`, `size`, `sort` | 200 `PageResponse<JoinRequest>` | Chủ lớp |
 | POST | `/{classroomId}/join-requests/{requestId}/approve` | — | 204 | Chủ lớp |
+| POST | `/{classroomId}/join-requests/{requestId}/reject` | — | 204 | Chủ lớp |
 | POST | `/{classroomId}/invitations` | `Invite` | 201 `ApiResponse<UUID>` | Chủ lớp |
 | GET | `/{classroomId}/invitations` | `page`, `size`, `sort` | 200 `PageResponse<InvitationView>` | Chủ lớp |
 | GET | `/invitations/me` | `page`, `size`, `sort` | 200 `PageResponse<InvitationView>` | Student được mời |

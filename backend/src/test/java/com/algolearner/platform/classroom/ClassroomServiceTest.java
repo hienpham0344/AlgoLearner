@@ -357,6 +357,60 @@ class ClassroomServiceTest {
         verify(memberships).save(any(ClassroomMembershipEntity.class));
     }
 
+    @Test
+    void ownerCanRejectPendingJoinRequestWithoutCreatingMembership() {
+        var owner = account(AccountRole.TEACHER);
+        var student = account(AccountRole.STUDENT);
+        var classroom = classroom(owner);
+        var request = new ClassroomJoinRequestEntity();
+        request.setId(UUID.randomUUID());
+        request.setClassroom(classroom);
+        request.setStudent(student);
+        request.setStatus(JoinRequestStatus.PENDING_APPROVAL);
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(requests.findById(request.getId())).thenReturn(Optional.of(request));
+
+        service.reject(owner.getId(), classroom.getId(), request.getId());
+
+        assertThat(request.getStatus()).isEqualTo(JoinRequestStatus.REJECTED);
+        verify(pairLock).lock(classroom.getId(), student.getId());
+        verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void nonOwnerCannotRejectJoinRequest() {
+        var owner = account(AccountRole.TEACHER);
+        var intruder = account(AccountRole.TEACHER);
+        var classroom = classroom(owner);
+        when(accounts.findById(intruder.getId())).thenReturn(Optional.of(intruder));
+
+        assertThatThrownBy(() -> service.reject(intruder.getId(), classroom.getId(), UUID.randomUUID()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getHttpStatus().value())
+                .isEqualTo(403);
+        verifyNoInteractions(requests, memberships);
+    }
+
+    @Test
+    void rejectingNonPendingJoinRequestThrowsNotFound() {
+        var owner = account(AccountRole.TEACHER);
+        var student = account(AccountRole.STUDENT);
+        var classroom = classroom(owner);
+        var request = new ClassroomJoinRequestEntity();
+        request.setId(UUID.randomUUID());
+        request.setClassroom(classroom);
+        request.setStudent(student);
+        request.setStatus(JoinRequestStatus.APPROVED);
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(requests.findById(request.getId())).thenReturn(Optional.of(request));
+
+        assertThatThrownBy(() -> service.reject(owner.getId(), classroom.getId(), request.getId()))
+                .isInstanceOf(AppException.class)
+                .extracting(e -> ((AppException) e).getErrorCode())
+                .isEqualTo("JOIN_REQUEST_NOT_FOUND");
+        verifyNoInteractions(memberships);
+    }
+
     private AccountEntity account(AccountRole role) { var a = new AccountEntity(); a.setId(UUID.randomUUID()); a.setRole(role); a.setStatus(AccountStatus.ACTIVE); a.setUsername(UUID.randomUUID().toString()); a.setEmail(UUID.randomUUID()+"@example.test"); return a; }
     private ClassroomEntity classroom(AccountEntity owner) { var c=new ClassroomEntity(); c.setId(UUID.randomUUID()); c.setOwner(owner); c.setName("A"); c.setStatus(ClassroomStatus.ACTIVE); c.setClassCode("ABCDEFGH"); c.setJoiningOpen(true); c.setJoinMode(JoinMode.AUTO_JOIN); when(classrooms.findById(c.getId())).thenReturn(Optional.of(c)); return c; }
     private ClassroomInvitationEntity invitation(ClassroomEntity classroom, AccountEntity student, Instant expiry) {
