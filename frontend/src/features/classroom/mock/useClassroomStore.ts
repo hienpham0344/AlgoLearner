@@ -2,14 +2,14 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Classroom,
   ClassroomAnnouncement,
-  CreateAnnouncementInput,
   CreateClassroomInput,
   DemoPersona,
   DemoRole,
   InAppNotification,
   JoinConfigurationInput,
   JoinResultFeedback,
-  UpdateAnnouncementInput,
+  PrototypeCreateAnnouncementInput,
+  PrototypeUpdateAnnouncementInput,
   UpdateClassroomInput,
 } from '../types';
 import {
@@ -729,7 +729,7 @@ export function useClassroomStore(roleOverride?: DemoRole) {
 
   // FR-ANN-001 & FR-ANN-003: Create announcement & dispatch in-app notifications
   const createAnnouncement = useCallback(
-    (input: CreateAnnouncementInput): ClassroomAnnouncement => {
+    (input: PrototypeCreateAnnouncementInput): ClassroomAnnouncement => {
       if (currentRole === 'STUDENT') {
         throw new Error('Students do not have permission to publish announcements.');
       }
@@ -801,7 +801,7 @@ export function useClassroomStore(roleOverride?: DemoRole) {
 
   // FR-ANN-001: Edit announcement
   const updateAnnouncement = useCallback(
-    (id: string, input: UpdateAnnouncementInput): ClassroomAnnouncement => {
+    (id: string, input: PrototypeUpdateAnnouncementInput): ClassroomAnnouncement => {
       if (currentRole === 'STUDENT') {
         throw new Error('Students do not have permission to edit announcements.');
       }

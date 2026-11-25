@@ -1,5 +1,5 @@
-import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { AlertCircle, AlertTriangle, X } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
 interface ConfirmationModalProps {
@@ -10,7 +10,9 @@ interface ConfirmationModalProps {
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'default' | 'warning';
-  onConfirm: () => void;
+  isConfirming?: boolean;
+  errorMessage?: string | null;
+  onConfirm: () => Promise<void> | void;
   onCancel: () => void;
 }
 
@@ -22,9 +24,22 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   variant = 'default',
+  isConfirming = false,
+  errorMessage = null,
   onConfirm,
   onCancel,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !isConfirming) {
+        onCancel();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isConfirming, onCancel]);
+
   if (!isOpen) return null;
 
   const contentText = description || message || '';
@@ -56,24 +71,43 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           </div>
           <button
             type="button"
+            disabled={isConfirming}
             onClick={onCancel}
-            className="classroom-modal-close"
+            className="classroom-modal-close disabled:opacity-50"
             aria-label="Close dialog"
           >
             <X size={18} aria-hidden="true" />
           </button>
         </div>
 
-        <p className="text-sm text-slate-600 leading-relaxed mb-6">{contentText}</p>
+        <p className="text-sm text-slate-600 leading-relaxed mb-4">{contentText}</p>
+
+        {errorMessage && (
+          <div
+            role="alert"
+            className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-center gap-2"
+          >
+            <AlertCircle size={15} className="shrink-0 text-rose-600" aria-hidden="true" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
         <div className="classroom-modal-footer">
-          <Button variant="outline" size="sm" onClick={onCancel}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={isConfirming}
+            onClick={onCancel}
+            className="text-slate-700 border-slate-300 hover:bg-slate-100"
+          >
             {cancelLabel}
           </Button>
           <Button
             variant={variant === 'danger' ? 'danger' : 'primary'}
             size="sm"
-            onClick={onConfirm}
+            isLoading={isConfirming}
+            disabled={isConfirming}
+            onClick={() => void onConfirm()}
           >
             {confirmLabel}
           </Button>

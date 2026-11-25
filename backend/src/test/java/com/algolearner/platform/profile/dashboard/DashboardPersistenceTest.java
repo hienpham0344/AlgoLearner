@@ -111,7 +111,8 @@ class DashboardPersistenceTest extends PostgresIntegrationTest {
 
     @Test void publicPracticeCountsCanonicalLatestGenerationAndAdminUsesRealSources() {
         var teacher=account(AccountRole.TEACHER);var student=account(AccountRole.STUDENT);var outsider=account(AccountRole.STUDENT);
-        UUID course=course(teacher,"PENDING_REVIEW");
+        UUID course=course(teacher,"DRAFT");
+        jdbc.update("INSERT INTO tbl_public_course_revision(id,course_id,author_id,revision_no,status,snapshot,submitted_at) VALUES(?,?,?,1,'PENDING_REVIEW','{}'::jsonb,CURRENT_TIMESTAMP)",UUID.randomUUID(),course,teacher);
         UUID problem=UUID.randomUUID();
         jdbc.update("INSERT INTO tbl_public_problem(id,author_id,status) VALUES(?,?,'PENDING_REVIEW')",problem,teacher);
         UUID submission=UUID.randomUUID();
