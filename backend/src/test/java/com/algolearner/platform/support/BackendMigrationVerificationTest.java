@@ -37,6 +37,30 @@ class BackendMigrationVerificationTest {
                 flyway.validate();
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
                 connection.setSchema(schema);
+                try (var rows = statement.executeQuery("""
+                        SELECT g.classroom_id, g.active_scheme_revision_id, g.show_overall, g.version,
+                               g.created_at, g.updated_at
+                        FROM tbl_gradebook g
+                        """)) {
+                    assertThat(rows.next()).isEqualTo(upgrade);
+                    if (upgrade) {
+                        assertThat(rows.getObject("classroom_id", UUID.class)).isEqualTo(classroom);
+                        assertThat(rows.getObject("active_scheme_revision_id")).isNull();
+                        assertThat(rows.getBoolean("show_overall")).isFalse();
+                        assertThat(rows.getLong("version")).isZero();
+                        assertThat(rows.getTimestamp("created_at")).isNotNull();
+                        assertThat(rows.getTimestamp("updated_at")).isNotNull();
+                        assertThat(rows.next()).isFalse();
+                    }
+                }
+                try (var rows = statement.executeQuery("""
+                        SELECT (SELECT count(*) FROM tbl_grade_scheme_revision),
+                               (SELECT count(*) FROM tbl_grade_scheme_item)
+                        """)) {
+                    assertThat(rows.next()).isTrue();
+                    assertThat(rows.getLong(1)).isZero();
+                    assertThat(rows.getLong(2)).isZero();
+                }
                 try (var rows = statement.executeQuery("SELECT relname FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relkind='r' AND relname LIKE 'tbl_%' AND NOT relrowsecurity")) {
                     assertThat(rows.next()).as("Application tables must keep RLS enabled").isFalse();
                 }
