@@ -29,6 +29,12 @@ const StudentAssignmentDetailPage = lazy(() => import('@/features/classroom/assi
 const StudentWorkspacePage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentWorkspacePage })));
 const StudentAttemptsHistoryPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAttemptsHistoryPage })));
 
+// Classroom Quizzes (FE 4.7 Student Scope - Issue #61)
+const StudentQuizzesPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizzesPage })));
+const StudentQuizDetailPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizDetailPage })));
+const StudentQuizAttemptPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizAttemptPage })));
+const StudentQuizResultPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizResultPage })));
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -112,6 +118,12 @@ export const App: React.FC = () => {
       <Route path="/student/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><StudentAssignmentDetailPage /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/assignments/:assignmentId/workspace" element={<ProtectedRoute><StudentWorkspacePage /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/assignments/:assignmentId/attempts" element={<ProtectedRoute><StudentAttemptsHistoryPage /></ProtectedRoute>} />
+
+      {/* Classroom Quizzes Routes (FE 4.7 Student Scope - Issue #61) */}
+      <Route path="/student/classrooms/:id/quizzes" element={<ProtectedRoute><StudentQuizzesPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute><StudentQuizDetailPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId/attempt" element={<ProtectedRoute><StudentQuizAttemptPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId/result" element={<ProtectedRoute><StudentQuizResultPage /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 

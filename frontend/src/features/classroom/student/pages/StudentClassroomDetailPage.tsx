@@ -200,6 +200,16 @@ export const StudentClassroomDetailPage: React.FC = () => {
             Class assignments
           </Link>
         )}
+        {isEnrolled && (
+          <Link
+            to={`/student/classrooms/${encodeURIComponent(classroom.id)}/quizzes`}
+            className="classroom-tab-btn"
+            role="tab"
+          >
+            <CheckCircle2 size={14} className="inline mr-1.5" />
+            Class quizzes
+          </Link>
+        )}
         <button
           type="button"
           role="tab"
