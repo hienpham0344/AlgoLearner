@@ -53,3 +53,20 @@ export function activityPath(path: string | null, classroomId: string, role: Les
     return url.pathname + url.search;
   } catch { return null; }
 }
+
+export function resolveLessonActivityPath(
+  activity: Pick<LessonActivity, 'id' | 'type' | 'path'>,
+  classroomId: string,
+  role: LessonRole,
+): string | null {
+  const explicit = activityPath(activity.path, classroomId, role);
+  if (explicit) return explicit;
+  const prefix = `/${role.toLowerCase()}/classrooms/${encodeURIComponent(classroomId)}`;
+  if (activity.type === 'ASSIGNMENT') {
+    return `${prefix}/assignments/${encodeURIComponent(activity.id)}`;
+  }
+  if (activity.type === 'QUIZ') {
+    return `${prefix}/quizzes/${encodeURIComponent(activity.id)}`;
+  }
+  return null;
+}

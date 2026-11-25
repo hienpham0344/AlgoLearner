@@ -21,6 +21,7 @@ import { NotificationsPage } from '@/features/dashboard/pages/NotificationsPage'
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { LoadingPreviewPage } from '@/features/dev/LoadingPreviewPage';
 const LessonWorkspacePage = lazy(() => import('@/features/classroom/lessons/pages/LessonWorkspacePage').then(module => ({ default: module.LessonWorkspacePage })));
+const TeacherAssignmentsHubPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentsHubPage })));
 const TeacherAssignmentsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentsPage })));
 const TeacherAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherAssignmentDetailPage })));
 const TeacherSubmissionsPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.TeacherSubmissionsPage })));
@@ -29,6 +30,16 @@ const StudentAssignmentDetailPage = lazy(() => import('@/features/classroom/assi
 const StudentWorkspacePage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentWorkspacePage })));
 const StudentAttemptsHistoryPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAttemptsHistoryPage })));
 
+const TeacherQuizzesPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizzesPage })));
+const TeacherQuizCreatePage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizCreatePage })));
+const TeacherQuizDetailPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizDetailPage })));
+const TeacherQuizEditPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizEditPage })));
+const TeacherQuizResultsPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizResultsPage })));
+const StudentQuizzesPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizzesPage })));
+const StudentQuizDetailPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizDetailPage })));
+const StudentQuizAttemptPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizAttemptPage })));
+const StudentQuizResultPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizResultPage })));
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
@@ -36,8 +47,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return (
       <LoadingScreen
         variant="fullscreen"
-        message="Đang khởi tạo không gian làm việc…"
-        submessage="Đang đồng bộ thông tin phiên làm việc"
+        message="Initializing workspace…"
+        submessage="Syncing your session information"
       />
     );
   }
@@ -51,8 +62,8 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
       fallback={
         <LoadingScreen
           variant="page"
-          message="Đang tải dữ liệu trang…"
-          submessage="Vui lòng đợi trong giây lát"
+          message="Loading page…"
+          submessage="Please wait a moment"
         />
       }
     >
@@ -91,7 +102,7 @@ export const App: React.FC = () => {
       <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
       <Route path="/student/courses" element={<ProtectedRoute><PlaceholderPage feature="public-courses" /></ProtectedRoute>} />
       <Route path="/practice" element={<ProtectedRoute><PlaceholderPage feature="practice" /></ProtectedRoute>} />
-      <Route path="/teacher/assignments" element={<ProtectedRoute><PlaceholderPage feature="teacher-assignments" /></ProtectedRoute>} />
+      <Route path="/teacher/assignments" element={<ProtectedRoute><TeacherAssignmentsHubPage /></ProtectedRoute>} />
       <Route path="/teacher/review-queue" element={<ProtectedRoute><PlaceholderPage feature="teacher-review-queue" /></ProtectedRoute>} />
       <Route path="/admin/submissions" element={<ProtectedRoute><PlaceholderPage feature="admin-submissions" /></ProtectedRoute>} />
       <Route path="/admin/system-logs" element={<ProtectedRoute><PlaceholderPage feature="admin-system-logs" /></ProtectedRoute>} />
@@ -112,6 +123,17 @@ export const App: React.FC = () => {
       <Route path="/student/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><StudentAssignmentDetailPage /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/assignments/:assignmentId/workspace" element={<ProtectedRoute><StudentWorkspacePage /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/assignments/:assignmentId/attempts" element={<ProtectedRoute><StudentAttemptsHistoryPage /></ProtectedRoute>} />
+
+      {/* Classroom Quizzes Routes (FE 4.7) */}
+      <Route path="/teacher/classrooms/:id/quizzes" element={<ProtectedRoute><TeacherQuizzesPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/new" element={<ProtectedRoute><TeacherQuizCreatePage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute><TeacherQuizDetailPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId/edit" element={<ProtectedRoute><TeacherQuizEditPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId/results" element={<ProtectedRoute><TeacherQuizResultsPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes" element={<ProtectedRoute><StudentQuizzesPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute><StudentQuizDetailPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId/attempt" element={<ProtectedRoute><StudentQuizAttemptPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId/result" element={<ProtectedRoute><StudentQuizResultPage /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 

@@ -16,6 +16,10 @@ import {
   useUpdateAnnouncementMutation,
 } from '../hooks/useAnnouncements';
 import { lessonApi, lessonKeys } from '../lessons/api/lessonApi';
+import { assignmentApi } from '../assignments/api/assignmentApi';
+import { assignmentKeys } from '../assignments/api/assignmentKeys';
+import { quizApi } from '../quizzes/api/quizApi';
+import { quizKeys } from '../quizzes/api/quizKeys';
 import { AvailabilityBadge } from '../components/AvailabilityBadge';
 import { ClassroomAnnouncementsList } from '../components/ClassroomAnnouncementsList';
 import type { DemoPersona, DemoRole, JoinMode } from '../types';
@@ -23,6 +27,8 @@ import {
   Bell,
   BookOpen,
   BookOpenText,
+  ClipboardCheck,
+  FileCode2,
   Users,
   Settings,
   Copy,
@@ -56,10 +62,12 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab')?.toUpperCase();
   const announcementIdParam = searchParams.get('announcementId');
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ANNOUNCEMENTS' | 'LESSONS' | 'MEMBERS' | 'SETTINGS'>(() => {
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ANNOUNCEMENTS' | 'LESSONS' | 'ASSIGNMENTS' | 'QUIZZES' | 'MEMBERS' | 'SETTINGS'>(() => {
     if ((tabParam === 'ANNOUNCEMENTS' || announcementIdParam) && role !== 'ADMIN') return 'ANNOUNCEMENTS';
     if (tabParam === 'SETTINGS') return 'SETTINGS';
     if (tabParam === 'MEMBERS') return 'MEMBERS';
+    if (tabParam === 'ASSIGNMENTS' && role !== 'ADMIN') return 'ASSIGNMENTS';
+    if (tabParam === 'QUIZZES' && role !== 'ADMIN') return 'QUIZZES';
     if (tabParam === 'LESSONS') return 'LESSONS';
     return 'OVERVIEW';
   });
@@ -68,6 +76,8 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
     if ((tabParam === 'ANNOUNCEMENTS' || announcementIdParam) && role !== 'ADMIN') setActiveTab('ANNOUNCEMENTS');
     else if (tabParam === 'SETTINGS') setActiveTab('SETTINGS');
     else if (tabParam === 'MEMBERS') setActiveTab('MEMBERS');
+    else if (tabParam === 'ASSIGNMENTS' && role !== 'ADMIN') setActiveTab('ASSIGNMENTS');
+    else if (tabParam === 'QUIZZES' && role !== 'ADMIN') setActiveTab('QUIZZES');
     else if (tabParam === 'LESSONS') setActiveTab('LESSONS');
     else if (tabParam === 'OVERVIEW') setActiveTab('OVERVIEW');
   }, [tabParam, announcementIdParam, role]);
@@ -139,6 +149,18 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
   const lessonsQuery = useQuery({
     queryKey: lessonKeys.list(user?.id || '', id || '', 0),
     queryFn: ({ signal }) => lessonApi.list(id!, 0, signal),
+    enabled: Boolean(id && user?.id) && role !== 'ADMIN',
+    retry: false,
+  });
+  const assignmentsQuery = useQuery({
+    queryKey: assignmentKeys.list(id || ''),
+    queryFn: ({ signal }) => assignmentApi.list(id!, signal),
+    enabled: Boolean(id && user?.id) && role !== 'ADMIN',
+    retry: false,
+  });
+  const quizzesQuery = useQuery({
+    queryKey: quizKeys.list(id || '', 0, 20),
+    queryFn: ({ signal }) => quizApi.list(id!, 0, 20, signal),
     enabled: Boolean(id && user?.id) && role !== 'ADMIN',
     retry: false,
   });
@@ -257,19 +279,19 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
           )
         }
         onMarkNotificationRead={notificationId =>
-          void run(() => classroomApi.markNotificationRead(notificationId), 'Đã đánh dấu đã đọc.')
+          void run(() => classroomApi.markNotificationRead(notificationId), 'Marked as read.')
         }
         onAcceptInvitation={(invitationId, classroomId) =>
           void run(
             () => classroomApi.acceptInvitation(invitationId),
-            'Đã tham gia lớp.',
+            'Joined classroom.',
             () => {
               if (classroomId) navigate(`${base}/${classroomId}`);
             },
           )
         }
         onDeclineInvitation={invitationId =>
-          void run(() => classroomApi.declineInvitation(invitationId), 'Đã từ chối lời mời.')
+          void run(() => classroomApi.declineInvitation(invitationId), 'Invitation declined.')
         }
         onClearFeedback={() => {
           setError('');
@@ -286,7 +308,7 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
       {error && <p role="alert" className="rounded-lg bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
       {notice && <p role="status" className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p>}
       <>
-        {detail.isPending && <LoadingScreen variant="page" message="Đang tải thông tin lớp học…" />}
+        {detail.isPending && <LoadingScreen variant="page" message="Loading classroom…" />}
         {detail.isError && <p role="alert">{classroomError(detail.error)} <button type="button" className="underline" onClick={() => detail.refetch()}>Retry</button></p>}
         {content && <>
           {/* Header Banner / Hero Card */}
@@ -328,13 +350,25 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
               </div>
 
               {role !== 'ADMIN' && (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2.5">
                   <Link
                     to={`${base}/${encodeURIComponent(id)}/lessons`}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-6 py-3.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800 transition"
                   >
                     <span>Open class lessons</span>
                     <ArrowRight size={16} />
+                  </Link>
+                  <Link
+                    to={`${base}/${encodeURIComponent(id)}/assignments`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition"
+                  >
+                    <span>Assignments</span>
+                  </Link>
+                  <Link
+                    to={`${base}/${encodeURIComponent(id)}/quizzes`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 transition"
+                  >
+                    <span>Quizzes</span>
                   </Link>
                 </div>
               )}
@@ -372,6 +406,50 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
               >
                 <BookOpenText size={16} aria-hidden="true" />
                 <span>Lessons</span>
+              </button>
+            )}
+
+            {role !== 'ADMIN' && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'ASSIGNMENTS'}
+                className="classroom-subnav-link"
+                data-active={activeTab === 'ASSIGNMENTS'}
+                onClick={() => {
+                  setActiveTab('ASSIGNMENTS');
+                  setSearchParams({ tab: 'assignments' });
+                }}
+              >
+                <FileCode2 size={16} aria-hidden="true" />
+                <span>Assignments</span>
+                {assignmentsQuery.data && (
+                  <span className="classroom-subnav-badge">
+                    {assignmentsQuery.data.length}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {role !== 'ADMIN' && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'QUIZZES'}
+                className="classroom-subnav-link"
+                data-active={activeTab === 'QUIZZES'}
+                onClick={() => {
+                  setActiveTab('QUIZZES');
+                  setSearchParams({ tab: 'quizzes' });
+                }}
+              >
+                <ClipboardCheck size={16} aria-hidden="true" />
+                <span>Quizzes</span>
+                {quizzesQuery.data && (
+                  <span className="classroom-subnav-badge">
+                    {quizzesQuery.data.pagination.totalElements}
+                  </span>
+                )}
               </button>
             )}
 
@@ -738,6 +816,116 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
             </div>
           )}
 
+          {/* Tab: ASSIGNMENTS */}
+          {activeTab === 'ASSIGNMENTS' && role !== 'ADMIN' && (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Class Assignments</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {role === 'TEACHER'
+                      ? 'Author multi-part assignments (code, objective, essay), manage deadlines, and review submissions.'
+                      : 'Complete assigned programming, objective, and written tasks before their deadlines.'}
+                  </p>
+                </div>
+                <Link
+                  to={`${base}/${encodeURIComponent(id)}/assignments`}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+                >
+                  <span>Open Assignments Workspace</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+
+              {assignmentsQuery.isPending ? (
+                <LoadingScreen variant="inline" message="Loading assignments…" />
+              ) : !assignmentsQuery.data || assignmentsQuery.data.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">
+                  No assignments available in this classroom yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {assignmentsQuery.data.slice(0, 6).map(asg => (
+                    <li key={asg.id} className="flex items-center justify-between gap-4 py-3 text-sm">
+                      <div className="min-w-0">
+                        <Link
+                          to={`${base}/${encodeURIComponent(id)}/assignments/${encodeURIComponent(asg.id)}`}
+                          className="font-semibold text-slate-900 hover:underline truncate block"
+                        >
+                          {asg.title}
+                        </Link>
+                        <span className="text-xs text-slate-500">
+                          Status: {asg.status}
+                        </span>
+                      </div>
+                      <Link
+                        to={`${base}/${encodeURIComponent(id)}/assignments/${encodeURIComponent(asg.id)}`}
+                        className="text-xs font-semibold text-indigo-600 hover:underline shrink-0"
+                      >
+                        Open →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Tab: QUIZZES */}
+          {activeTab === 'QUIZZES' && role !== 'ADMIN' && (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">Classroom Quizzes</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {role === 'TEACHER'
+                      ? 'Configure timed objective quizzes, publish official grades, and review student attempts.'
+                      : 'Take timed multiple-choice and true/false assessments with automatic answer saving.'}
+                  </p>
+                </div>
+                <Link
+                  to={`${base}/${encodeURIComponent(id)}/quizzes`}
+                  className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800 transition"
+                >
+                  <span>Open Quizzes Workspace</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+
+              {quizzesQuery.isPending ? (
+                <LoadingScreen variant="inline" message="Loading quizzes…" />
+              ) : !quizzesQuery.data || quizzesQuery.data.items.length === 0 ? (
+                <p className="py-6 text-center text-sm text-slate-500">
+                  No quizzes available in this classroom yet.
+                </p>
+              ) : (
+                <ul className="divide-y divide-slate-100">
+                  {quizzesQuery.data.items.slice(0, 6).map(quiz => (
+                    <li key={quiz.id} className="flex items-center justify-between gap-4 py-3 text-sm">
+                      <div className="min-w-0">
+                        <Link
+                          to={`${base}/${encodeURIComponent(id)}/quizzes/${encodeURIComponent(quiz.id)}`}
+                          className="font-semibold text-slate-900 hover:underline truncate block"
+                        >
+                          {quiz.title}
+                        </Link>
+                        <span className="text-xs text-slate-500">
+                          {quiz.status} · {quiz.kind} · Max attempts: {quiz.maxAttempts}
+                        </span>
+                      </div>
+                      <Link
+                        to={`${base}/${encodeURIComponent(id)}/quizzes/${encodeURIComponent(quiz.id)}`}
+                        className="text-xs font-semibold text-indigo-600 hover:underline shrink-0"
+                      >
+                        Open →
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           {/* Tab 3: MEMBERS */}
           {activeTab === 'MEMBERS' && (
             <div className="mt-6 space-y-6">
@@ -750,14 +938,24 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
                     {requests.data.items.map(request => (
                       <li key={request.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                         <span className="font-semibold text-slate-900">{request.username}</span>
-                        <button
-                          className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
-                          type="button"
-                          disabled={pending}
-                          onClick={() => void run(() => classroomApi.approve(id, request.id), 'Join request approved.')}
-                        >
-                          Approve
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            className="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 transition"
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void run(() => classroomApi.approve(id, request.id), 'Join request approved.')}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="rounded-lg border border-rose-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 transition"
+                            type="button"
+                            disabled={pending}
+                            onClick={() => void run(() => classroomApi.reject(id, request.id), 'Join request rejected.')}
+                          >
+                            Reject
+                          </button>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -767,7 +965,7 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
 
               <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 <h2 className="mb-3 text-lg font-bold text-slate-900">Members</h2>
-                {members.isPending && <LoadingScreen variant="inline" message="Đang tải danh sách thành viên…" />}
+                {members.isPending && <LoadingScreen variant="inline" message="Loading members…" />}
                 {members.isError && <p role="alert">{classroomError(members.error)}</p>}
                 {members.data && (
                   <>
@@ -842,7 +1040,7 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
                       <button className={button} disabled={pending}>Invite</button>
                     </div>
                   </form>
-                  {invitations.isPending && <LoadingScreen variant="inline" message="Đang tải danh sách lời mời…" className="mt-4" />}
+                  {invitations.isPending && <LoadingScreen variant="inline" message="Loading invitations…" className="mt-4" />}
                   {invitations.isError && <p role="alert" className="mt-4">{classroomError(invitations.error)}</p>}
                   {invitations.data && (
                     <>
@@ -855,9 +1053,9 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
                                 type="button"
                                 className={secondary}
                                 disabled={pending}
-                                onClick={() => void run(() => classroomApi.revoke(id, invitation.id), 'Đã thu hồi lời mời.')}
+                                onClick={() => void run(() => classroomApi.revoke(id, invitation.id), 'Invitation revoked.')}
                               >
-                                Thu hồi
+                                Revoke
                               </button>
                             )}
                           </li>

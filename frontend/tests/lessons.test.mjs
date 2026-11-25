@@ -530,6 +530,19 @@ test('activity navigation cannot escape the current role/class and dates use UTC
   for (const path of ['https://evil.test', '//evil.test', '/teacher/classrooms/class-a/quizzes/q1', '/student/classrooms/class-a/../class-b/quizzes/q1', '/student/classrooms/class-a/%2e%2e/class-b/quizzes/q1']) {
     assert.equal(activityPath(path, 'class-a', 'STUDENT'), null);
   }
+  const { resolveLessonActivityPath } = module.exports;
+  assert.equal(
+    resolveLessonActivityPath({ id: 'asg-1', type: 'ASSIGNMENT', path: null }, 'class-a', 'STUDENT'),
+    '/student/classrooms/class-a/assignments/asg-1',
+  );
+  assert.equal(
+    resolveLessonActivityPath({ id: 'quiz-9', type: 'QUIZ', path: null }, 'class-a', 'TEACHER'),
+    '/teacher/classrooms/class-a/quizzes/quiz-9',
+  );
+  assert.equal(
+    resolveLessonActivityPath({ id: 'prac-1', type: 'PRACTICE', path: null }, 'class-a', 'STUDENT'),
+    null,
+  );
   assert.match(lessonDate('2026-11-11T00:00:00Z'), /07:00/);
 });
 

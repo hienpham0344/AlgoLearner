@@ -16,7 +16,7 @@ import {
   readSavedLessonProgress,
   saveLessonReadProgress,
 } from '../lessonReading';
-import { activityPath, canCompleteLesson, lessonDate, visibleLessons } from '../lessonRules';
+import { canCompleteLesson, lessonDate, resolveLessonActivityPath, visibleLessons } from '../lessonRules';
 import type { Lesson, LessonInput, LessonRole } from '../types';
 import { LessonEditor } from '../components/LessonEditor';
 import { LessonContent } from '../components/LessonContent';
@@ -30,7 +30,7 @@ import '../styles/lessons.css';
 
 export function LessonWorkspacePage({ role }: { role: LessonRole }) {
   const { user, isLoading } = useAuth();
-  if (isLoading) return <LoadingScreen variant="page" message="Đang tải thông tin tài khoản…" />;
+  if (isLoading) return <LoadingScreen variant="page" message="Loading account…" />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== role) return <div className="p-8" role="alert">This lesson workspace is for {role.toLowerCase()} accounts. <Link to="/classrooms">Open my classrooms</Link></div>;
   return <LessonScope role={role} userId={user.id} />;
@@ -105,7 +105,7 @@ function LessonScope({ role, userId }: { role: LessonRole; userId: string }) {
 
   return <ClassroomLayout className="lesson-shell" role={role} persona={layoutPersona} breadcrumbChild={breadcrumbNode}>
     <div className="lesson-workspace" id="lesson-main">
-      {classroom.isPending ? <LoadingScreen variant="page" message="Đang tải thông tin lớp học…" /> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
+      {classroom.isPending ? <LoadingScreen variant="page" message="Loading classroom…" /> : classroom.isError ? <LessonErrorState error={classroom.error} retry={() => void classroom.refetch()} />
         : classroom.data && (
           role === 'TEACHER' && classroom.data.ownerId !== effectiveUserId
             ? <LessonErrorState error={new Error('Only the classroom owner can manage these lessons.')} />
@@ -223,7 +223,7 @@ function LessonList({
         ];
 
   return <>
-    {query.isPending ? <LoadingScreen variant="page" message="Đang tải danh sách bài học…" /> : query.isError ? <LessonErrorState error={query.error} retry={() => void query.refetch()} /> : <>
+    {query.isPending ? <LoadingScreen variant="page" message="Loading lessons…" /> : query.isError ? <LessonErrorState error={query.error} retry={() => void query.refetch()} /> : <>
       {items.length === 0 ? (
         <section className="lesson-panel lesson-empty">
           <BookOpen size={32} strokeWidth={1.4} aria-hidden="true" />
@@ -601,7 +601,7 @@ function LessonDetail({
     }); } catch { /* Mutation feedback is rendered below. */ }
   }
 
-  if (!create && detail.isPending) return <LoadingScreen variant="page" message="Đang tải nội dung bài học…" />;
+  if (!create && detail.isPending) return <LoadingScreen variant="page" message="Loading lesson content…" />;
   if (!create && detail.isError) return <LessonErrorState error={detail.error} retry={() => void detail.refetch()} />;
   if (!create && (!lesson || lesson.classroomId !== classId || (role === 'STUDENT' && lesson.status !== 'PUBLISHED'))) return <LessonErrorState error={new Error('This lesson is not available to you.')} />;
   const activities = [...(options.data || []), ...(lesson?.activities || []).filter(activity => !options.data?.some(option => option.id === activity.id))];
@@ -689,7 +689,7 @@ function LessonDetail({
             <section className="lesson-panel"><h2><FileText size={18} aria-hidden="true" />Linked activities</h2>
               {lesson.activities.filter(activity => role === 'TEACHER' || activity.available).length === 0 && <p className="lesson-muted">No available activities linked yet.</p>}
               <ul className="lesson-activity-list">{lesson.activities.filter(activity => role === 'TEACHER' || activity.available).map(activity => {
-                const path = activity.available ? activityPath(activity.path, classId, role) : null;
+                const path = activity.available ? resolveLessonActivityPath(activity, classId, role) : null;
                 return <li key={activity.id}><div><small>{activity.type.toLowerCase()}{lesson.requiredActivityIds.includes(activity.id) ? ' · Required for completion' : ''}</small><strong>{activity.title}</strong></div>{path ? <Link className="lesson-button text" to={path}>Open <ArrowUpRight size={15} aria-hidden="true" /><span className="sr-only">{activity.title}</span></Link> : <span className="lesson-muted">Unavailable</span>}</li>;
               })}</ul>
               <div className="lesson-completion"><h3>{role === 'TEACHER' ? 'Completion mode' : 'Your completion'}</h3><p>{lesson.completionMode === 'MANUAL' ? 'Students mark this lesson as completed.' : 'Completion depends on the configured requirements of linked assignments or quizzes.'}</p>
