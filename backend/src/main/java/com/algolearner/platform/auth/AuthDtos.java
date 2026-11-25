@@ -1,192 +1,71 @@
 package com.algolearner.platform.auth;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
-
-import java.time.Instant;
+import jakarta.validation.constraints.Size;
 import java.util.UUID;
+import java.time.Instant;
 
 public final class AuthDtos {
-    private AuthDtos() {}
+    private AuthDtos() { }
 
-    @Schema(description = "Account registration request payload")
-    public record RegisterRequest(
-            @NotBlank(message = "Email is required")
-            @Email(message = "Email must be a valid email address")
-            @Schema(example = "student@example.com")
-            String email,
-
-            @NotBlank(message = "Username is required")
-            @Pattern(regexp = "^[a-zA-Z0-9_.-]{3,50}$", message = "Username must be 3-50 alphanumeric characters")
-            @Schema(example = "student_algo")
-            String username,
-
-            @NotBlank(message = "Password is required")
-            @Schema(example = "Password123")
-            String password,
-
-            @Schema(example = "STUDENT", description = "Target role: STUDENT or TEACHER only")
+    public record RegisterRequest(@NotBlank @Email String email,
+            @NotBlank @Size(min = 3, max = 50) String username,
+            @NotBlank @Size(min = 8, max = 72, message = "Use between 8 and 72 characters.")
+            @Pattern(regexp = "(?s)(?=.*[A-Za-z])(?=.*[0-9]).*",
+                    message = "Use at least one letter and one number.") String password,
+            @NotBlank String confirmPassword,
             AccountRole role,
-
-            @NotNull(message = "termsAccepted is required")
-            @Schema(example = "true")
-            Boolean termsAccepted,
-
-            @NotNull(message = "privacyAccepted is required")
-            @Schema(example = "true")
-            Boolean privacyAccepted
-    ) {}
-
-    @Schema(description = "Account login request payload")
-    public record LoginRequest(
-            @NotBlank(message = "Username or email is required")
-            @Schema(example = "student@example.com")
-            String usernameOrEmail,
-
-            @NotBlank(message = "Password is required")
-            @Schema(example = "Password123")
-            String password,
-
-            @Schema(example = "false", description = "Extends refresh token lifetime from 7 days to 30 days")
-            Boolean rememberMe
-    ) {}
-
-    @Schema(description = "Verify OTP code payload")
-    public record VerifyOtpRequest(
-            @NotBlank(message = "Email is required")
-            @Email(message = "Email must be a valid email address")
-            @Schema(example = "student@example.com")
-            String email,
-
-            @NotBlank(message = "OTP code is required")
-            @Pattern(regexp = "^\\d{6}$", message = "OTP code must be exactly 6 digits")
-            @Schema(example = "123456")
-            String code,
-
-            @NotNull(message = "OTP purpose is required")
-            @Schema(example = "REGISTER")
-            OtpPurpose purpose
-    ) {}
-
-    @Schema(description = "Resend OTP request payload")
-    public record ResendOtpRequest(
-            @NotBlank(message = "Email is required")
-            @Email(message = "Email must be a valid email address")
-            @Schema(example = "student@example.com")
-            String email,
-
-            @NotNull(message = "OTP purpose is required")
-            @Schema(example = "REGISTER")
-            OtpPurpose purpose
-    ) {}
-
-    @Schema(description = "Forgot password request payload")
-    public record ForgotPasswordRequest(
-            @NotBlank(message = "Email is required")
-            @Email(message = "Email must be a valid email address")
-            @Schema(example = "student@example.com")
-            String email
-    ) {}
-
-    @Schema(description = "Reset password request payload")
-    public record ResetPasswordRequest(
-            @NotBlank(message = "Email is required")
-            @Email(message = "Email must be a valid email address")
-            @Schema(example = "student@example.com")
-            String email,
-
-            @NotBlank(message = "Reset token is required")
-            @Schema(example = "reset-token-xyz")
-            String resetToken,
-
-            @NotBlank(message = "New password is required")
-            @Schema(example = "NewPassword123")
-            String newPassword
-    ) {}
-
-    @Schema(description = "Change password request payload (authenticated)")
-    public record ChangePasswordRequest(
-            @NotBlank(message = "Current password is required")
-            @Schema(example = "OldPassword123")
-            String currentPassword,
-
-            @NotBlank(message = "New password is required")
-            @Schema(example = "NewPassword123")
-            String newPassword
-    ) {}
-
-    @Schema(description = "Refresh token request payload")
-    public record RefreshTokenRequest(
-            @NotBlank(message = "Refresh token is required")
-            @Schema(example = "refresh-token-xyz")
-            String refreshToken
-    ) {}
-
-    @Schema(description = "Account deactivation request payload")
-    public record DeactivateAccountRequest(
-            @NotBlank(message = "Password is required to deactivate account")
-            @Schema(example = "Password123")
-            String password,
-
-            @NotNull(message = "Confirmation flag is required")
-            @Schema(example = "true")
-            Boolean confirm
-    ) {}
-
-    @Schema(description = "Admin suspend account request payload")
-    public record SuspendAccountRequest(
-            @NotBlank(message = "Reason is required for account suspension")
-            @Schema(example = "Violating platform code of conduct")
-            String reason,
-
-            @Schema(description = "Optional end time; null means indefinite suspension")
-            Instant endsAt
-    ) {}
-
-    @Schema(description = "Authenticated user detail response")
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record AuthUserResponse(
-            UUID id,
-            String username,
-            String email,
-            AccountRole role,
-            String lifecycleStatus,
-            Instant termsAcceptedAt,
-            Instant privacyAcceptedAt
-    ) {}
-
-    @Schema(description = "Authentication token response")
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record AuthResponse(
-            String token,
-            String refreshToken,
-            AuthUserResponse user,
-            long expiresIn
-    ) {}
-
-    @Schema(description = "Password reset verification response")
-    public record ResetVerificationResponse(
-            String resetToken
-    ) {}
-
-    @Schema(description = "Active user device session response")
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record SessionResponse(
-            UUID id,
-            String deviceLabel,
-            Instant createdAt,
-            Instant lastSeenAt,
-            Instant expiresAt,
-            boolean current
-    ) {}
-
-    @Schema(description = "Simple operation status message")
-    public record MessageResponse(
-            String message
-    ) {}
+            @NotNull Boolean termsAccepted,
+            @NotNull Boolean privacyAccepted) { }
+    private static IdentityType namespace(String usernameOrEmail, IdentityType identityType) {
+        return usernameOrEmail == null || usernameOrEmail.isBlank() ? IdentityType.EMAIL
+                : identityType == null ? IdentityType.AUTO : identityType;
+    }
+    public record EmailRequest(@Email String email, String usernameOrEmail, @NotBlank String purpose,
+            IdentityType identityType) {
+        public EmailRequest(String email, String usernameOrEmail, String purpose) { this(email, usernameOrEmail, purpose, null); }
+        public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
+    }
+    public record VerifyOtpRequest(@Email String email, String usernameOrEmail,
+            @NotBlank String code, @NotBlank String purpose, IdentityType identityType) {
+        public VerifyOtpRequest(String email, String usernameOrEmail, String code, String purpose) { this(email, usernameOrEmail, code, purpose, null); }
+        public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
+    }
+    public record LoginRequest(@NotBlank String usernameOrEmail, @NotBlank String password, boolean rememberMe,
+            IdentityType identityType) {
+        public LoginRequest(String usernameOrEmail, String password, boolean rememberMe) { this(usernameOrEmail, password, rememberMe, null); }
+    }
+    public record ForgotPasswordRequest(@Email String email, String usernameOrEmail, IdentityType identityType) {
+        public ForgotPasswordRequest(String email) { this(email, null, null); }
+        public ForgotPasswordRequest(String email, String usernameOrEmail) { this(email, usernameOrEmail, null); }
+        public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
+    }
+    public record ResetPasswordRequest(@Email String email, String usernameOrEmail, @NotBlank String resetToken,
+            @NotBlank @Size(min = 8, max = 72) String newPassword, @NotBlank String confirmPassword,
+            IdentityType identityType) {
+        public ResetPasswordRequest(String email, String usernameOrEmail, String resetToken, String newPassword, String confirmPassword) {
+            this(email, usernameOrEmail, resetToken, newPassword, confirmPassword, null);
+        }
+        public String identity() { return usernameOrEmail == null || usernameOrEmail.isBlank() ? email : usernameOrEmail; }
+        public IdentityType namespace() { return AuthDtos.namespace(usernameOrEmail, identityType); }
+    }
+    public record ChangePasswordRequest(@NotBlank String currentPassword,
+            @NotBlank @Size(min = 8, max = 72) String newPassword, @NotBlank String confirmPassword) { }
+    public record ResetVerification(String resetToken) { }
+    public record Message(String email, String message) { }
+    public record ResendResult(boolean success, String message) { }
+    public record AuthUser(UUID id, String username, String email, AccountRole role, String lifecycleStatus) { }
+    public record AuthResult(String token, AuthUser user, long expiresIn,
+            @com.fasterxml.jackson.annotation.JsonIgnore String refreshToken,
+            @com.fasterxml.jackson.annotation.JsonIgnore long refreshExpiresIn,
+            @com.fasterxml.jackson.annotation.JsonIgnore boolean rememberMe) { }
+    public record SessionView(UUID id, Instant createdAt, Instant expiresAt,
+            boolean rememberMe, boolean current, String userAgent) { }
+    public record DeactivateRequest(@NotBlank String currentPassword, @NotNull Boolean confirmed) { }
 }
-

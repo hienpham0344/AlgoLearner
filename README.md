@@ -114,16 +114,29 @@ Trong thư mục `frontend`, chạy `npm.cmd run dev:auth-demo` trên Windows ho
 
 - Tài khoản thử: `learner@example.test`; mật khẩu đúng: `DemoPass123!`.
 - Nhập một mật khẩu sai năm lần cho cùng tài khoản để thấy bốn phản hồi `401` và phản hồi khóa `423` ở lần thứ năm. Giao diện hiển thị thời gian từ header `Retry-After` và vô hiệu hóa nút đăng nhập.
-- Dừng và chạy lại dev server để xóa bộ đếm thử nghiệm trong bộ nhớ.
+- Dữ liệu mock chỉ xuất hiện khi backend không chạy; không được lưu vào Supabase.
 
 Để thử luồng quên mật khẩu khi chưa có backend, mở `/forgot-password`, nhập `learner@example.test`, rồi dùng mã demo `123456` ở màn hình xác minh. Form đặt mật khẩu mới chỉ hiện sau khi xác minh thành công. Mật khẩu mới dùng được để đăng nhập tài khoản demo trong cùng phiên dev server. Chế độ này không gửi email thật.
 
+Để nhận OTP đăng ký qua Gmail thật, chạy backend với profile `internal-auth` và cấu hình SMTP theo `backend/README.md`; chạy frontend bằng `npm run dev`. Frontend luôn ưu tiên backend; các alias demo cũng chỉ mô phỏng khi backend không chạy.
+Trên Linux, điền cấu hình Gmail, `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` và `OTP_HMAC_SECRET` cố định vào `backend/.env` (tạo từ `backend/.env.example` nếu chưa có), rồi chạy `backend/scripts/run-local-email.sh`. Cấu hình bắt buộc trỏ tới Supabase với TLS. Script đọc cấu hình đã lưu, dùng PostgreSQL với Flyway và không dùng H2 tạm; `.env` được Git bỏ qua. Giữ nguyên DB và các khóa qua các lần khởi động để giữ tài khoản, phiên đăng nhập và OTP còn hạn. Xem `backend/README.md` để điền kết nối Supabase; không có DB local dự phòng.
+
 Backend thật cần trả `resetToken` ngắn hạn từ `POST /api/v1/auth/verify-otp` với `purpose: RESET_PASSWORD`, rồi xác thực và tiêu thụ token đó trong `POST /api/v1/auth/reset-password`. Token phải hết hạn và chỉ dùng một lần.
 
-Chế độ này chỉ mô phỏng API trong Vite khi dùng lệnh `dev:auth-demo`; nó không kiểm chứng bảo mật hay dữ liệu của Spring backend thật.
+Mock API chỉ hoạt động trong Vite development khi backend từ chối kết nối, với cả `npm run dev` và các alias demo. Backend trả lỗi HTTP vẫn là nguồn dữ liệu được dùng; frontend hiển thị lỗi, không chuyển sang dữ liệu mẫu. Kiểm thử mock không xác nhận kết nối Supabase thật.
 
 Sau khi đăng nhập tài khoản demo, mở `/dashboard` để xem Dashboard Student với dữ liệu mẫu được gắn nhãn. Các phần dữ liệu thật còn thiếu API được ghi tại [`docs/student-dashboard-integration.md`](docs/student-dashboard-integration.md).
 
 Trong cùng chế độ `dev:auth-demo`, chọn **My profile** trên Dashboard hoặc mở thẳng `http://localhost:3000/profile`. Có thể sửa tên/bio, tải avatar PNG/JPEG, bật hồ sơ công khai rồi xem `/u/learner`. Để thử Dashboard Teacher/Admin không cần backend, đăng xuất rồi đăng nhập lần lượt bằng `teacher@example.test` hoặc `admin@example.test` (cũng chấp nhận username `teacher`/`admin`), đều dùng mật khẩu `DemoPass123!`. Teacher có thêm `/profile` và `/u/teacher`; Admin chỉ có dashboard quản trị. Tất cả số liệu của chế độ này là dữ liệu mẫu; khởi động lại dev server sẽ đặt lại hồ sơ và avatar.
 
-Để thử tích hợp frontend 4.2 với backend mock của nhánh `feat/backend` (#6), chạy backend trên cổng 8080 rồi chạy `npm.cmd run dev:backend-mock` trong `frontend`. Đăng nhập bằng `student`, `teacher` hoặc `admin` với mật khẩu `DemoPass123!`; chế độ này dùng mock token chỉ dành cho môi trường phát triển. Mở `/dashboard`, `/profile` (Student/Teacher) hoặc `/u/student`. Xem [Test Report issue #7](docs/test-reports/issue-7-profile-dashboard.md) để biết các tiêu chí chưa thể nghiệm thu khi backend còn in-memory.
+Để dùng 4.1/4.2/4.3 thật, cấu hình Supabase trong `backend/.env`, chạy `bash backend/scripts/run-local-email.sh`, rồi `npm run dev` trong `frontend`. Đăng ký/đăng nhập bằng tài khoản thật; tài khoản, hồ sơ và lớp học lưu trong Supabase. Backend không có chế độ H2 hoặc tài khoản mẫu trong luồng chạy ứng dụng.
+
+### Nguồn dữ liệu lớp học (4.3)
+
+Các trang `/teacher/classrooms`, `/student/classrooms`, `/admin/classrooms` và trang chi tiết lấy dữ liệu/thao tác từ backend. Mọi alias Vite đều thử backend trước; chỉ kết nối bị từ chối khi backend dừng mới chuyển sang mock frontend, có banner thông báo và dữ liệu lớp học mẫu trong `sessionStorage`. HTTP 401/403/404/5xx không kích hoạt mock. Backend bật lại sẽ kết thúc phiên mẫu và yêu cầu đăng nhập thật. Production không đóng gói cơ chế mock của Vite.
+
+Backend 4.3 có API liệt kê lời mời đã gửi và thông báo lời mời của Student. Student có thể chấp nhận hoặc từ chối trực tiếp tại `/student/classrooms#invitations`; Teacher thu hồi từ danh sách lời mời trong lớp. Lời mời hết hạn hoặc bị thu hồi vẫn giữ trạng thái để đối chiếu. Chuyển quyền sở hữu hiện yêu cầu Admin nhập UUID Teacher. Các số liệu mẫu trong prototype không xuất hiện ở chế độ API.
+
+Kiểm thử giao diện 4.2/4.3 bằng Chrome: từ `frontend`, chạy `npm run test:e2e` hoặc `npm run test:e2e:coverage` để xem độ bao phủ hàm của mã frontend được nạp. Bộ test tự chạy Vite ở cổng 3100/3101; có thể đặt `PLAYWRIGHT_CHROME_PATH` nếu Chrome không ở `/usr/bin/google-chrome`. Mặc định các phản hồi API trong Playwright được giả lập.
+
+Để kiểm tra UI với backend thật, điền Supabase trong `backend/.env`, chạy `bash backend/scripts/run-local-email.sh`, rồi `npm run dev` trong `frontend`. Đăng ký tài khoản thật qua OTP; launcher không seed tài khoản mẫu. Các bài Playwright mặc định dùng backend HTTP fixture hoặc frontend offline, không chứng minh kết nối Supabase thật. Xem `backend/README.md` để chạy integration tests trên PostgreSQL riêng.

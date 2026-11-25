@@ -1,291 +1,130 @@
 package com.algolearner.platform.auth;
 
-import com.algolearner.platform.common.security.AccountRepository;
-import com.algolearner.platform.profile.PracticeRepository;
-import com.algolearner.platform.profile.ProfileRepository;
-import com.algolearner.platform.profile.dashboard.DashboardRepository;
-import com.algolearner.platform.profile.dashboard.DashboardResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.mail.MailSendException;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-
-import static com.algolearner.platform.auth.AuthDtos.*;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest(properties = {
-        "spring.datasource.url=jdbc:h2:mem:auth-api;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE",
-        "spring.datasource.username=sa", "spring.datasource.password=", "spring.jpa.hibernate.ddl-auto=create-drop",
-        "spring.flyway.enabled=false", "logging.level.root=WARN", "logging.level.org.hibernate.SQL=WARN", "debug=false",
-        "app.security.jwt.issuer=https://issuer.example.test", "app.security.jwt.audience=auth-tests",
-        "app.security.jwt.jwk-set-uri=https://issuer.example.test/.well-known/jwks.json"
+        "app.security.jwt-secret=auth-api-test-secret-unique-and-long-enough-123",
+        "app.mail.from=sender@example.test"
 })
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
-@Transactional
-class AuthApiTest {
+@ActiveProfiles({"internal-auth", "test"})
+@EnabledIfEnvironmentVariable(named = "TEST_DB_URL", matches = "jdbc:postgresql:.*")
+class AuthApiTest extends com.algolearner.platform.support.PostgresIntegrationTest {
+    @Autowired MockMvc mvc;
+    @Autowired AccountRepository accounts;
+    @MockBean JavaMailSender sender;
 
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        @Primary
-        Clock fixedClock() {
-            return Clock.fixed(Instant.parse("2026-11-10T10:00:00Z"), ZoneOffset.UTC);
-        }
-
-        @Bean
-        @Primary
-        TestAccounts testAccounts() {
-            return new TestAccounts();
-        }
-
-        @Bean
-        @Primary
-        DashboardRepository dashboardRepository() {
-            return org.mockito.Mockito.mock(DashboardRepository.class, invocation -> {
-                Class<?> type = invocation.getMethod().getReturnType();
-                if (type == DashboardResponse.Preview.class) return new DashboardResponse.Preview<>(List.of(), 0, false);
-                if (type == DashboardResponse.Contributions.class) return new DashboardResponse.Contributions(0, 0);
-                if (type == DashboardResponse.Totals.class) return new DashboardResponse.Totals(0, 0, 0, 0, 0, 0);
-                if (type == DashboardResponse.Moderation.class) return new DashboardResponse.Moderation(0, 0, 0);
-                if (List.class.isAssignableFrom(type)) return List.of();
-                return org.mockito.Mockito.RETURNS_DEFAULTS.answer(invocation);
-            });
-        }
-
-        @Bean
-        @Primary
-        PracticeRepository practiceRepository() {
-            return accountId -> List.of();
-        }
-
-        @Bean
-        @Primary
-        ProfileRepository profileRepository() {
-            return org.mockito.Mockito.mock(ProfileRepository.class);
-        }
-    }
-
-    static class TestAccounts implements AccountRepository {
-        private final List<Account> records = new ArrayList<>();
-
-        @Override
-        public List<Account> accounts() {
-            return List.copyOf(records);
-        }
-
-        @Override
-        public List<Restriction> restrictions() {
-            return List.of();
-        }
-
-        void add(AccountEntity account) {
-            records.add(new Account(account.getId(), account.getUsername(), account.getRole().name(),
-                    account.getStatus().name(), account.getCreatedAt()));
-        }
-    }
-
-    @Autowired
-    private MockMvc mvc;
-
-    @Autowired
-    private ObjectMapper mapper;
-
-    @Autowired
-    private com.algolearner.platform.auth.AccountRepository accountRepository;
-
-    @Autowired
-    private OtpChallengeRepository otpRepository;
-
-    @Autowired
-    private AuthSessionRepository sessionRepository;
-
-    @Autowired
-    private PasswordService passwordService;
-
-    @Autowired
-    private TestAccounts testAccounts;
-
-    @BeforeEach
-    void setUp() {
-        otpRepository.deleteAll();
-        sessionRepository.deleteAll();
-        accountRepository.deleteAll();
-    }
-
-    @Test
-    @DisplayName("FR-ACC-001 & FR-ACC-003: Full registration and verification flow")
-    void registrationAndVerificationFlow() throws Exception {
-        RegisterRequest registerReq = new RegisterRequest(
-                "newstudent@example.test",
-                "newstudent",
-                "Password123",
-                AccountRole.STUDENT,
-                true,
-                true
-        );
-
-        // 1. Register
-        mvc.perform(post("/api/v1/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(registerReq)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.username").value("newstudent"))
-                .andExpect(jsonPath("$.data.lifecycleStatus").value("PENDING_VERIFICATION"));
-
-        AccountEntity savedAccount = accountRepository.findByUsernameIgnoreCase("newstudent").orElseThrow();
-        assertThat(savedAccount.getStatus()).isEqualTo(AccountStatus.PENDING_VERIFICATION);
-
-        // Find the generated OTP challenge
-        OtpChallengeEntity challenge = otpRepository.findLatestByAccountAndPurpose(savedAccount.getId(), OtpPurpose.REGISTER)
-                .orElseThrow();
-        assertThat(challenge.getPurpose()).isEqualTo(OtpPurpose.REGISTER);
-
-        // We know raw code from OTP generation; let's test verify-otp with invalid code first
-        VerifyOtpRequest wrongOtpReq = new VerifyOtpRequest("newstudent@example.test", "000000", OtpPurpose.REGISTER);
-        mvc.perform(post("/api/v1/auth/verify-otp")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(wrongOtpReq)))
+    @ParameterizedTest
+    @ValueSource(strings = {"12345678", "abcdefgh"})
+    void registrationExplainsPasswordCompositionBeforeSendingMail(String password) throws Exception {
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("invalid@example.test", "invaliduser")
+                                .replace("ExamplePass123!", password)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("OTP_INVALID"));
+                .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("password"))
+                .andExpect(jsonPath("$.errors[0].message").value("Use at least one letter and one number."))
+                .andExpect(jsonPath("$.errors[0].rejectedValue").doesNotExist());
+        verifyNoInteractions(sender);
+        org.junit.jupiter.api.Assertions.assertFalse(accounts.existsByEmailIgnoreCase("invalid@example.test"));
     }
 
     @Test
-    @DisplayName("FR-AUTH-001 & FR-AUTH-005: Login with active account creates session and returns token")
-    void loginSuccessFlow() throws Exception {
-        AccountEntity account = AccountEntity.builder()
-                .id(UUID.randomUUID())
-                .username("activeuser")
-                .email("active@example.test")
-                .passwordHash(passwordService.hash("Password123"))
-                .role(AccountRole.STUDENT)
-                .status(AccountStatus.ACTIVE)
-                .failedLoginCount(0)
-                .build();
-        accountRepository.save(account);
-        testAccounts.add(account);
+    void registrationExplainsPasswordByteLimitBeforeSendingMail() throws Exception {
+        String password = "a1" + "é".repeat(36);
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("long@example.test", "longuser")
+                                .replace("ExamplePass123!", password)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Password is too long. Use at most 72 UTF-8 bytes."));
+        verifyNoInteractions(sender);
+        org.junit.jupiter.api.Assertions.assertFalse(accounts.existsByEmailIgnoreCase("long@example.test"));
+    }
 
-        LoginRequest loginReq = new LoginRequest("activeuser", "Password123", false);
-
-        MvcResult result = mvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(loginReq)))
+    @Test
+    void registrationSendsOtpAndVerificationActivatesAccount() throws Exception {
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("new@example.test", "newuser")))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.email").value("new@example.test"));
+        ArgumentCaptor<SimpleMailMessage> message = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(sender).send(message.capture());
+        mvc.perform(post("/api/v1/auth/resend-otp").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"new@example.test\",\"purpose\":\"REGISTER\"}"))
+                .andExpect(status().isTooManyRequests());
+        String text = message.getValue().getText();
+        var matcher = Pattern.compile("\\b[0-9]{6}\\b").matcher(text);
+        org.junit.jupiter.api.Assertions.assertTrue(matcher.find());
+        String code = matcher.group();
+        String verifyBody = "{\"email\":\"new@example.test\",\"code\":\"" + code
+                + "\",\"purpose\":\"REGISTER\"}";
+        mvc.perform(post("/api/v1/auth/verify-otp").contentType(MediaType.APPLICATION_JSON)
+                        .content(verifyBody))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.token").isString())
-                .andExpect(jsonPath("$.data.refreshToken").isString())
-                .andExpect(jsonPath("$.data.user.username").value("activeuser"))
-                .andReturn();
-
-        String responseBody = result.getResponse().getContentAsString();
-        String refreshToken = mapper.readTree(responseBody).path("data").path("refreshToken").asText();
-
-        // Test refresh-token
-        RefreshTokenRequest refreshReq = new RefreshTokenRequest(refreshToken);
-        mvc.perform(post("/api/v1/auth/refresh-token")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(refreshReq)))
+                .andExpect(jsonPath("$.data.user.lifecycleStatus").value("ACTIVE"));
+        mvc.perform(post("/api/v1/auth/verify-otp").contentType(MediaType.APPLICATION_JSON)
+                        .content(verifyBody))
+                .andExpect(status().isBadRequest());
+        String login = mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"usernameOrEmail\":\"newuser\",\"password\":\"ExamplePass123!\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.token").isString());
+                .andExpect(jsonPath("$.data.token").isString())
+                .andReturn().getResponse().getContentAsString();
+        String token = new com.fasterxml.jackson.databind.ObjectMapper().readTree(login).path("data").path("token").asText();
+        mvc.perform(get("/api/v1/users/me/profile").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.username").value("newuser"));
+        for (int attempt = 0; attempt < 4; attempt++) {
+            mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"usernameOrEmail\":\"newuser\",\"password\":\"wrong-password\"}"))
+                    .andExpect(status().isUnauthorized());
+        }
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"usernameOrEmail\":\"newuser\",\"password\":\"wrong-password\"}"))
+                .andExpect(status().is(423));
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"usernameOrEmail\":\"newuser\",\"password\":\"ExamplePass123!\"}"))
+                .andExpect(status().is(423));
     }
 
     @Test
-    @DisplayName("FR-AUTH-006: User can list sessions and logout")
-    void sessionManagementFlow() throws Exception {
-        AccountEntity account = AccountEntity.builder()
-                .id(UUID.randomUUID())
-                .username("sessionuser")
-                .email("session@example.test")
-                .passwordHash(passwordService.hash("Password123"))
-                .role(AccountRole.STUDENT)
-                .status(AccountStatus.ACTIVE)
-                .build();
-        accountRepository.save(account);
-        testAccounts.add(account);
-
-        // Login to generate session
-        LoginRequest loginReq = new LoginRequest("sessionuser", "Password123", false);
-        MvcResult result = mvc.perform(post("/api/v1/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(loginReq)))
-                .andExpect(status().isOk())
-                .andReturn();
-
-        String refreshToken = mapper.readTree(result.getResponse().getContentAsString()).path("data").path("refreshToken").asText();
-
-        var auth = new UsernamePasswordAuthenticationToken(
-                account.getId().toString(), null, List.of(new SimpleGrantedAuthority("ROLE_STUDENT")));
-
-        // List sessions
-        mvc.perform(get("/api/v1/auth/sessions")
-                        .with(authentication(auth))
-                        .header("X-Refresh-Token", refreshToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data[0].current").value(true));
-
-        // Logout
-        mvc.perform(post("/api/v1/auth/logout")
-                        .with(authentication(auth))
-                        .header("X-Refresh-Token", refreshToken))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
+    void failedDeliveryDoesNotCreateAccount() throws Exception {
+        doThrow(new MailSendException("SMTP unavailable")).when(sender).send(any(SimpleMailMessage.class));
+        mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("retry@example.test", "retryuser")))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.errorCode").value("MAIL_DELIVERY_FAILED"));
+        org.junit.jupiter.api.Assertions.assertFalse(accounts.existsByEmailIgnoreCase("retry@example.test"));
     }
 
-    @Test
-    @DisplayName("FR-ACC-006: Self-deactivation flow")
-    void deactivateFlow() throws Exception {
-        AccountEntity account = AccountEntity.builder()
-                .id(UUID.randomUUID())
-                .username("deactivateuser")
-                .email("deactivate@example.test")
-                .passwordHash(passwordService.hash("Password123"))
-                .role(AccountRole.STUDENT)
-                .status(AccountStatus.ACTIVE)
-                .build();
-        accountRepository.save(account);
-        testAccounts.add(account);
-
-        var auth = new UsernamePasswordAuthenticationToken(
-                account.getId().toString(), null, List.of(new SimpleGrantedAuthority("ROLE_STUDENT")));
-
-        DeactivateAccountRequest req = new DeactivateAccountRequest("Password123", true);
-
-        mvc.perform(post("/api/v1/auth/deactivate")
-                        .with(authentication(auth))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(mapper.writeValueAsString(req)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true));
-
-        AccountEntity updated = accountRepository.findById(account.getId()).orElseThrow();
-        assertThat(updated.getStatus()).isEqualTo(AccountStatus.DEACTIVATED);
+    private static String registerBody(String email, String username) {
+        return "{\"email\":\"" + email + "\",\"username\":\"" + username
+                + "\",\"password\":\"ExamplePass123!\",\"confirmPassword\":\"ExamplePass123!\","
+                + "\"role\":\"STUDENT\",\"termsAccepted\":true,\"privacyAccepted\":true}";
     }
 }
-

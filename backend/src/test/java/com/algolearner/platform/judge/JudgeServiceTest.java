@@ -301,8 +301,13 @@ class JudgeServiceTest {
     }
 
     private static AccountEntity account(UUID id, AccountRole role) {
-        return AccountEntity.builder().id(id).username(role + id.toString()).email(id + "@test.local")
-                .role(role).status(AccountStatus.ACTIVE).build();
+        AccountEntity account = new AccountEntity();
+        account.setId(id);
+        account.setUsername(role + id.toString());
+        account.setEmail(id + "@test.local");
+        account.setRole(role);
+        account.setStatus(AccountStatus.ACTIVE);
+        return account;
     }
 
     private static final class TestAppException extends AppException {

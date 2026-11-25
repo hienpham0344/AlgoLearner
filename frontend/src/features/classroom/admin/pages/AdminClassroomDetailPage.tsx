@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ClassroomLayout } from '../../components/ClassroomLayout';
 import { ClassroomSummaryCard } from '../../components/ClassroomSummaryCard';
 import { UserAvatar } from '../../components/UserAvatar';
 import { TransferOwnershipModal } from '../../components/TransferOwnershipModal';
 import { ConfirmationModal } from '../../components/ConfirmationModal';
+import { ClassroomAnnouncementsList } from '../../components/ClassroomAnnouncementsList';
 import { useClassroomStore } from '../../mock/useClassroomStore';
 import {
   ArrowLeft,
   Users,
   Archive,
+  RotateCcw,
   Trash2,
   Share2,
   Calendar,
@@ -18,6 +20,7 @@ import {
   ShieldCheck,
   BookOpen,
   AlertTriangle,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -31,13 +34,35 @@ export const AdminClassroomDetailPage: React.FC = () => {
     teachers,
     getClassroom,
     archiveClassroom,
+    restoreClassroom,
     deleteClassroom,
     transferOwnership,
+    getAnnouncements,
+    createAnnouncement,
+    updateAnnouncement,
+    deleteAnnouncement,
+    togglePinAnnouncement,
   } = useClassroomStore('ADMIN');
 
-  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'MEMBERS' | 'SECURITY'>('OVERVIEW');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab')?.toUpperCase();
+  const announcementIdParam = searchParams.get('announcementId');
+
+  const [activeTab, setActiveTab] = useState<'OVERVIEW' | 'ANNOUNCEMENTS' | 'MEMBERS' | 'SECURITY'>(() => {
+    if (tabParam === 'ANNOUNCEMENTS' || announcementIdParam) return 'ANNOUNCEMENTS';
+    if (tabParam === 'MEMBERS') return 'MEMBERS';
+    if (tabParam === 'SECURITY') return 'SECURITY';
+    return 'OVERVIEW';
+  });
+
+  React.useEffect(() => {
+    if (tabParam === 'ANNOUNCEMENTS' || announcementIdParam) {
+      setActiveTab('ANNOUNCEMENTS');
+    }
+  }, [tabParam, announcementIdParam]);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
@@ -65,11 +90,17 @@ export const AdminClassroomDetailPage: React.FC = () => {
     );
   }
 
+  const classroomAnnouncements = getAnnouncements(classroom.id);
   const canHardDelete = classroom.members.length === 0;
 
   const handleConfirmArchive = () => {
     archiveClassroom(classroom.id);
     setIsArchiveModalOpen(false);
+  };
+
+  const handleConfirmRestore = () => {
+    restoreClassroom(classroom.id);
+    setIsRestoreModalOpen(false);
   };
 
   const handleConfirmDelete = () => {
@@ -129,7 +160,7 @@ export const AdminClassroomDetailPage: React.FC = () => {
               Transfer Owner
             </Button>
 
-            {classroom.status === 'ACTIVE' && (
+            {classroom.status === 'ACTIVE' ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -138,6 +169,16 @@ export const AdminClassroomDetailPage: React.FC = () => {
               >
                 <Archive size={14} className="mr-1.5 shrink-0" />
                 Archive
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsRestoreModalOpen(true)}
+                className="text-xs font-semibold rounded-xl text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+              >
+                <RotateCcw size={14} className="mr-1.5 shrink-0" />
+                Restore
               </Button>
             )}
 
@@ -171,10 +212,26 @@ export const AdminClassroomDetailPage: React.FC = () => {
           role="tab"
           className="classroom-tab-btn"
           data-active={activeTab === 'OVERVIEW'}
-          onClick={() => setActiveTab('OVERVIEW')}
+          onClick={() => {
+            setActiveTab('OVERVIEW');
+            setSearchParams({});
+          }}
         >
           <BookOpen size={14} className="inline mr-1.5" />
           Administrative Overview
+        </button>
+        <button
+          type="button"
+          role="tab"
+          className="classroom-tab-btn"
+          data-active={activeTab === 'ANNOUNCEMENTS'}
+          onClick={() => {
+            setActiveTab('ANNOUNCEMENTS');
+            setSearchParams({ tab: 'announcements' });
+          }}
+        >
+          <Bell size={14} className="inline mr-1.5" />
+          Announcements ({classroomAnnouncements.length})
         </button>
         <button
           type="button"
@@ -199,6 +256,19 @@ export const AdminClassroomDetailPage: React.FC = () => {
       </div>
 
       {/* 04 / Tab Panels */}
+      {activeTab === 'ANNOUNCEMENTS' && (
+        <ClassroomAnnouncementsList
+          classroomId={classroom.id}
+          isTeacherOrAdmin={true}
+          announcements={classroomAnnouncements}
+          highlightedId={announcementIdParam}
+          onCreate={data => createAnnouncement({ classroomId: classroom.id, ...data })}
+          onUpdate={(annId, data) => updateAnnouncement(annId, data)}
+          onDelete={annId => deleteAnnouncement(annId)}
+          onTogglePin={annId => togglePinAnnouncement(annId)}
+        />
+      )}
+
       {activeTab === 'OVERVIEW' && (
         <div className="space-y-6">
           <div className="classroom-glass-card p-6">
@@ -364,6 +434,17 @@ export const AdminClassroomDetailPage: React.FC = () => {
         variant="warning"
         onConfirm={handleConfirmArchive}
         onCancel={() => setIsArchiveModalOpen(false)}
+      />
+
+      {/* Restore Modal */}
+      <ConfirmationModal
+        isOpen={isRestoreModalOpen}
+        title="Restore Classroom"
+        message={`Are you sure you want to restore "${classroom.name}" back to active status?`}
+        confirmLabel="Restore Classroom"
+        variant="default"
+        onConfirm={handleConfirmRestore}
+        onCancel={() => setIsRestoreModalOpen(false)}
       />
 
       {/* Hard Delete Modal */}

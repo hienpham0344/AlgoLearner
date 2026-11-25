@@ -34,6 +34,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class ProfileApiTest {
     @org.springframework.boot.test.context.TestConfiguration
     static class TimeConfiguration {
+        /** Explicit external fixtures: this mock-profile suite does not contact Supabase or Clamd. */
+        @org.springframework.context.annotation.Bean
+        com.algolearner.platform.storage.PrivateObjectStorage avatarObjectsFixture() {
+            return new com.algolearner.platform.storage.PrivateObjectStorage() {
+                final java.util.Map<String,byte[]> objects=new java.util.concurrent.ConcurrentHashMap<>();
+                public void upload(String key,String mediaType,byte[] bytes){objects.put(key,bytes.clone());}
+                public void download(String key,java.io.OutputStream output)throws java.io.IOException {
+                    byte[] bytes=objects.get(key);if(bytes==null)throw new java.io.IOException("Fixture object missing");output.write(bytes);
+                }
+                public void delete(String key){objects.remove(key);}
+            };
+        }
+        @org.springframework.context.annotation.Bean
+        com.algolearner.platform.storage.MalwareScanner avatarScannerFixture(){return bytes->{};}
         @org.springframework.context.annotation.Bean
         @org.springframework.context.annotation.Primary
         java.time.Clock testClock() {

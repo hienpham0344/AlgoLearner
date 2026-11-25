@@ -1,583 +1,298 @@
 package com.algolearner.platform.auth;
 
+import static com.algolearner.platform.auth.AuthDtos.*;
+
 import com.algolearner.platform.common.exception.ApiException;
 import com.algolearner.platform.common.exception.ErrorCode;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
+import com.algolearner.platform.admin.AccountAdministrationService;
+import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
+import java.util.Locale;
 import java.util.UUID;
-
-import static com.algolearner.platform.auth.AuthDtos.*;
+import org.springframework.context.annotation.Profile;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@org.springframework.context.annotation.Profile("!mock")
+@Profile("internal-auth")
 @Transactional(readOnly = true)
 public class AuthService {
-
-    private static final int MAX_LOGIN_ATTEMPTS = 5;
-    private static final Duration AUTO_LOCK_DURATION = Duration.ofMinutes(15);
-
-    private final AccountRepository accountRepository;
-    private final OtpChallengeRepository otpRepository;
-    private final AuthSessionRepository sessionRepository;
-    private final AccountRestrictionRepository restrictionRepository;
-    private final PasswordService passwordService;
-    private final OtpService otpService;
-    private final TokenService tokenService;
-    private final AuthAuditPort auditPort;
+    static final String RESET_REQUEST_MESSAGE = "If the account is eligible, a reset code has been sent.";
+    private static final Duration OTP_LIFETIME = Duration.ofMinutes(10);
+    private static final Duration RESET_GRANT_LIFETIME = Duration.ofMinutes(5);
+    private static final Duration RESEND_WAIT = Duration.ofSeconds(60);
+    private static final Duration LOGIN_LOCK = Duration.ofMinutes(15);
+    private final AccountRepository accounts;
+    private final AccountIdentityResolver identities;
+    private final RegistrationOtpRepository otps;
+    private final RegistrationMailer mailer;
+    private final PasswordEncoder passwords;
+    private final OtpCodeHasher otpHasher;
+    private final AuthSessionService sessions;
+    private final AccountAdministrationService administration;
     private final Clock clock;
+    private final SecureRandom random = new SecureRandom();
 
-    public AuthService(
-            AccountRepository accountRepository,
-            OtpChallengeRepository otpRepository,
-            AuthSessionRepository sessionRepository,
-            AccountRestrictionRepository restrictionRepository,
-            PasswordService passwordService,
-            OtpService otpService,
-            TokenService tokenService,
-            AuthAuditPort auditPort,
-            Clock clock
-    ) {
-        this.accountRepository = accountRepository;
-        this.otpRepository = otpRepository;
-        this.sessionRepository = sessionRepository;
-        this.restrictionRepository = restrictionRepository;
-        this.passwordService = passwordService;
-        this.otpService = otpService;
-        this.tokenService = tokenService;
-        this.auditPort = auditPort;
+    public AuthService(AccountRepository accounts, RegistrationOtpRepository otps, RegistrationMailer mailer,
+            PasswordEncoder passwords, OtpCodeHasher otpHasher, AuthSessionService sessions,
+            AccountAdministrationService administration, Clock clock) {
+        this.accounts = accounts;
+        this.identities = new AccountIdentityResolver(accounts);
+        this.otps = otps;
+        this.mailer = mailer;
+        this.passwords = passwords;
+        this.otpHasher = otpHasher;
+        this.sessions = sessions;
+        this.administration = administration;
         this.clock = clock;
     }
 
-    /**
-     * FR-ACC-001: Register public student/teacher account.
-     * Starts in PENDING_VERIFICATION state; sends REGISTER OTP.
-     */
     @Transactional
-    public AuthUserResponse register(RegisterRequest request) {
-        Instant now = clock.instant();
+    public Message register(RegisterRequest request) {
+        long stageStarted = RegistrationTiming.begin();
+        String email = request.email().trim().toLowerCase(Locale.ROOT);
+        String username = request.username().trim();
+        if (request.role() == AccountRole.ADMIN || !Boolean.TRUE.equals(request.termsAccepted())
+                || !Boolean.TRUE.equals(request.privacyAccepted()) || !request.password().equals(request.confirmPassword()))
+            throw new ApiException(ErrorCode.VALIDATION_FAILED);
+        AccountIdentityRegistration.validateUsername(request.username());
+        validatePassword(request.password(), request.confirmPassword());
+        RegistrationTiming.record("validation", stageStarted);
+        stageStarted = RegistrationTiming.begin();
+        AccountIdentityRegistration.lock(accounts, email, username);
+        if (AccountIdentityRegistration.conflicts(accounts, email, username))
+            throw new ApiException(ErrorCode.ACCOUNT_ALREADY_EXISTS);
+        RegistrationTiming.record("duplicate_lookup", stageStarted);
 
-        // AC-05: Reject public registration with ADMIN role
-        if (request.role() == AccountRole.ADMIN) {
-            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION, "Public registration cannot assign ADMIN role");
+        var account = new AccountEntity();
+        account.setId(UUID.randomUUID());
+        account.setEmail(email);
+        account.setUsername(username);
+        account.setRole(request.role() == null ? AccountRole.STUDENT : request.role());
+        account.setStatus(AccountStatus.PENDING_VERIFICATION);
+        stageStarted = RegistrationTiming.begin();
+        account.setPasswordHash(passwords.encode(request.password()));
+        RegistrationTiming.record("password_hash", stageStarted);
+        stageStarted = RegistrationTiming.begin();
+        try {
+            accounts.saveAndFlush(account);
+        } catch (DataIntegrityViolationException ex) {
+            throw new ApiException(ErrorCode.ACCOUNT_ALREADY_EXISTS);
         }
-
-        // AC-04: Mandatory acceptance of terms and privacy policy
-        if (!Boolean.TRUE.equals(request.termsAccepted()) || !Boolean.TRUE.equals(request.privacyAccepted())) {
-            throw new ApiException(ErrorCode.TERMS_NOT_ACCEPTED,
-                    "You must accept Terms of Service and Privacy Policy to register");
-        }
-
-        // AC-03: Email and username must be unique
-        String email = request.email().strip().toLowerCase();
-        String username = request.username().strip();
-
-        if (accountRepository.existsByEmailIgnoreCase(email)) {
-            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS, "Email is already registered");
-        }
-        if (accountRepository.existsByUsernameIgnoreCase(username)) {
-            throw new ApiException(ErrorCode.USERNAME_ALREADY_EXISTS, "Username is already taken");
-        }
-
-        // Validate and hash password (FR-ACC-005)
-        passwordService.validatePassword(request.password());
-        String passwordHash = passwordService.hash(request.password());
-
-        // AC-02: Default role is STUDENT if not provided
-        AccountRole assignedRole = request.role() != null ? request.role() : AccountRole.STUDENT;
-
-        // AC-01: Account created in PENDING_VERIFICATION
-        AccountEntity account = AccountEntity.builder()
-                .id(UUID.randomUUID())
-                .username(username)
-                .email(email)
-                .passwordHash(passwordHash)
-                .role(assignedRole)
-                .status(AccountStatus.PENDING_VERIFICATION)
-                .failedLoginCount(0)
-                .termsAcceptedAt(now)
-                .privacyAcceptedAt(now)
-                .build();
-
-        AccountEntity saved = accountRepository.save(account);
-
-        // FR-ACC-003: Dispatch REGISTER OTP
-        otpService.generateAndSendOtp(saved, OtpPurpose.REGISTER);
-
-        auditPort.record(saved.getId(), saved.getId(), AuditActorType.USER, "REGISTER", AuditOutcome.SUCCESS, now);
-
-        return toUserResponse(saved);
+        RegistrationTiming.record("account_flush", stageStarted);
+        sendCode(account, "REGISTER");
+        return new Message(email, "Verification code sent");
     }
 
-    /**
-     * FR-ACC-003 & FR-ACC-004: Verify OTP.
-     * When REGISTER: activates account and returns AuthResponse.
-     * When RESET_PASSWORD: returns single-use reset grant token.
-     */
     @Transactional
-    public Object verifyOtp(VerifyOtpRequest request) {
-        Instant now = clock.instant();
-        String email = request.email().strip().toLowerCase();
-
-        AccountEntity account = accountRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found with email: " + email));
-
-        otpService.verifyOtp(account, request.code(), request.purpose());
-
-        if (request.purpose() == OtpPurpose.REGISTER) {
-            // Activate account
-            account.setStatus(AccountStatus.ACTIVE);
-            account.setEmailVerifiedAt(now);
-            accountRepository.save(account);
-
-            auditPort.record(account.getId(), account.getId(), AuditActorType.USER, "VERIFY_REGISTER_OTP", AuditOutcome.SUCCESS, now);
-
-            // Create initial session for seamless post-verification login
-            return createSessionAndTokenResponse(account, false, "Web Browser", now);
-        } else {
-            // RESET_PASSWORD grant
-            Instant resetExpiresAt = now.plus(TokenService.RESET_TOKEN_EXPIRY);
-            String resetToken = tokenService.generateResetToken(account.getId(), resetExpiresAt);
-
-            auditPort.record(account.getId(), account.getId(), AuditActorType.USER, "VERIFY_RESET_OTP", AuditOutcome.SUCCESS, now);
-
-            return new ResetVerificationResponse(resetToken);
+    public ResendResult resend(EmailRequest request) {
+        if ("RESET_PASSWORD".equals(request.purpose())) {
+            forgotPassword(new ForgotPasswordRequest(request.email(), request.usernameOrEmail(), request.identityType()));
+            return new ResendResult(true, RESET_REQUEST_MESSAGE);
         }
+        if (!"REGISTER".equals(request.purpose())) throw new ApiException(ErrorCode.INVALID_REQUEST);
+        if (request.email() == null || request.email().isBlank()) throw new ApiException(ErrorCode.VALIDATION_FAILED);
+        var account = identities.resolve(request.email(), IdentityType.EMAIL)
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
+        if (account.getStatus() != AccountStatus.PENDING_VERIFICATION) throw new ApiException(ErrorCode.INVALID_OTP);
+        sendCode(account, "REGISTER");
+        return new ResendResult(true, "Verification code sent");
     }
 
-    /**
-     * FR-ACC-004: Resend OTP code.
-     */
     @Transactional
-    public MessageResponse resendOtp(ResendOtpRequest request) {
-        String email = request.email().strip().toLowerCase();
-        AccountEntity account = accountRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found with email: " + email));
-
-        otpService.generateAndSendOtp(account, request.purpose());
-        return new MessageResponse("A new OTP code has been sent to your email");
+    public Message forgotPassword(ForgotPasswordRequest request) {
+        String lookup = identity(request.identity());
+        identities.resolve(lookup, request.namespace()).filter(a -> a.getStatus() == AccountStatus.ACTIVE)
+                .ifPresent(account -> sendCode(account, "RESET_PASSWORD"));
+        return resetRequestMessage(request);
     }
 
-    /**
-     * FR-AUTH-001 & FR-AUTH-002: Login with username/email and password.
-     * Enforces failed attempt lock (15 minutes after 5 failures).
-     */
+    static Message resetRequestMessage(ForgotPasswordRequest request) {
+        return new Message(request.email() == null ? null : request.email().trim().toLowerCase(Locale.ROOT),
+                RESET_REQUEST_MESSAGE);
+    }
+
+    @Transactional(noRollbackFor = ApiException.class)
+    public AuthResult verify(VerifyOtpRequest request) {
+        return verify(request, null);
+    }
+
+    @Transactional(noRollbackFor = ApiException.class)
+    public AuthResult verify(VerifyOtpRequest request, String userAgent) {
+        var otp = verifyCode(request, "REGISTER", AccountStatus.PENDING_VERIFICATION);
+        var account = otp.getAccount();
+        account.setStatus(AccountStatus.ACTIVE);
+        account.setFailedLoginAttempts(0);
+        account.setLoginLockedUntil(null);
+        return sessions.issue(account, false, userAgent);
+    }
+
+    @Transactional(noRollbackFor = ApiException.class)
+    public ResetVerification verifyReset(VerifyOtpRequest request) {
+        var otp = verifyCode(request, "RESET_PASSWORD", AccountStatus.ACTIVE);
+        String grant = SecretTokens.create();
+        otp.setResetTokenHash(SecretTokens.hash(grant));
+        otp.setResetExpiresAt(clock.instant().plus(RESET_GRANT_LIFETIME));
+        return new ResetVerification(grant);
+    }
+
     @Transactional
-    public AuthResponse login(LoginRequest request, String deviceLabel) {
+    public ResendResult resetPassword(ResetPasswordRequest request) {
+        validatePassword(request.newPassword(), request.confirmPassword());
+        var account = identities.resolve(identity(request.identity()), request.namespace())
+                .filter(a -> a.getStatus() == AccountStatus.ACTIVE)
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
+        var grant = otps.findByAccountIdAndResetTokenHash(account.getId(), SecretTokens.hash(request.resetToken()))
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
+        if (!"RESET_PASSWORD".equals(grant.getPurpose()) || grant.getUsedAt() == null
+                || grant.getResetUsedAt() != null || grant.getResetExpiresAt() == null
+                || !grant.getResetExpiresAt().isAfter(clock.instant())) throw new ApiException(ErrorCode.INVALID_OTP);
+        account.setPasswordHash(passwords.encode(request.newPassword()));
+        account.setFailedLoginAttempts(0);
+        account.setLoginLockedUntil(null);
+        invalidatePasswordCodes(account.getId());
+        sessions.revokeOtherSessions(account.getId(), null);
+        return new ResendResult(true, "Password updated. Sign in again on all devices.");
+    }
+
+    @Transactional
+    public ResendResult changePassword(UUID accountId, UUID sessionId, ChangePasswordRequest request) {
+        validatePassword(request.newPassword(), request.confirmPassword());
+        var account = accounts.findForUpdateById(accountId)
+                .filter(a -> a.getStatus() == AccountStatus.ACTIVE)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED_ACCESS));
+        if (!passwords.matches(request.currentPassword(), account.getPasswordHash()))
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Current password is incorrect.");
+        account.setPasswordHash(passwords.encode(request.newPassword()));
+        invalidatePasswordCodes(accountId);
+        sessions.revokeOtherSessions(accountId, sessionId);
+        return new ResendResult(true, "Password updated. Other sessions have been signed out.");
+    }
+
+    private RegistrationOtpEntity verifyCode(VerifyOtpRequest request, String purpose, AccountStatus status) {
+        if (!purpose.equals(request.purpose()) || !request.code().matches("[0-9]{6}"))
+            throw new ApiException(ErrorCode.INVALID_OTP);
+        var account = identities.resolve(identity(request.identity()), request.namespace())
+                .filter(a -> a.getStatus() == status).orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
+        var otp = otps.findFirstByAccountIdAndPurposeOrderBySentAtDesc(account.getId(), purpose)
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_OTP));
+        if (otp.getUsedAt() != null || !otp.getExpiresAt().isAfter(clock.instant()) || otp.getFailedAttempts() >= 5)
+            throw new ApiException(ErrorCode.INVALID_OTP);
+        if (!otpHasher.matches(account.getId(), purpose, request.code(), otp.getCodeHash(), passwords)) {
+            otp.setFailedAttempts(otp.getFailedAttempts() + 1);
+            throw new ApiException(ErrorCode.INVALID_OTP);
+        }
+        otp.setUsedAt(clock.instant());
+        return otp;
+    }
+
+    private void invalidatePasswordCodes(UUID accountId) {
+        otps.findByAccountId(accountId).stream().filter(o -> "RESET_PASSWORD".equals(o.getPurpose()))
+                .forEach(o -> { o.setUsedAt(clock.instant()); o.setResetUsedAt(clock.instant()); });
+    }
+
+    private String identity(String value) {
+        if (value == null || value.isBlank()) throw new ApiException(ErrorCode.VALIDATION_FAILED);
+        return value.trim();
+    }
+
+    private void validatePassword(String password, String confirm) {
+        if (!password.equals(confirm)) throw new ApiException(ErrorCode.VALIDATION_FAILED, "Passwords do not match.");
+        if (password.length() < 8 || !password.matches("(?s)(?=.*[A-Za-z])(?=.*[0-9]).*"))
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Use at least 8 characters, including a letter and a number.");
+        if (password.getBytes(StandardCharsets.UTF_8).length > 72)
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Password is too long. Use at most 72 UTF-8 bytes.");
+    }
+
+    @Transactional(noRollbackFor = ApiException.class)
+    public AuthResult login(LoginRequest request) {
+        return login(request, null);
+    }
+
+    @Transactional(noRollbackFor = ApiException.class)
+    public AuthResult login(LoginRequest request, String userAgent) {
+        String identity = request.usernameOrEmail().trim();
+        AccountEntity account = identities.resolve(identity, request.identityType())
+                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS));
         Instant now = clock.instant();
-        String identifier = request.usernameOrEmail().strip();
-
-        AccountEntity account = accountRepository.findByUsernameIgnoreCaseOrEmailIgnoreCase(identifier, identifier)
-                .orElseThrow(() -> new ApiException(ErrorCode.INVALID_CREDENTIALS, "Invalid username/email or password"));
-
-        // Check active restrictions
-        assertNotRestricted(account, now);
-
-        // Check lifecycle status
-        if (account.getStatus() == AccountStatus.PENDING_VERIFICATION) {
-            throw new ApiException(ErrorCode.ACCOUNT_PENDING_VERIFICATION,
-                    "Account is not activated yet. Please verify your email with OTP");
+        if (account.getLoginLockedUntil() != null && account.getLoginLockedUntil().isAfter(now))
+            throw ApiException.withRetryAfter(ErrorCode.ACCOUNT_TEMP_LOCKED,
+                    retryAfterSeconds(now, account.getLoginLockedUntil()));
+        if (account.getLoginLockedUntil() != null) {
+            account.setLoginLockedUntil(null);
+            account.setFailedLoginAttempts(0);
         }
-        if (account.getStatus() == AccountStatus.DEACTIVATED) {
-            throw new ApiException(ErrorCode.ACCOUNT_DEACTIVATED, "Account has been deactivated");
+        if (account.getStatus() == AccountStatus.SUSPENDED && account.getSuspensionEndsAt() != null
+                && !account.getSuspensionEndsAt().isAfter(now)) {
+            administration.releaseExpiredSuspension(account.getId());
         }
-
-        // Verify password
-        if (!passwordService.matches(request.password(), account.getPasswordHash())) {
-            int attempts = account.getFailedLoginCount() + 1;
-            account.setFailedLoginCount(attempts);
-
-            if (attempts >= MAX_LOGIN_ATTEMPTS) {
-                // Apply 15-minute auto lock
-                AccountRestrictionEntity autoLock = AccountRestrictionEntity.builder()
-                        .id(UUID.randomUUID())
-                        .account(account)
-                        .kind(RestrictionKind.AUTO_LOCK)
-                        .reason("5 consecutive failed login attempts")
-                        .startsAt(now)
-                        .endsAt(now.plus(AUTO_LOCK_DURATION))
-                        .build();
-                restrictionRepository.save(autoLock);
-                account.setFailedLoginCount(0); // reset counter after locking
-                accountRepository.save(account);
-
-                auditPort.record(null, account.getId(), AuditActorType.SYSTEM, "AUTO_LOCK", AuditOutcome.SUCCESS, now);
-
-                throw new ApiException(ErrorCode.ACCOUNT_LOCKED,
-                        "Too many consecutive failed login attempts. Account locked for 15 minutes");
+        if (account.getStatus() == AccountStatus.SUSPENDED && account.getPasswordHash() != null
+                && passwords.matches(request.password(), account.getPasswordHash()))
+            throw new ApiException(ErrorCode.ACCOUNT_SUSPENDED, account.getSuspensionReason() == null
+                    ? ErrorCode.ACCOUNT_SUSPENDED.getMessage() : account.getSuspensionReason());
+        if (account.getStatus() != AccountStatus.ACTIVE || account.getPasswordHash() == null
+                || !passwords.matches(request.password(), account.getPasswordHash())) {
+            int failures = account.getFailedLoginAttempts() + 1;
+            account.setFailedLoginAttempts(failures);
+            if (failures >= 5) {
+                Instant lockedUntil = now.plus(LOGIN_LOCK);
+                account.setLoginLockedUntil(lockedUntil);
+                throw ApiException.withRetryAfter(ErrorCode.ACCOUNT_TEMP_LOCKED, retryAfterSeconds(now, lockedUntil));
             }
-
-            accountRepository.save(account);
-            auditPort.record(account.getId(), account.getId(), AuditActorType.USER, "LOGIN_FAILED", AuditOutcome.FAILED, now);
-
-            throw new ApiException(ErrorCode.INVALID_CREDENTIALS,
-                    "Invalid username/email or password. Attempts remaining: " + (MAX_LOGIN_ATTEMPTS - attempts));
+            throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
-
-        // Successful login: reset failed login count
-        if (account.getFailedLoginCount() > 0) {
-            account.setFailedLoginCount(0);
-            accountRepository.save(account);
-        }
-
-        auditPort.record(account.getId(), account.getId(), AuditActorType.USER, "LOGIN", AuditOutcome.SUCCESS, now);
-
-        boolean rememberMe = Boolean.TRUE.equals(request.rememberMe());
-        return createSessionAndTokenResponse(account, rememberMe, deviceLabel != null ? deviceLabel : "Web Browser", now);
+        account.setFailedLoginAttempts(0);
+        return sessions.issue(account, request.rememberMe(), userAgent);
     }
 
-    /**
-     * FR-AUTH-003: Request password reset OTP.
-     */
-    @Transactional
-    public MessageResponse forgotPassword(ForgotPasswordRequest request) {
-        String email = request.email().strip().toLowerCase();
-        Optional<AccountEntity> accountOpt = accountRepository.findByEmailIgnoreCase(email);
-
-        if (accountOpt.isPresent()) {
-            AccountEntity account = accountOpt.get();
-            if (account.getStatus() != AccountStatus.DEACTIVATED) {
-                otpService.generateAndSendOtp(account, OtpPurpose.RESET_PASSWORD);
-            }
-        }
-        return new MessageResponse("If an active account exists with this email, a reset OTP has been sent");
+    public AuthUser me(UUID id) {
+        AccountEntity account = accounts.findById(id)
+                .orElseThrow(() -> new ApiException(ErrorCode.UNAUTHORIZED_ACCESS));
+        if (account.getStatus() != AccountStatus.ACTIVE)
+            throw new ApiException(ErrorCode.UNAUTHORIZED_ACCESS);
+        return new AuthUser(account.getId(), account.getUsername(), account.getEmail(),
+                account.getRole(), account.getStatus().name());
     }
 
-    /**
-     * FR-AUTH-003: Complete password reset.
-     * Revokes ALL existing sessions of the account.
-     */
-    @Transactional
-    public MessageResponse resetPassword(ResetPasswordRequest request) {
+    private void sendCode(AccountEntity account, String purpose) {
+        long stageStarted = RegistrationTiming.begin();
+        var previous = otps.findFirstByAccountIdAndPurposeOrderBySentAtDesc(account.getId(), purpose);
+        Instant checkedAt = clock.instant();
+        if (previous.isPresent()) {
+            Instant retryAt = previous.get().getSentAt().plus(RESEND_WAIT);
+            if (retryAt.isAfter(checkedAt))
+                throw ApiException.withRetryAfter(ErrorCode.OTP_RATE_LIMITED, retryAfterSeconds(checkedAt, retryAt));
+        }
+        previous.ifPresent(code -> { code.setUsedAt(checkedAt); code.setResetUsedAt(checkedAt); });
+        RegistrationTiming.record("otp_lookup", stageStarted);
+        String code = String.format(Locale.ROOT, "%06d", random.nextInt(1_000_000));
         Instant now = clock.instant();
-        String email = request.email().strip().toLowerCase();
-
-        AccountEntity account = accountRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
-
-        UUID tokenAccountId = tokenService.parseAndValidateResetToken(request.resetToken(), now);
-        if (tokenAccountId == null || !tokenAccountId.equals(account.getId())) {
-            throw new ApiException(ErrorCode.INVALID_RESET_TOKEN, "Password reset token is invalid or expired");
-        }
-
-        passwordService.validatePassword(request.newPassword());
-        account.setPasswordHash(passwordService.hash(request.newPassword()));
-        accountRepository.save(account);
-
-        // AC-03: Revoke all existing sessions
-        sessionRepository.revokeAllByAccountId(account.getId(), now);
-
-        auditPort.record(account.getId(), account.getId(), AuditActorType.USER, "PASSWORD_RESET", AuditOutcome.SUCCESS, now);
-
-        return new MessageResponse("Password has been reset successfully. Please log in with your new password");
+        var otp = new RegistrationOtpEntity();
+        otp.setId(UUID.randomUUID());
+        otp.setAccount(account);
+        otp.setPurpose(purpose);
+        stageStarted = RegistrationTiming.begin();
+        otp.setCodeHash(otpHasher.hash(account.getId(), purpose, code));
+        RegistrationTiming.record("otp_hash", stageStarted);
+        otp.setSentAt(now);
+        otp.setExpiresAt(now.plus(OTP_LIFETIME));
+        stageStarted = RegistrationTiming.begin();
+        otps.save(otp);
+        RegistrationTiming.record("otp_save", stageStarted);
+        stageStarted = RegistrationTiming.begin();
+        mailer.send(account.getEmail(), code, purpose);
+        RegistrationTiming.record("smtp_send", stageStarted);
     }
 
-    /**
-     * FR-AUTH-004: Change password for authenticated user.
-     * Keeps current session alive; revokes all other sessions.
-     */
-    @Transactional
-    public MessageResponse changePassword(UUID accountId, ChangePasswordRequest request, String currentRawRefreshToken) {
-        Instant now = clock.instant();
-
-        AccountEntity account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
-
-        if (!passwordService.matches(request.currentPassword(), account.getPasswordHash())) {
-            throw new ApiException(ErrorCode.INVALID_CREDENTIALS, "Current password does not match");
-        }
-
-        passwordService.validatePassword(request.newPassword());
-        account.setPasswordHash(passwordService.hash(request.newPassword()));
-        accountRepository.save(account);
-
-        // Keep current session; revoke all other sessions
-        if (currentRawRefreshToken != null && !currentRawRefreshToken.isBlank()) {
-            String currentHash = tokenService.hashRefreshToken(currentRawRefreshToken);
-            sessionRepository.findByRefreshTokenHash(currentHash).ifPresent(currentSession ->
-                    sessionRepository.revokeOtherSessions(accountId, currentSession.getId(), now));
-        } else {
-            sessionRepository.revokeAllByAccountId(accountId, now);
-        }
-
-        auditPort.record(accountId, accountId, AuditActorType.USER, "PASSWORD_CHANGED", AuditOutcome.SUCCESS, now);
-
-        return new MessageResponse("Password changed successfully. Other sessions have been revoked");
+    private static long retryAfterSeconds(Instant now, Instant until) {
+        Duration remaining = Duration.between(now, until);
+        long seconds = remaining.getSeconds() + (remaining.getNano() > 0 ? 1L : 0L);
+        return Math.max(1L, seconds);
     }
 
-    /**
-     * FR-AUTH-005: Refresh access token.
-     */
-    @Transactional
-    public AuthResponse refreshToken(RefreshTokenRequest request) {
-        Instant now = clock.instant();
-        String tokenHash = tokenService.hashRefreshToken(request.refreshToken());
-
-        AuthSessionEntity session = sessionRepository.findByRefreshTokenHash(tokenHash)
-                .orElseThrow(() -> new ApiException(ErrorCode.SESSION_REVOKED, "Refresh token not found or revoked"));
-
-        if (session.getRevokedAt() != null) {
-            throw new ApiException(ErrorCode.SESSION_REVOKED, "Session has been revoked");
-        }
-        if (session.getExpiresAt().isBefore(now)) {
-            session.setRevokedAt(now);
-            sessionRepository.save(session);
-            throw new ApiException(ErrorCode.TOKEN_EXPIRED, "Refresh token has expired");
-        }
-
-        AccountEntity account = session.getAccount();
-        assertNotRestricted(account, now);
-
-        if (account.getStatus() != AccountStatus.ACTIVE) {
-            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION, "Account is not active");
-        }
-
-        session.setLastSeenAt(now);
-        sessionRepository.save(session);
-
-        String newAccessToken = tokenService.generateAccessToken(account);
-        return new AuthResponse(
-                newAccessToken,
-                request.refreshToken(),
-                toUserResponse(account),
-                TokenService.ACCESS_TOKEN_EXPIRY.toSeconds()
-        );
-    }
-
-    /**
-     * FR-AUTH-006: List sessions for user.
-     */
-    public List<SessionResponse> listSessions(UUID accountId, String currentRawRefreshToken) {
-        Instant now = clock.instant();
-        String currentHash = currentRawRefreshToken != null ? tokenService.hashRefreshToken(currentRawRefreshToken) : null;
-
-        return sessionRepository.findByAccountIdAndRevokedAtIsNullAndExpiresAtAfter(accountId, now).stream()
-                .map(s -> new SessionResponse(
-                        s.getId(),
-                        s.getDeviceLabel(),
-                        s.getCreatedAt(),
-                        s.getLastSeenAt(),
-                        s.getExpiresAt(),
-                        currentHash != null && currentHash.equals(s.getRefreshTokenHash())
-                ))
-                .toList();
-    }
-
-    /**
-     * FR-AUTH-006: Logout current session.
-     */
-    @Transactional
-    public MessageResponse logout(UUID accountId, String rawRefreshToken) {
-        Instant now = clock.instant();
-        if (rawRefreshToken != null && !rawRefreshToken.isBlank()) {
-            String tokenHash = tokenService.hashRefreshToken(rawRefreshToken);
-            sessionRepository.findByRefreshTokenHash(tokenHash).ifPresent(s -> {
-                if (s.getAccount().getId().equals(accountId)) {
-                    s.setRevokedAt(now);
-                    sessionRepository.save(s);
-                }
-            });
-        }
-        auditPort.record(accountId, accountId, AuditActorType.USER, "LOGOUT", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Logged out successfully");
-    }
-
-    /**
-     * FR-AUTH-006: Logout all sessions.
-     */
-    @Transactional
-    public MessageResponse logoutAll(UUID accountId) {
-        Instant now = clock.instant();
-        sessionRepository.revokeAllByAccountId(accountId, now);
-        auditPort.record(accountId, accountId, AuditActorType.USER, "LOGOUT_ALL", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Logged out from all devices successfully");
-    }
-
-    /**
-     * FR-AUTH-006: Revoke a specific session.
-     */
-    @Transactional
-    public MessageResponse revokeSession(UUID accountId, UUID sessionId) {
-        Instant now = clock.instant();
-        AuthSessionEntity session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new ApiException(ErrorCode.SESSION_NOT_FOUND, "Session not found"));
-
-        if (!session.getAccount().getId().equals(accountId)) {
-            throw new ApiException(ErrorCode.FORBIDDEN_OPERATION, "Cannot revoke a session belonging to another user");
-        }
-
-        session.setRevokedAt(now);
-        sessionRepository.save(session);
-
-        auditPort.record(accountId, accountId, AuditActorType.USER, "REVOKE_SESSION", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Session revoked successfully");
-    }
-
-    /**
-     * FR-ACC-006: Self deactivate account.
-     */
-    @Transactional
-    public MessageResponse deactivateAccount(UUID accountId, DeactivateAccountRequest request) {
-        Instant now = clock.instant();
-
-        if (!Boolean.TRUE.equals(request.confirm())) {
-            throw new ApiException(ErrorCode.VALIDATION_FAILED, "Confirmation is required to deactivate account");
-        }
-
-        AccountEntity account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
-
-        if (!passwordService.matches(request.password(), account.getPasswordHash())) {
-            throw new ApiException(ErrorCode.INVALID_CREDENTIALS, "Incorrect password");
-        }
-
-        account.setStatus(AccountStatus.DEACTIVATED);
-        accountRepository.save(account);
-
-        sessionRepository.revokeAllByAccountId(accountId, now);
-
-        auditPort.record(accountId, accountId, AuditActorType.USER, "ACCOUNT_DEACTIVATED", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Account has been deactivated. Contact an administrator if you wish to reactivate");
-    }
-
-    /**
-     * FR-ACC-006: Admin suspend account.
-     */
-    @Transactional
-    public MessageResponse suspendAccount(UUID adminId, UUID targetAccountId, SuspendAccountRequest request) {
-        Instant now = clock.instant();
-
-        AccountEntity target = accountRepository.findById(targetAccountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
-
-        AccountEntity admin = accountRepository.findById(adminId).orElse(null);
-
-        AccountRestrictionEntity suspension = AccountRestrictionEntity.builder()
-                .id(UUID.randomUUID())
-                .account(target)
-                .imposedByAccount(admin)
-                .kind(RestrictionKind.SUSPENSION)
-                .reason(request.reason().strip())
-                .startsAt(now)
-                .endsAt(request.endsAt())
-                .build();
-
-        restrictionRepository.save(suspension);
-
-        // Revoke all sessions of suspended user
-        sessionRepository.revokeAllByAccountId(targetAccountId, now);
-
-        auditPort.record(adminId, targetAccountId, AuditActorType.USER, "ACCOUNT_SUSPENDED", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Account suspended successfully");
-    }
-
-    /**
-     * FR-ACC-006: Admin unsuspend account.
-     */
-    @Transactional
-    public MessageResponse unsuspendAccount(UUID adminId, UUID targetAccountId) {
-        Instant now = clock.instant();
-
-        List<AccountRestrictionEntity> activeSuspensions = restrictionRepository
-                .findActiveRestrictionsByKind(targetAccountId, RestrictionKind.SUSPENSION, now);
-
-        for (AccountRestrictionEntity suspension : activeSuspensions) {
-            suspension.setRevokedAt(now);
-            restrictionRepository.save(suspension);
-        }
-
-        auditPort.record(adminId, targetAccountId, AuditActorType.USER, "ACCOUNT_UNSUSPENDED", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Account suspension lifted successfully");
-    }
-
-    /**
-     * FR-ACC-006: Admin reactivate deactivated account.
-     */
-    @Transactional
-    public MessageResponse reactivateAccount(UUID adminId, UUID targetAccountId) {
-        Instant now = clock.instant();
-
-        AccountEntity target = accountRepository.findById(targetAccountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
-
-        if (target.getStatus() != AccountStatus.DEACTIVATED) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "Account is not in deactivated state");
-        }
-
-        target.setStatus(AccountStatus.ACTIVE);
-        accountRepository.save(target);
-
-        auditPort.record(adminId, targetAccountId, AuditActorType.USER, "ACCOUNT_REACTIVATED", AuditOutcome.SUCCESS, now);
-        return new MessageResponse("Account reactivated successfully");
-    }
-
-    public AuthUserResponse getCurrentUser(UUID accountId) {
-        AccountEntity account = accountRepository.findById(accountId)
-                .orElseThrow(() -> new ApiException(ErrorCode.RESOURCE_NOT_FOUND, "Account not found"));
-        return toUserResponse(account);
-    }
-
-    private void assertNotRestricted(AccountEntity account, Instant now) {
-        List<AccountRestrictionEntity> activeRestrictions = restrictionRepository.findActiveRestrictions(account.getId(), now);
-        for (AccountRestrictionEntity r : activeRestrictions) {
-            if (r.getKind() == RestrictionKind.AUTO_LOCK) {
-                throw new ApiException(ErrorCode.ACCOUNT_LOCKED,
-                        "Account is temporarily locked due to multiple failed login attempts. Please try again later");
-            }
-            if (r.getKind() == RestrictionKind.ADMIN_LOCK) {
-                throw new ApiException(ErrorCode.FORBIDDEN_OPERATION, "Account locked by administrator");
-            }
-            if (r.getKind() == RestrictionKind.SUSPENSION) {
-                String reason = r.getReason() != null ? r.getReason() : "No reason specified";
-                throw new ApiException(ErrorCode.ACCOUNT_SUSPENDED, "Account suspended: " + reason);
-            }
-        }
-    }
-
-    private AuthResponse createSessionAndTokenResponse(AccountEntity account, boolean rememberMe, String deviceLabel, Instant now) {
-        String rawRefreshToken = tokenService.generateRawRefreshToken();
-        String hashedRefreshToken = tokenService.hashRefreshToken(rawRefreshToken);
-
-        Duration refreshDuration = rememberMe ? TokenService.REFRESH_TOKEN_EXPIRY_REMEMBER : TokenService.REFRESH_TOKEN_EXPIRY_NORMAL;
-        Instant refreshExpiresAt = now.plus(refreshDuration);
-
-        AuthSessionEntity session = AuthSessionEntity.builder()
-                .id(UUID.randomUUID())
-                .account(account)
-                .refreshTokenHash(hashedRefreshToken)
-                .rememberMe(rememberMe)
-                .deviceLabel(deviceLabel)
-                .expiresAt(refreshExpiresAt)
-                .lastSeenAt(now)
-                .build();
-
-        sessionRepository.save(session);
-
-        String accessToken = tokenService.generateAccessToken(account);
-
-        return new AuthResponse(
-                accessToken,
-                rawRefreshToken,
-                toUserResponse(account),
-                TokenService.ACCESS_TOKEN_EXPIRY.toSeconds()
-        );
-    }
-
-    private AuthUserResponse toUserResponse(AccountEntity account) {
-        return new AuthUserResponse(
-                account.getId(),
-                account.getUsername(),
-                account.getEmail(),
-                account.getRole(),
-                account.getStatus().name(),
-                account.getTermsAcceptedAt(),
-                account.getPrivacyAcceptedAt()
-        );
-    }
 }
-

@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["e2e/lessons.spec.ts", "e2e/lessons-live.spec.ts", "e2e/lessons-demo.spec.ts", "src/vite-env.d.ts"]
+}

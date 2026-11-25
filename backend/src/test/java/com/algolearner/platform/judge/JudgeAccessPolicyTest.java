@@ -62,7 +62,12 @@ class JudgeAccessPolicyTest {
 
     private static AccountEntity account(AccountRole role) {
         UUID id = UUID.randomUUID();
-        return AccountEntity.builder().id(id).username(id.toString()).email(id + "@test.local")
-                .role(role).status(AccountStatus.ACTIVE).build();
+        AccountEntity account = new AccountEntity();
+        account.setId(id);
+        account.setUsername(id.toString());
+        account.setEmail(id + "@test.local");
+        account.setRole(role);
+        account.setStatus(AccountStatus.ACTIVE);
+        return account;
     }
 }

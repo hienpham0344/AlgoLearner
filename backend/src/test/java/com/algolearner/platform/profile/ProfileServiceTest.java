@@ -25,14 +25,14 @@ class ProfileServiceTest {
         var failure=new IllegalStateException("storage offline");
         when(storage.store(file)).thenThrow(failure);
         assertThatThrownBy(() -> service.avatar(id,file)).isSameAs(failure);
-        verify(repository,never()).avatar(any(),any(),any());
+        verify(repository,never()).compareAndSetAvatar(any(),any(),any(),any());
         verify(storage,never()).delete(any());
     }
     @Test void databaseFailureCleansNewAvatarAndPreservesOld() {
         var file=new MockMultipartFile("file",new byte[]{1});
         when(storage.store(file)).thenReturn("new.png");
         var failure=new IllegalStateException("write failed");
-        doThrow(failure).when(repository).avatar(id,"new.png",clock.instant());
+        when(repository.compareAndSetAvatar(id,"old.png","new.png",clock.instant())).thenThrow(failure);
         assertThatThrownBy(() -> service.avatar(id,file)).isSameAs(failure);
         verify(storage).delete("new.png");
         verify(storage,never()).delete("old.png");
@@ -42,7 +42,7 @@ class ProfileServiceTest {
         var request=new ProfileDtos.ProfileUpdate();
         request.fullName("  ");
         service.update(id,request);
-        verify(repository).update(id,null,"Bio",clock.instant());
+        verify(repository).update(id,true,null,false,null,clock.instant());
     }
     @Test void unicodeLengthBoundaryUsesCodePoints() {
         when(statistics.forAccount(id)).thenReturn(new PracticeStatisticsService.Statistics(0,new PracticeStatisticsService.Streak(0,0)));
@@ -51,6 +51,6 @@ class ProfileServiceTest {
         service.update(id,request);
         request.fullName("😀".repeat(151));
         assertThatThrownBy(() -> service.update(id,request)).isInstanceOf(com.algolearner.platform.common.exception.ApiException.class);
-        verify(repository,times(1)).update(any(),any(),any(),any());
+        verify(repository,times(1)).update(any(),anyBoolean(),any(),anyBoolean(),any(),any());
     }
 }

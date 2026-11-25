@@ -17,12 +17,24 @@ public interface JudgeExecutionPort {
     }
 
     record TestCase(int ordinalNumber, TestCaseVisibility visibility, String input, String expectedOutput) {}
-    record CaseResult(int ordinalNumber, JudgeStatus status, long executionTimeMs, long memoryUsedKb,
-            String actualOutput, String stderrOutput) {}
+
+    record CaseResult(int ordinalNumber, JudgeStatus status, long executionTimeMs, Long memoryUsedKb,
+            String actualOutput, String stderrOutput) {
+        public CaseResult(int ordinalNumber, JudgeStatus status, long executionTimeMs, long memoryUsedKb,
+                String actualOutput, String stderrOutput) {
+            this(ordinalNumber, status, executionTimeMs, Long.valueOf(memoryUsedKb), actualOutput, stderrOutput);
+        }
+    }
+
     record ExecutionResult(JudgeStatus status, String stdout, String compilerOutput,
-            long executionTimeMs, long memoryUsedKb, List<CaseResult> cases, String provider) {
+            long executionTimeMs, Long memoryUsedKb, List<CaseResult> cases, String provider) {
         public ExecutionResult {
             cases = cases == null ? List.of() : List.copyOf(cases);
+        }
+
+        public ExecutionResult(JudgeStatus status, String stdout, String compilerOutput,
+                long executionTimeMs, long memoryUsedKb, List<CaseResult> cases, String provider) {
+            this(status, stdout, compilerOutput, executionTimeMs, Long.valueOf(memoryUsedKb), cases, provider);
         }
     }
 }

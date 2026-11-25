@@ -1,3 +1,4 @@
+import { isOfflineRequest } from './backendFirstPlugin';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { Plugin } from 'vite';
@@ -75,6 +76,7 @@ export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'
     apply: 'serve',
     configureServer(server) {
       server.middlewares.use(async (request, response, next) => {
+        if (!isOfflineRequest(request)) { next(); return; }
         const route = request.url?.split('?')[0];
         const resetRoutes = new Set(['/api/v1/auth/forgot-password', '/api/v1/auth/verify-otp', '/api/v1/auth/resend-otp', '/api/v1/auth/reset-password']);
         if (request.method !== 'POST' || !route || !resetRoutes.has(route)) { next(); return; }
@@ -128,19 +130,19 @@ export function authDemoPlugin(roleAccountMode: 'demo' | 'backend-mock' = 'demo'
 
         const resetToken = stringField(payload, 'resetToken');
         const newPassword = stringField(payload, 'newPassword');
-        const confirmPassword = stringField(payload, 'confirmPassword');
         const grant = resetToken ? grants.get(resetToken) : undefined;
         if (!grant || grant.email !== email || grant.expiresAt <= now) {
           fail(400, 'INVALID_RESET_TOKEN', 'Request and verify a new reset code.'); return;
         }
-        if (!newPassword || newPassword.length < 8 || newPassword !== confirmPassword) {
-          fail(400, 'INVALID_PASSWORD', 'Use at least 8 matching characters.'); return;
+        if (!newPassword || newPassword.length < 8 || !/[A-Za-z]/.test(newPassword) || !/\d/.test(newPassword)) {
+          fail(400, 'INVALID_PASSWORD', 'Use at least 8 characters, including a letter and a number.'); return;
         }
         grants.delete(resetToken!);
         if (email === DEMO_IDENTITY) { demoPassword = newPassword; attempts.delete(email); }
         respond(response, 200, successBody({ success: true, message: 'Password updated.' }, 'Password updated.'));
       });
       server.middlewares.use(async (request, response, next) => {
+        if (!isOfflineRequest(request)) { next(); return; }
         if (request.method !== 'POST' || request.url?.split('?')[0] !== '/api/v1/auth/login') {
           next();
           return;

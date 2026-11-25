@@ -1,6 +1,9 @@
-import React, { createContext, useEffect, useState } from 'react';
+import { API_SOURCE_EVENT, getApiSource } from '../services/apiSource';
+import React, { createContext, useEffect, useRef, useState } from 'react';
 import { AuthUser, LoginRequest, RegisterRequest, VerifyOtpRequest } from '../features/auth/types';
 import { authApi } from '../features/auth/api/authApi';
+import { useQueryClient } from '@tanstack/react-query';
+import { UNAUTHORIZED_EVENT, SESSION_REFRESHED_EVENT, refreshSession, clearSession } from '../services/apiClient';
 
 export interface AuthContextType {
   user: AuthUser | null;
@@ -11,7 +14,7 @@ export interface AuthContextType {
   register: (data: RegisterRequest) => Promise<{ email: string; message: string }>;
   verifyOtp: (data: VerifyOtpRequest) => Promise<void>;
   quickLogin: (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,6 +31,9 @@ const savedAuthUser = (): AuthUser | null => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const queryClient = useQueryClient();
+  const lastApiSource = useRef(getApiSource());
+  const sessionRestoreStarted = useRef(false);
   const [user, setUser] = useState<AuthUser | null>(savedAuthUser);
   const [token, setToken] = useState<string | null>(() => {
     return localStorage.getItem('algolearner_token');
@@ -35,37 +41,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
+    const expireSession = () => {
+      queryClient.clear();
+      setUser(null);
+      setToken(null);
+    };
+    window.addEventListener(UNAUTHORIZED_EVENT, expireSession);
+    const sourceChanged = () => {
+      const source = getApiSource();
+      if (lastApiSource.current !== 'unknown' && lastApiSource.current !== source) queryClient.clear();
+      lastApiSource.current = source;
+      const saved = localStorage.getItem('algolearner_token');
+      if (saved && (saved.startsWith('mock-') !== (source === 'mock'))) clearSession();
+    };
+    window.addEventListener(API_SOURCE_EVENT, sourceChanged);
+    const refreshed = () => {
+      setToken(localStorage.getItem('algolearner_token'));
+      setUser(savedAuthUser());
+    };
+    window.addEventListener(SESSION_REFRESHED_EVENT, refreshed);
+    return () => {
+      window.removeEventListener(UNAUTHORIZED_EVENT, expireSession);
+      window.removeEventListener(API_SOURCE_EVENT, sourceChanged);
+      window.removeEventListener(SESSION_REFRESHED_EVENT, refreshed);
+    };
+  }, [queryClient]);
+
+  useEffect(() => {
+    if (sessionRestoreStarted.current) return;
+    sessionRestoreStarted.current = true;
     const initAuth = async () => {
-      const savedToken = localStorage.getItem('algolearner_token');
+      let savedToken = localStorage.getItem('algolearner_token');
+      if (!savedToken) {
+        try { savedToken = (await refreshSession()).token; } catch { /* No active cookie or server unavailable. */ }
+      }
       if (savedToken) {
-        if (['auth-demo', 'backend-mock'].includes(import.meta.env.MODE) && savedToken.startsWith('mock-')) {
-          const storedUser = savedAuthUser();
-          if (storedUser) { setUser(storedUser); setIsLoading(false); return; }
-        }
         try {
-          // If token exists, try fetching profile from live backend
-          const me = await authApi.getCurrentUser();
-          setUser(me);
-          localStorage.setItem('algolearner_user', JSON.stringify(me));
+          const currentUser = await authApi.getCurrentUser();
+          setUser(currentUser);
+          setToken(localStorage.getItem('algolearner_token') || savedToken);
+          localStorage.setItem('algolearner_user', JSON.stringify(currentUser));
         } catch {
-          // If profile fetch fails but token is valid mock token
-          if (import.meta.env.DEV && savedToken.startsWith('mock-')) {
-            const role = savedToken.replace('mock-', '').toUpperCase() as 'STUDENT' | 'TEACHER' | 'ADMIN';
-            const fallbackUser: AuthUser = {
-              id: 'mock-user-id',
-              username: role.toLowerCase(),
-              email: `${role.toLowerCase()}@example.test`,
-              role,
-              fullName: role.charAt(0) + role.slice(1).toLowerCase(),
-              lifecycleStatus: 'ACTIVE',
-            };
-            setUser(fallbackUser);
-          } else {
-            localStorage.removeItem('algolearner_token');
-            localStorage.removeItem('algolearner_user');
-            setUser(null);
-            setToken(null);
-          }
+          clearSession();
         }
       }
       setIsLoading(false);
@@ -75,10 +92,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const handleAuthSuccess = (newToken: string, newUser: AuthUser) => {
+    queryClient.clear();
     setToken(newToken);
     setUser(newUser);
     localStorage.setItem('algolearner_token', newToken);
     localStorage.setItem('algolearner_user', JSON.stringify(newUser));
+    window.dispatchEvent(new Event(SESSION_REFRESHED_EVENT));
   };
 
   const login = async (credentials: LoginRequest) => {
@@ -115,11 +134,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('algolearner_token');
-    localStorage.removeItem('algolearner_user');
+  const logout = async () => {
+    await authApi.logout();
   };
 
   return (

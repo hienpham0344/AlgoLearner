@@ -5,10 +5,16 @@ import com.algolearner.platform.auth.AccountRole;
 import com.algolearner.platform.auth.AccountStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.algolearner.platform.judge.JudgeTypes.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -108,6 +114,60 @@ class JudgeSubmissionProcessorTest {
                 submission.getSubmitter().getId(), JudgeStatus.WRONG_ANSWER, JudgeStatus.ACCEPTED));
     }
 
+    @Test
+    void sandboxExecutionRunsOutsideDatabaseTransactionsAndCommitsInTwoShortPhases() {
+        AtomicBoolean insideTx = new AtomicBoolean(false);
+        AtomicInteger txCount = new AtomicInteger(0);
+        TransactionOperations recordingTx = new TransactionOperations() {
+            @Override
+            public <T> T execute(TransactionCallback<T> action) {
+                txCount.incrementAndGet();
+                insideTx.set(true);
+                try {
+                    return action.doInTransaction(new SimpleTransactionStatus());
+                } finally {
+                    insideTx.set(false);
+                }
+            }
+        };
+
+        JudgeSubmissionProcessor txProcessor = new JudgeSubmissionProcessor(evaluations, snapshots,
+                results, rejudges, execution, events, Clock.fixed(NOW, ZoneOffset.UTC), recordingTx);
+
+        SubmissionEntity submission = submission(JudgeStatus.QUEUED);
+        SubmissionEvaluationEntity evaluation = evaluation(submission, EvaluationTrigger.INITIAL);
+        SubmissionTestCaseSnapshotEntity snap = snapshot(evaluation, 1);
+        when(evaluations.findByIdForUpdate(evaluation.getId())).thenReturn(Optional.of(evaluation));
+        when(snapshots.findByEvaluationIdOrderByOrdinalNumber(evaluation.getId())).thenReturn(List.of(snap));
+
+        AtomicBoolean wasInTxDuringSandbox = new AtomicBoolean(true);
+        when(execution.execute(any())).thenAnswer(inv -> {
+            wasInTxDuringSandbox.set(insideTx.get());
+            return new JudgeExecutionPort.ExecutionResult(
+                    JudgeStatus.ACCEPTED, "ok", null, 15, null,
+                    List.of(new JudgeExecutionPort.CaseResult(1, JudgeStatus.ACCEPTED, 15, null, "ok", null)), "docker");
+        });
+
+        txProcessor.processSubmission(evaluation.getId());
+
+        assertThat(wasInTxDuringSandbox.get()).isFalse();
+        assertThat(txCount.get()).isEqualTo(2);
+        assertThat(evaluation.getStatus()).isEqualTo(JudgeStatus.ACCEPTED);
+        assertThat(submission.getStatus()).isEqualTo(JudgeStatus.ACCEPTED);
+    }
+
+    @Test
+    void duplicateWorkerClaimIsIdempotentAndDoesNotReExecuteSandbox() {
+        SubmissionEntity submission = submission(JudgeStatus.JUDGING);
+        SubmissionEvaluationEntity evaluation = evaluation(submission, EvaluationTrigger.INITIAL);
+        evaluation.setStatus(JudgeStatus.JUDGING);
+        when(evaluations.findByIdForUpdate(evaluation.getId())).thenReturn(Optional.of(evaluation));
+
+        processor.processSubmission(evaluation.getId());
+
+        verifyNoInteractions(execution, results);
+    }
+
     private static SubmissionEntity submission(JudgeStatus status) {
         JudgeProblemEntity problem = new JudgeProblemEntity();
         problem.setId(UUID.randomUUID());
@@ -120,8 +180,13 @@ class JudgeSubmissionProcessorTest {
         SubmissionEntity submission = new SubmissionEntity();
         submission.setId(UUID.randomUUID());
         submission.setProblem(problem);
-        submission.setSubmitter(AccountEntity.builder().id(UUID.randomUUID()).username("student")
-                .email(UUID.randomUUID() + "@test.local").role(AccountRole.STUDENT).status(AccountStatus.ACTIVE).build());
+        AccountEntity submitter = new AccountEntity();
+        submitter.setId(UUID.randomUUID());
+        submitter.setUsername("student");
+        submitter.setEmail(UUID.randomUUID() + "@test.local");
+        submitter.setRole(AccountRole.STUDENT);
+        submitter.setStatus(AccountStatus.ACTIVE);
+        submission.setSubmitter(submitter);
         submission.setTestCaseVersion(version);
         submission.setLanguage(JudgeLanguage.JAVA);
         submission.setSourceCode("class Main {}");

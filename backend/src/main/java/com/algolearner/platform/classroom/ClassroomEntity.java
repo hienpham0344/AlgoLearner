@@ -11,6 +11,7 @@ import java.util.UUID;
 
 @Entity @Table(name = "tbl_classroom") @Getter @Setter @NoArgsConstructor
 public class ClassroomEntity extends BaseAuditableEntity {
+    @Version @Column(nullable = false) private long version;
     @Id @Column(nullable = false, updatable = false) private UUID id;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "owner_id", nullable = false) private AccountEntity owner;
     @Column(nullable = false, length = 150) private String name;

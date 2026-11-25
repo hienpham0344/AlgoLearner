@@ -1,17 +1,22 @@
 package com.algolearner.platform.judge;
 
-import org.springframework.stereotype.Service;
-import org.springframework.context.annotation.Profile;
-import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionOperations;
 
 import java.time.Clock;
 import java.util.*;
 
 import static com.algolearner.platform.judge.JudgeTypes.*;
 
+/**
+ * Processes queued submission evaluations and rejudges without holding database
+ * row locks or transactions across untrusted sandbox execution.
+ */
 @Service
 @Profile("!mock")
 public class JudgeSubmissionProcessor {
@@ -23,11 +28,13 @@ public class JudgeSubmissionProcessor {
     private final JudgeExecutionPort execution;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+    private final TransactionOperations transactions;
 
+    @Autowired
     public JudgeSubmissionProcessor(SubmissionEvaluationRepository evaluations,
             SubmissionTestCaseSnapshotRepository snapshots, SubmissionTestResultRepository results,
             RejudgeHistoryRepository rejudges, JudgeExecutionPort execution,
-            ApplicationEventPublisher events, Clock clock) {
+            ApplicationEventPublisher events, Clock clock, TransactionOperations transactions) {
         this.evaluations = evaluations;
         this.snapshots = snapshots;
         this.results = results;
@@ -35,94 +42,174 @@ public class JudgeSubmissionProcessor {
         this.execution = execution;
         this.events = events;
         this.clock = clock;
+        this.transactions = Objects.requireNonNull(transactions);
     }
 
-    @Transactional
+    /** Convenience constructor for unit tests that do not supply a Spring TransactionOperations bean. */
+    JudgeSubmissionProcessor(SubmissionEvaluationRepository evaluations,
+            SubmissionTestCaseSnapshotRepository snapshots, SubmissionTestResultRepository results,
+            RejudgeHistoryRepository rejudges, JudgeExecutionPort execution,
+            ApplicationEventPublisher events, Clock clock) {
+        this(evaluations, snapshots, results, rejudges, execution, events, clock,
+                TransactionOperations.withoutTransaction());
+    }
+
     public void processSubmission(UUID evaluationId) {
-        SubmissionEvaluationEntity evaluation = evaluations.findByIdForUpdate(evaluationId).orElse(null);
-        if (evaluation == null || evaluation.getTriggerType() != EvaluationTrigger.INITIAL
-                || evaluation.getStatus() != JudgeStatus.QUEUED) return;
-        SubmissionEntity submission = evaluation.getSubmission();
-        evaluation.setStatus(JudgeStatus.JUDGING);
-        evaluation.setStartedAt(clock.instant());
-        submission.setStatus(JudgeStatus.JUDGING);
+        ClaimedSubmission claimed = transactions.execute(status -> claimSubmission(evaluationId));
+        if (claimed == null) return;
+
         try {
-            JudgeExecutionPort.ExecutionResult outcome = execute(evaluation);
-            applyEvaluation(evaluation, outcome);
-            evaluation.setCurrentOfficial(true);
-            applySubmission(submission, evaluation);
+            JudgeExecutionPort.ExecutionResult outcome = executeOutsideTransaction(claimed.request());
+            transactions.executeWithoutResult(status -> completeSubmission(claimed.evaluationId(), outcome));
         } catch (JudgeProviderException exception) {
             LOG.warn("Initial Judge evaluation failed: evaluationId={}, submissionId={}",
-                    evaluation.getId(), submission.getId());
-            markJudgeError(evaluation);
-            evaluation.setCurrentOfficial(true);
-            applySubmission(submission, evaluation);
+                    claimed.evaluationId(), claimed.submissionId());
+            transactions.executeWithoutResult(status -> failSubmission(claimed.evaluationId()));
         }
     }
 
-    @Transactional
     public void processRejudge(long historyId) {
-        RejudgeHistoryEntity history = rejudges.findByIdForUpdate(historyId).orElse(null);
-        if (history == null || history.getStatus() != RejudgeStatus.QUEUED) return;
-        SubmissionEvaluationEntity next = history.getNewEvaluation();
-        SubmissionEntity submission = history.getSubmission();
-        history.setStatus(RejudgeStatus.RUNNING);
-        next.setStatus(JudgeStatus.JUDGING);
-        next.setStartedAt(clock.instant());
+        ClaimedRejudge claimed = transactions.execute(status -> claimRejudge(historyId));
+        if (claimed == null) return;
+
         try {
-            JudgeStatus previousStatus = submission.getStatus();
-            JudgeExecutionPort.ExecutionResult outcome = execute(next);
+            JudgeExecutionPort.ExecutionResult outcome = executeOutsideTransaction(claimed.request());
             if (outcome.status() == JudgeStatus.JUDGE_ERROR) {
                 throw new JudgeProviderException("Provider returned infrastructure status");
             }
-            applyEvaluation(next, outcome);
-            if (history.getPreviousEvaluation() != null) {
-                history.getPreviousEvaluation().setCurrentOfficial(false);
-                evaluations.flush();
-            }
-            next.setCurrentOfficial(true);
-            submission.setTestCaseVersion(next.getTestCaseVersion());
-            applySubmission(submission, next);
-            history.setNewStatus(next.getStatus());
-            history.setStatus(RejudgeStatus.COMPLETED);
-            history.setCompletedAt(clock.instant());
-            if (previousStatus != next.getStatus()) {
-                events.publishEvent(new SubmissionResultChangedEvent(submission.getId(),
-                        submission.getSubmitter().getId(), previousStatus, next.getStatus()));
-            }
+            transactions.executeWithoutResult(status -> completeRejudge(claimed.historyId(), outcome));
         } catch (JudgeProviderException exception) {
             LOG.warn("Rejudge failed: historyId={}, evaluationId={}, submissionId={}",
-                    history.getId(), next.getId(), submission.getId());
-            markJudgeError(next);
-            next.setCurrentOfficial(false);
-            history.setStatus(RejudgeStatus.FAILED);
-            history.setFailureMessage("Isolated Judge provider failed");
-            history.setCompletedAt(clock.instant());
+                    claimed.historyId(), claimed.evaluationId(), claimed.submissionId());
+            transactions.executeWithoutResult(status -> failRejudge(claimed.historyId()));
         }
     }
 
-    private JudgeExecutionPort.ExecutionResult execute(SubmissionEvaluationEntity evaluation) {
+    private ClaimedSubmission claimSubmission(UUID evaluationId) {
+        SubmissionEvaluationEntity evaluation = evaluations.findByIdForUpdate(evaluationId).orElse(null);
+        if (evaluation == null || evaluation.getTriggerType() != EvaluationTrigger.INITIAL
+                || evaluation.getStatus() != JudgeStatus.QUEUED) {
+            return null;
+        }
         SubmissionEntity submission = evaluation.getSubmission();
         List<SubmissionTestCaseSnapshotEntity> testCases = snapshots
                 .findByEvaluationIdOrderByOrdinalNumber(evaluation.getId());
-        if (testCases.isEmpty()) throw new JudgeProviderException("Evaluation snapshot is empty");
+        JudgeExecutionPort.ExecutionRequest request = buildRequest(submission, testCases);
+        evaluation.setStatus(JudgeStatus.JUDGING);
+        evaluation.setStartedAt(clock.instant());
+        submission.setStatus(JudgeStatus.JUDGING);
+        return new ClaimedSubmission(evaluation.getId(), submission.getId(), request);
+    }
+
+    private void completeSubmission(UUID evaluationId, JudgeExecutionPort.ExecutionResult outcome) {
+        SubmissionEvaluationEntity evaluation = evaluations.findByIdForUpdate(evaluationId).orElse(null);
+        if (evaluation == null || evaluation.getStatus() != JudgeStatus.JUDGING) return;
+
+        List<SubmissionTestCaseSnapshotEntity> testCases = snapshots
+                .findByEvaluationIdOrderByOrdinalNumber(evaluation.getId());
+        persistCaseResults(evaluation, testCases, outcome.cases());
+        applyEvaluation(evaluation, outcome);
+        evaluation.setCurrentOfficial(true);
+        applySubmission(evaluation.getSubmission(), evaluation);
+    }
+
+    private void failSubmission(UUID evaluationId) {
+        SubmissionEvaluationEntity evaluation = evaluations.findByIdForUpdate(evaluationId).orElse(null);
+        if (evaluation == null || evaluation.getStatus() != JudgeStatus.JUDGING) return;
+
+        markJudgeError(evaluation);
+        evaluation.setCurrentOfficial(true);
+        applySubmission(evaluation.getSubmission(), evaluation);
+    }
+
+    private ClaimedRejudge claimRejudge(long historyId) {
+        RejudgeHistoryEntity history = rejudges.findByIdForUpdate(historyId).orElse(null);
+        if (history == null || history.getStatus() != RejudgeStatus.QUEUED) return null;
+
+        SubmissionEvaluationEntity next = history.getNewEvaluation();
+        SubmissionEntity submission = history.getSubmission();
+        List<SubmissionTestCaseSnapshotEntity> testCases = snapshots
+                .findByEvaluationIdOrderByOrdinalNumber(next.getId());
+        JudgeExecutionPort.ExecutionRequest request = buildRequest(submission, testCases);
+
+        history.setStatus(RejudgeStatus.RUNNING);
+        next.setStatus(JudgeStatus.JUDGING);
+        next.setStartedAt(clock.instant());
+        return new ClaimedRejudge(history.getId(), next.getId(), submission.getId(), request);
+    }
+
+    private void completeRejudge(long historyId, JudgeExecutionPort.ExecutionResult outcome) {
+        RejudgeHistoryEntity history = rejudges.findByIdForUpdate(historyId).orElse(null);
+        if (history == null || history.getStatus() != RejudgeStatus.RUNNING) return;
+
+        SubmissionEvaluationEntity next = history.getNewEvaluation();
+        SubmissionEntity submission = history.getSubmission();
+        JudgeStatus previousStatus = submission.getStatus();
+
+        List<SubmissionTestCaseSnapshotEntity> testCases = snapshots
+                .findByEvaluationIdOrderByOrdinalNumber(next.getId());
+        persistCaseResults(next, testCases, outcome.cases());
+        applyEvaluation(next, outcome);
+
+        if (history.getPreviousEvaluation() != null) {
+            history.getPreviousEvaluation().setCurrentOfficial(false);
+            evaluations.flush();
+        }
+        next.setCurrentOfficial(true);
+        submission.setTestCaseVersion(next.getTestCaseVersion());
+        applySubmission(submission, next);
+        history.setNewStatus(next.getStatus());
+        history.setStatus(RejudgeStatus.COMPLETED);
+        history.setCompletedAt(clock.instant());
+
+        if (previousStatus != next.getStatus()) {
+            events.publishEvent(new SubmissionResultChangedEvent(submission.getId(),
+                    submission.getSubmitter().getId(), previousStatus, next.getStatus()));
+        }
+    }
+
+    private void failRejudge(long historyId) {
+        RejudgeHistoryEntity history = rejudges.findByIdForUpdate(historyId).orElse(null);
+        if (history == null || history.getStatus() != RejudgeStatus.RUNNING) return;
+
+        SubmissionEvaluationEntity next = history.getNewEvaluation();
+        markJudgeError(next);
+        next.setCurrentOfficial(false);
+        history.setStatus(RejudgeStatus.FAILED);
+        history.setFailureMessage("Isolated Judge provider failed");
+        history.setCompletedAt(clock.instant());
+    }
+
+    private JudgeExecutionPort.ExecutionRequest buildRequest(SubmissionEntity submission,
+            List<SubmissionTestCaseSnapshotEntity> testCases) {
+        if (testCases.isEmpty()) return null;
         List<JudgeExecutionPort.TestCase> requestCases = testCases.stream()
                 .map(item -> new JudgeExecutionPort.TestCase(item.getOrdinalNumber(), item.getVisibility(),
-                        item.getInputData(), item.getExpectedOutput())).toList();
+                        item.getInputData(), item.getExpectedOutput()))
+                .toList();
         JudgeProblemEntity problem = submission.getProblem();
-        JudgeExecutionPort.ExecutionResult outcome = execution.execute(new JudgeExecutionPort.ExecutionRequest(
-                submission.getLanguage(), problem.getFormat(), submission.getSourceCode(), starterCode(problem, submission.getLanguage()),
-                submission.getTimeLimitMs(), submission.getMemoryLimitMb(), true, requestCases));
-        if (!terminal(outcome.status())) throw new JudgeProviderException("Provider returned a non-terminal status");
-        validateCaseResults(testCases, outcome);
-        persistCaseResults(evaluation, testCases, outcome.cases());
+        return new JudgeExecutionPort.ExecutionRequest(
+                submission.getLanguage(), problem.getFormat(), submission.getSourceCode(),
+                starterCode(problem, submission.getLanguage()),
+                submission.getTimeLimitMs(), submission.getMemoryLimitMb(), true, requestCases);
+    }
+
+    private JudgeExecutionPort.ExecutionResult executeOutsideTransaction(JudgeExecutionPort.ExecutionRequest request) {
+        if (request == null || request.testCases().isEmpty()) {
+            throw new JudgeProviderException("Evaluation snapshot is empty");
+        }
+        JudgeExecutionPort.ExecutionResult outcome = execution.execute(request);
+        if (!terminal(outcome.status())) {
+            throw new JudgeProviderException("Provider returned a non-terminal status");
+        }
+        validateCaseResults(request.testCases(), outcome);
         return outcome;
     }
 
-    private static void validateCaseResults(List<SubmissionTestCaseSnapshotEntity> expected,
+    private static void validateCaseResults(List<JudgeExecutionPort.TestCase> expected,
             JudgeExecutionPort.ExecutionResult outcome) {
         Set<Integer> expectedOrdinals = new HashSet<>();
-        for (SubmissionTestCaseSnapshotEntity item : expected) expectedOrdinals.add(item.getOrdinalNumber());
+        for (JudgeExecutionPort.TestCase item : expected) expectedOrdinals.add(item.ordinalNumber());
         Set<Integer> returnedOrdinals = new HashSet<>();
         for (JudgeExecutionPort.CaseResult item : outcome.cases()) {
             if (!expectedOrdinals.contains(item.ordinalNumber()) || !returnedOrdinals.add(item.ordinalNumber())
@@ -193,4 +280,7 @@ public class JudgeSubmissionProcessor {
     private static String starterCode(JudgeProblemEntity problem, JudgeLanguage language) {
         return language == JudgeLanguage.JAVA ? problem.getStarterCodeJava() : problem.getStarterCodePython();
     }
+
+    private record ClaimedSubmission(UUID evaluationId, UUID submissionId, JudgeExecutionPort.ExecutionRequest request) {}
+    private record ClaimedRejudge(long historyId, UUID evaluationId, UUID submissionId, JudgeExecutionPort.ExecutionRequest request) {}
 }

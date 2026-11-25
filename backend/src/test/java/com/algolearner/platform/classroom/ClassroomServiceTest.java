@@ -2,7 +2,11 @@ package com.algolearner.platform.classroom;
 
 import com.algolearner.platform.auth.*;
 import com.algolearner.platform.common.exception.AppException;
+import com.algolearner.platform.notification.NotificationRepository;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import java.time.*;
 import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,9 +19,167 @@ class ClassroomServiceTest {
     private final ClassroomMembershipRepository memberships = mock(ClassroomMembershipRepository.class);
     private final ClassroomJoinRequestRepository requests = mock(ClassroomJoinRequestRepository.class);
     private final ClassroomInvitationRepository invitations = mock(ClassroomInvitationRepository.class);
+    private final NotificationRepository notifications = mock(NotificationRepository.class);
     private final AccountRepository accounts = mock(AccountRepository.class);
+    private final ClassroomPairLock pairLock = mock(ClassroomPairLock.class);
+    private final EntityManager entityManager = mock(EntityManager.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
-    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, accounts, clock);
+    private final com.algolearner.platform.practice.ClassroomPracticeRepository practices = mock(com.algolearner.platform.practice.ClassroomPracticeRepository.class);
+    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts), practices);
+
+    @Test
+    void invitationCreatesNotificationForInvitedStudent() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(accounts.findByEmailIgnoreCase(student.getEmail())).thenReturn(Optional.of(student));
+        var id = service.invite(owner.getId(), classroom.getId(), new ClassroomDtos.Invite(student.getEmail(), clock.instant().plusSeconds(3600)));
+        verify(invitations).save(argThat(invitation -> invitation.getId().equals(id) && invitation.getStudent() == student));
+        verify(notifications).save(argThat(notification -> notification.getRecipient() == student
+                && notification.getInvitation().getId().equals(id)));
+    }
+
+    @Test
+    void acceptingInvitationMarksItsNotificationRead() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        var invitation = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        var notification = new com.algolearner.platform.notification.NotificationEntity();
+        notification.setId(UUID.randomUUID()); notification.setRecipient(student); notification.setInvitation(invitation);
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+        when(notifications.findByInvitationId(invitation.getId())).thenReturn(Optional.of(notification));
+        service.acceptInvitation(student.getId(), invitation.getId());
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.ACCEPTED);
+        assertThat(notification.getReadAt()).isEqualTo(clock.instant());
+    }
+
+    @Test
+    void closedClassRejectsInvitationAcceptanceWithoutChangingMembership() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        classroom.setJoiningOpen(false);
+        var invitation = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+
+        assertThatThrownBy(() -> service.acceptInvitation(student.getId(), invitation.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("JOINING_CLOSED");
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.PENDING);
+        verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void decliningInvitationMarksItsNotificationRead() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        var invitation = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        var notification = new com.algolearner.platform.notification.NotificationEntity();
+        notification.setId(UUID.randomUUID()); notification.setRecipient(student); notification.setInvitation(invitation);
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+        when(notifications.findByInvitationId(invitation.getId())).thenReturn(Optional.of(notification));
+        service.declineInvitation(student.getId(), invitation.getId());
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.DECLINED);
+        assertThat(notification.getReadAt()).isEqualTo(clock.instant());
+    }
+
+    @Test
+    void studentCanDeclineInvitationAfterClassIsArchived() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        classroom.setStatus(ClassroomStatus.ARCHIVED);
+        var invitation = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        var notification = new com.algolearner.platform.notification.NotificationEntity();
+        notification.setId(UUID.randomUUID()); notification.setRecipient(student); notification.setInvitation(invitation);
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+        when(notifications.findByInvitationId(invitation.getId())).thenReturn(Optional.of(notification));
+
+        service.declineInvitation(student.getId(), invitation.getId());
+
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.DECLINED);
+        assertThat(notification.getReadAt()).isEqualTo(clock.instant());
+        verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void archivedClassRejectsInvitationAcceptance() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        classroom.setStatus(ClassroomStatus.ARCHIVED);
+        var invitation = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findById(invitation.getId())).thenReturn(Optional.of(invitation));
+
+        assertThatThrownBy(() -> service.acceptInvitation(student.getId(), invitation.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("CLASS_ARCHIVED");
+        verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void removingStudentRevokesOnlyTheirStillValidInvitations() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        var membership = new ClassroomMembershipEntity(); membership.setId(UUID.randomUUID()); membership.setClassroom(classroom);
+        membership.setStudent(student); membership.setStatus(MembershipStatus.ACTIVE);
+        var pending = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        var expired = invitation(classroom, student, clock.instant().minusSeconds(1));
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId())).thenReturn(Optional.of(membership));
+        when(invitations.findByClassroomIdAndStudentIdAndStatus(classroom.getId(), student.getId(), InvitationStatus.PENDING))
+                .thenReturn(List.of(pending, expired));
+
+        service.removeStudent(owner.getId(), classroom.getId(), student.getId());
+
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.REMOVED);
+        assertThat(pending.getStatus()).isEqualTo(InvitationStatus.REVOKED);
+        assertThat(expired.getStatus()).isEqualTo(InvitationStatus.PENDING);
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findById(pending.getId())).thenReturn(Optional.of(pending));
+        assertThatThrownBy(() -> service.acceptInvitation(student.getId(), pending.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("INVITATION_UNAVAILABLE");
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.REMOVED);
+    }
+
+    @Test
+    void leavingClassRevokesPreviousPendingInvitationsBeforeRejoin() {
+        var owner = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT); var classroom = classroom(owner);
+        var membership = new ClassroomMembershipEntity(); membership.setId(UUID.randomUUID()); membership.setClassroom(classroom);
+        membership.setStudent(student); membership.setStatus(MembershipStatus.ACTIVE);
+        var pending = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId())).thenReturn(Optional.of(membership));
+        when(invitations.findByClassroomIdAndStudentIdAndStatus(classroom.getId(), student.getId(), InvitationStatus.PENDING))
+                .thenReturn(List.of(pending));
+
+        service.leave(student.getId(), classroom.getId());
+
+        assertThat(membership.getStatus()).isEqualTo(MembershipStatus.LEFT);
+        assertThat(pending.getStatus()).isEqualTo(InvitationStatus.REVOKED);
+    }
+
+    @Test
+    void ownerCanListSentInvitationsButOtherTeacherCannot() {
+        var owner = account(AccountRole.TEACHER); var other = account(AccountRole.TEACHER); var student = account(AccountRole.STUDENT);
+        var classroom = classroom(owner); var invitation = invitation(classroom, student, clock.instant().plusSeconds(3600));
+        when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
+        when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(invitations.findByClassroomId(eq(classroom.getId()), any())).thenReturn(new PageImpl<>(List.of(invitation)));
+        var page = service.sentInvitations(owner.getId(), classroom.getId(), PageRequest.of(0, 20));
+        assertThat(page.getData().getItems()).hasSize(1);
+        assertThat(page.getData().getItems().get(0).studentEmail()).isEqualTo(student.getEmail());
+        when(accounts.findById(other.getId())).thenReturn(Optional.of(other));
+        assertThatThrownBy(() -> service.sentInvitations(other.getId(), classroom.getId(), PageRequest.of(0, 20)))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getHttpStatus().value()).isEqualTo(403);
+    }
+
+    @Test
+    void studentSeesOwnExpiredAndRevokedInvitationNotifications() {
+        var student = account(AccountRole.STUDENT); var owner = account(AccountRole.TEACHER); var classroom = classroom(owner);
+        var expired = invitation(classroom, student, clock.instant().minusSeconds(1));
+        var revoked = invitation(classroom, student, clock.instant().plusSeconds(3600)); revoked.setStatus(InvitationStatus.REVOKED);
+        when(accounts.findById(student.getId())).thenReturn(Optional.of(student));
+        when(invitations.findByStudentId(eq(student.getId()), any())).thenReturn(new PageImpl<>(List.of(expired, revoked)));
+        var page = service.myInvitations(student.getId(), PageRequest.of(0, 20));
+        assertThat(page.getData().getItems()).extracting(ClassroomDtos.InvitationView::status).containsExactly("EXPIRED", "REVOKED");
+    }
 
     @Test
     void teacherCreatesPrivateActiveClassWithGeneratedCode() {
@@ -88,6 +250,16 @@ class ClassroomServiceTest {
     }
 
     @Test
+    void deleteRejectsClassWithPracticesInsteadOfFailingOnTheForeignKey() {
+        var teacher = account(AccountRole.TEACHER); var classroom = classroom(teacher);
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher)); when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
+        when(practices.existsByClassroomId(classroom.getId())).thenReturn(true);
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
+                .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
+        verify(classrooms, never()).delete(any());
+    }
+
+    @Test
     void closedClassRejectsJoinEvenWhenCodeIsOtherwiseValid() {
         var student = account(AccountRole.STUDENT); var owner = account(AccountRole.TEACHER); var classroom = classroom(owner); classroom.setJoiningOpen(false);
         when(accounts.findById(student.getId())).thenReturn(Optional.of(student)); when(classrooms.findByClassCode("ABCDEFGH")).thenReturn(Optional.of(classroom));
@@ -127,7 +299,7 @@ class ClassroomServiceTest {
         var request = new ClassroomJoinRequestEntity(); request.setId(UUID.randomUUID()); request.setClassroom(classroom);
         request.setStudent(student); request.setStatus(JoinRequestStatus.PENDING_APPROVAL);
         when(accounts.findById(owner.getId())).thenReturn(Optional.of(owner));
-        when(accounts.findByUsernameIgnoreCase(student.getUsername())).thenReturn(Optional.of(student));
+        when(accounts.findForIdentityResolution(student.getUsername())).thenReturn(List.of(student));
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom));
         when(memberships.findByClassroomIdAndStudentId(classroom.getId(), student.getId())).thenReturn(Optional.empty());
         when(requests.findByClassroomIdAndStudentIdAndStatus(classroom.getId(), student.getId(), JoinRequestStatus.PENDING_APPROVAL))
@@ -147,7 +319,7 @@ class ClassroomServiceTest {
         when(accounts.findById(student.getId())).thenReturn(Optional.of(student)); when(invitations.findById(invitation.getId())).thenReturn(Optional.of(invitation));
         assertThatThrownBy(() -> service.acceptInvitation(student.getId(), invitation.getId()))
                 .isInstanceOf(AppException.class).extracting(e -> ((AppException) e).getErrorCode()).isEqualTo("INVITATION_UNAVAILABLE");
-        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.EXPIRED); verifyNoInteractions(memberships);
+        assertThat(invitation.getStatus()).isEqualTo(InvitationStatus.PENDING); verifyNoInteractions(memberships);
     }
 
     @Test
@@ -186,5 +358,10 @@ class ClassroomServiceTest {
     }
 
     private AccountEntity account(AccountRole role) { var a = new AccountEntity(); a.setId(UUID.randomUUID()); a.setRole(role); a.setStatus(AccountStatus.ACTIVE); a.setUsername(UUID.randomUUID().toString()); a.setEmail(UUID.randomUUID()+"@example.test"); return a; }
-    private ClassroomEntity classroom(AccountEntity owner) { var c=new ClassroomEntity(); c.setId(UUID.randomUUID()); c.setOwner(owner); c.setName("A"); c.setStatus(ClassroomStatus.ACTIVE); c.setClassCode("ABCDEFGH"); c.setJoiningOpen(true); c.setJoinMode(JoinMode.AUTO_JOIN); return c; }
+    private ClassroomEntity classroom(AccountEntity owner) { var c=new ClassroomEntity(); c.setId(UUID.randomUUID()); c.setOwner(owner); c.setName("A"); c.setStatus(ClassroomStatus.ACTIVE); c.setClassCode("ABCDEFGH"); c.setJoiningOpen(true); c.setJoinMode(JoinMode.AUTO_JOIN); when(classrooms.findById(c.getId())).thenReturn(Optional.of(c)); return c; }
+    private ClassroomInvitationEntity invitation(ClassroomEntity classroom, AccountEntity student, Instant expiry) {
+        var invitation = new ClassroomInvitationEntity(); invitation.setId(UUID.randomUUID()); invitation.setClassroom(classroom);
+        invitation.setStudent(student); invitation.setStatus(InvitationStatus.PENDING); invitation.setExpiresAt(expiry);
+        return invitation;
+    }
 }
