@@ -28,6 +28,8 @@ const StudentAssignmentsPage = lazy(() => import('@/features/classroom/assignmen
 const StudentAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAssignmentDetailPage })));
 const StudentWorkspacePage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentWorkspacePage })));
 const StudentAttemptsHistoryPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAttemptsHistoryPage })));
+const TeacherQuizzesPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizzesPage })));
+const TeacherQuizDetailPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.TeacherQuizDetailPage })));
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -112,6 +114,10 @@ export const App: React.FC = () => {
       <Route path="/student/classrooms/:id/assignments/:assignmentId" element={<ProtectedRoute><StudentAssignmentDetailPage /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/assignments/:assignmentId/workspace" element={<ProtectedRoute><StudentWorkspacePage /></ProtectedRoute>} />
       <Route path="/student/classrooms/:id/assignments/:assignmentId/attempts" element={<ProtectedRoute><StudentAttemptsHistoryPage /></ProtectedRoute>} />
+
+      {/* Classroom Quizzes Routes (FE 4.7 Teacher Scope) */}
+      <Route path="/teacher/classrooms/:id/quizzes" element={<ProtectedRoute><TeacherQuizzesPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute><TeacherQuizDetailPage /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 

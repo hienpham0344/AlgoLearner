@@ -26,6 +26,7 @@ import {
   Plus,
   Bell,
   Pin,
+  HelpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 
@@ -227,6 +228,16 @@ export const TeacherClassroomDetailPage: React.FC = () => {
         >
           <FileCode size={16} aria-hidden="true" />
           <span>Class assignments</span>
+        </Link>
+
+        <Link
+          to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/quizzes`}
+          className="classroom-subnav-link"
+          role="tab"
+        >
+          <HelpCircle size={16} aria-hidden="true" />
+          <span>Class quizzes</span>
+          <span className="classroom-subnav-badge">{classroom.stats?.quizzesCount ?? 0}</span>
         </Link>
 
         <button
@@ -433,7 +444,7 @@ export const TeacherClassroomDetailPage: React.FC = () => {
                   </Link>
 
                   <Link
-                    to="/teacher/review-queue"
+                    to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/quizzes`}
                     className="p-3.5 rounded-xl bg-slate-50 hover:bg-white border border-slate-200 flex items-center justify-between gap-2 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
