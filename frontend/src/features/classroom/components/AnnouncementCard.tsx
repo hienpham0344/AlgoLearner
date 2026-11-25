@@ -8,6 +8,8 @@ interface AnnouncementCardProps {
   announcement: ClassroomAnnouncement;
   isTeacherOrAdmin: boolean;
   isHighlighted?: boolean;
+  isPinPending?: boolean;
+  isBusy?: boolean;
   onEdit?: (announcement: ClassroomAnnouncement) => void;
   onDelete?: (announcement: ClassroomAnnouncement) => void;
   onTogglePin?: (announcementId: string) => void;
@@ -124,25 +126,29 @@ function formatInlineFormatting(str: string): React.ReactNode {
   });
 }
 
+const VIETNAM_TIME_FORMATTER = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
 function formatUtcTimestamp(isoString: string): string {
-  try {
-    const d = new Date(isoString);
-    return d.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
+  const parsed = new Date(isoString);
+  if (Number.isNaN(parsed.getTime())) {
     return isoString;
   }
+  return VIETNAM_TIME_FORMATTER.format(parsed);
 }
 
 export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
   announcement,
   isTeacherOrAdmin,
   isHighlighted = false,
+  isPinPending = false,
+  isBusy = false,
   onEdit,
   onDelete,
   onTogglePin,
@@ -176,9 +182,11 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-sm font-bold text-slate-900">{announcement.authorName}</span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60 uppercase tracking-wider">
-                {announcement.authorRole === 'ADMIN' ? 'Administrator' : 'Instructor'}
-              </span>
+              {announcement.authorRole && (
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200/60 uppercase tracking-wider">
+                  {announcement.authorRole === 'ADMIN' ? 'Administrator' : 'Instructor'}
+                </span>
+              )}
               {announcement.isPinned && (
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200/80">
                   <Pin size={11} className="shrink-0 fill-amber-500 text-amber-600 rotate-45" />
@@ -208,6 +216,8 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
+                isLoading={isPinPending}
+                disabled={isBusy}
                 onClick={() => onTogglePin(announcement.id)}
                 title={announcement.isPinned ? 'Unpin this announcement' : 'Pin this announcement to top'}
                 className={`h-8 px-2.5 text-xs font-semibold rounded-lg transition-colors ${
@@ -217,11 +227,14 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
                 }`}
                 aria-label={announcement.isPinned ? 'Unpin announcement' : 'Pin announcement'}
               >
-                <Pin
-                  size={14}
-                  className={`mr-1 shrink-0 ${announcement.isPinned ? 'fill-amber-500 text-amber-600 rotate-45' : ''}`}
-                />
-                <span>{announcement.isPinned ? 'Unpin' : 'Pin'}</span>
+                {!isPinPending && (
+                  <Pin
+                    size={14}
+                    aria-hidden="true"
+                    className={`mr-1 shrink-0 ${announcement.isPinned ? 'fill-amber-500 text-amber-600 rotate-45' : ''}`}
+                  />
+                )}
+                <span>{isPinPending ? 'Updating…' : announcement.isPinned ? 'Unpin' : 'Pin'}</span>
               </Button>
             )}
 
@@ -229,12 +242,13 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={isBusy}
                 onClick={() => onEdit(announcement)}
                 title="Edit announcement"
                 className="h-8 px-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg"
                 aria-label="Edit announcement"
               >
-                <Pencil size={13} className="mr-1 shrink-0" />
+                <Pencil size={13} aria-hidden="true" className="mr-1 shrink-0" />
                 <span>Edit</span>
               </Button>
             )}
@@ -243,12 +257,13 @@ export const AnnouncementCard: React.FC<AnnouncementCardProps> = ({
               <Button
                 variant="ghost"
                 size="sm"
+                disabled={isBusy}
                 onClick={() => onDelete(announcement)}
                 title="Delete announcement"
                 className="h-8 px-2 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg"
                 aria-label="Delete announcement"
               >
-                <Trash2 size={13} className="mr-1 shrink-0" />
+                <Trash2 size={13} aria-hidden="true" className="mr-1 shrink-0" />
                 <span>Delete</span>
               </Button>
             )}

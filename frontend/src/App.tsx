@@ -124,6 +124,9 @@ export const App: React.FC = () => {
       {/* Entry Route Router */}
       <Route path="/classrooms" element={<ClassroomRouterPage />} />
       <Route path="/classrooms/:id" element={<ClassroomRouterPage />} />
+      <Route path="/classrooms/:id/announcements/:announcementId" element={<ClassroomRouterPage />} />
+      <Route path="/teacher/classrooms/:id/announcements/:announcementId" element={<ClassroomRouterPage />} />
+      <Route path="/student/classrooms/:id/announcements/:announcementId" element={<ClassroomRouterPage />} />
 
       {/* Dev Loading Preview Route */}
       <Route path="/preview/loading" element={<LoadingPreviewPage />} />
