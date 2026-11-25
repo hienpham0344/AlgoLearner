@@ -109,11 +109,12 @@ public class JdbcDashboardRepository implements DashboardRepository {
     @Override public Preview<Course> courses(Context c) {
         return preview("""
                 SELECT p.id,p.title,e.created_at,
-                    (SELECT COUNT(*) FROM tbl_public_course_unit u WHERE u.course_id=p.id) AS units,
+                    (SELECT COUNT(*) FROM tbl_public_course_unit u WHERE u.course_id=p.id AND u.removed_at IS NULL) AS units,
                     (SELECT COUNT(*) FROM tbl_course_unit_completion done JOIN tbl_public_course_unit u ON u.id=done.unit_id
-                     WHERE done.enrollment_id=e.id AND u.course_id=p.id) AS completed
+                     WHERE done.enrollment_id=e.id AND u.course_id=p.id AND u.removed_at IS NULL) AS completed
                 FROM tbl_course_enrollment e JOIN tbl_public_course p ON p.id=e.course_id
-                WHERE e.account_id=:account AND p.status='PUBLISHED'
+                WHERE e.account_id=:account AND e.unenrolled_at IS NULL
+                  AND (p.status IN ('PUBLISHED','ARCHIVED') OR (p.status='UNPUBLISHED' AND p.unpublish_policy='ENROLLED_CONTINUE'))
                 """, c, (rs,row) -> {
                     int total=rs.getInt("units"), complete=rs.getInt("completed");
                     return new Course(rs.getObject("id",UUID.class),rs.getString("title"),complete,total,total==0 ? 0 : 100.0*complete/total);
@@ -138,7 +139,7 @@ public class JdbcDashboardRepository implements DashboardRepository {
     @Override public Contributions contributions(Context c, boolean allTeachers) {
         String scope=allTeachers ? "author.role='TEACHER'" : "p.author_id=:account AND author.role='TEACHER'";
         var params=Map.of("account",c.accountId());
-        long courses=jdbc.queryForObject("SELECT COUNT(*) FROM tbl_public_course p JOIN tbl_account author ON author.id=p.author_id WHERE p.status='PENDING_REVIEW' AND "+scope,params,Long.class);
+        long courses=jdbc.queryForObject("SELECT COUNT(*) FROM tbl_public_course_revision p JOIN tbl_account author ON author.id=p.author_id WHERE p.status='PENDING_REVIEW' AND "+scope,params,Long.class);
         long problems=jdbc.queryForObject("SELECT COUNT(*) FROM tbl_public_problem p JOIN tbl_account author ON author.id=p.author_id WHERE p.status='PENDING_REVIEW' AND "+scope,params,Long.class);
         return new Contributions(courses,problems);
     }
