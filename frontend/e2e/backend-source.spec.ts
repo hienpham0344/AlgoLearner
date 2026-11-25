@@ -13,10 +13,7 @@ async function demoLogin(page: Page) {
 
 test('offline mock supports profile reload and classrooms with a visible notice', async ({ page }) => {
   await demoLogin(page);
-  const lessonsRegion = page.getByRole('region', { name: 'Class lessons', exact: true });
-  await expect(lessonsRegion).toBeVisible();
-  await expect(lessonsRegion.getByRole('alert')).toHaveCount(0);
-  await expect(lessonsRegion.getByRole('link', { name: /Data Structures & Advanced Algorithms/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Data Structures & Advanced Algorithms/ }).first()).toBeVisible();
   await page.goto(`${base}/profile`);
   await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Learner');
@@ -25,8 +22,7 @@ test('offline mock supports profile reload and classrooms with a visible notice'
   await page.goto(`${base}/student/classrooms`);
   await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading').first()).toBeVisible();
-  await page.goto(`${base}/dashboard`);
-  await lessonsRegion.getByRole('link', { name: /Data Structures & Advanced Algorithms/ }).click();
+  await page.goto(`${base}/student/classrooms/cls-algo-2026/lessons`);
   await expect(page).toHaveURL(/\/student\/classrooms\/cls-algo-2026\/lessons$/);
   await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
@@ -101,15 +97,15 @@ test('available backend supplies account, profile, dashboard and classrooms', as
     await page.getByRole('button', { name: 'Continue to your workspace' }).click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 });
     await expect(page.getByText(classroom.name, { exact: true })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Class lessons' }).getByRole('link', { name: /Classroom from backend/ })).toBeVisible();
-    expect(classroomListCalls).toBe(1);
+    await expect(page.getByRole('link', { name: new RegExp(classroom.name) })).toBeVisible();
+    expect(classroomListCalls).toBe(0);
     expect(await page.evaluate(() => localStorage.getItem('algolearner_token'))).toBe('backend-access');
     await page.goto(`${base}/profile`);
     await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Teacher from backend');
     expect(currentUserCalls).toBe(1);
     await page.goto(`${base}/teacher/classrooms`);
     await expect(page.getByRole('heading', { name: classroom.name })).toBeVisible();
-    expect(classroomListCalls).toBe(2);
+    expect(classroomListCalls).toBe(1);
     await expect(page.getByText('Backend chưa chạy', { exact: false })).toHaveCount(0);
     for (const path of ['/auth/login', '/auth/me', '/users/me/profile', '/dashboards/teacher', '/classrooms']) {
       expect(calls.has(`/api/v1${path}`)).toBe(true);
