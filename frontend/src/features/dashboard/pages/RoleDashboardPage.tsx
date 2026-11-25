@@ -7,7 +7,7 @@ import { ArrowRight } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { WorkspaceLayout } from '@/components/layout/WorkspaceLayout';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
+import { DashboardSkeleton } from '../components/DashboardSkeleton';
 import {
   dashboardApi,
   dashboardKeys,
@@ -17,7 +17,6 @@ import {
 import { InteractiveCourseBackground } from '../components/InteractiveCourseBackground';
 import { readStoredClassrooms, readStoredPersona } from '@/features/classroom/mock/useClassroomStore';
 import { getClassroomLessonSummary, getLessonCountForClassroom } from '@/features/classroom/lessons/mock/lessonMockStore';
-import { DashboardLessonLinks } from '@/features/classroom/lessons/components/DashboardLessonLinks';
 import '../styles/dashboard.css';
 import '../styles/role-dashboard.css';
 
@@ -148,14 +147,15 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
                   {data.classrooms.totalElements === 1 ? 'active class' : 'active classes'}
                 </h3>
                 <p>
-                  {totalActiveStudents} enrolled students · {totalUngraded} awaiting review
+                  {totalActiveStudents}{' '}
+                  {totalActiveStudents === 1 ? 'enrolled student' : 'enrolled students'} ·{' '}
+                  {totalUngraded} awaiting review
                 </p>
-                <p>Grading progress will appear once the submission module is connected.</p>
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="dashboard-learning-actions">
                   <Link className="dashboard-learning-action" to="/teacher/classrooms">
                     Manage classrooms &amp; lessons <ArrowRight size={15} aria-hidden="true" />
                   </Link>
-                  <a className="inline-flex items-center gap-1 text-xs font-semibold text-white/80 hover:text-white underline underline-offset-4" href="#review">
+                  <a className="dashboard-learning-secondary" href="#review">
                     Review submissions →
                   </a>
                 </div>
@@ -165,12 +165,12 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
 
           {/* 02 / Open & Upcoming Assignments Timeline */}
           <section aria-labelledby="teacher-assignments-title" id="assignments" className="dashboard-section">
-            <div className="dashboard-section-heading flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+              <div className="dashboard-section-heading mb-0">
                 <span className="dashboard-eyebrow">02 / PLANNING</span>
                 <h2 id="teacher-assignments-title">Open & upcoming assignments</h2>
               </div>
-              <Link to="/teacher/assignments" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+              <Link to="/teacher/assignments" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline underline-offset-4">
                 Manage assignments →
               </Link>
             </div>
@@ -223,12 +223,12 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
 
           {/* 03 / My Classes */}
           <section aria-labelledby="teacher-classes-title" id="classes" className="dashboard-section">
-            <div className="dashboard-section-heading flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+              <div className="dashboard-section-heading mb-0">
                 <span className="dashboard-eyebrow">03 / CLASSROOMS</span>
                 <h2 id="teacher-classes-title">My classes</h2>
               </div>
-              <Link to="/teacher/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+              <Link to="/teacher/classrooms" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline underline-offset-4">
                 View all classrooms →
               </Link>
             </div>
@@ -307,12 +307,12 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
 
           {/* 04 / Ungraded Work & Recent Submissions */}
           <section aria-labelledby="teacher-review-title" id="review" className="dashboard-section">
-            <div className="dashboard-section-heading flex items-center justify-between">
-              <div>
+            <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
+              <div className="dashboard-section-heading mb-0">
                 <span className="dashboard-eyebrow">04 / REVIEW QUEUE</span>
                 <h2 id="teacher-review-title">Recent submissions</h2>
               </div>
-              <Link to="/teacher/review-queue" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline">
+              <Link to="/teacher/review-queue" className="text-xs font-semibold text-slate-700 hover:text-slate-900 underline underline-offset-4">
                 Open review queue →
               </Link>
             </div>
@@ -467,7 +467,6 @@ function TeacherWorkspace({ data, firstName, isDemo }: { data: TeacherDashboardR
           </section>
         </aside>
       </div>
-      <DashboardLessonLinks role="TEACHER" />
     </>
   );
 }
@@ -886,11 +885,7 @@ export function RoleDashboardPage({ role }: { role: 'TEACHER' | 'ADMIN' }) {
   return (
     <WorkspaceLayout role={role} unreadCount={unreadCount} displayNameOverride={displayName}>
       {query.isPending ? (
-        <LoadingScreen
-          variant="page"
-          message={`Đang tải không gian làm việc ${role === 'TEACHER' ? 'giảng viên' : role === 'ADMIN' ? 'quản trị' : 'học viên'}…`}
-          submessage="Đang đồng bộ dữ liệu và tiến trình lớp học"
-        />
+        <DashboardSkeleton role={role} />
       ) : query.isError ? (
         <div className="dashboard-fetch-state" role="alert">
           <span className="dashboard-eyebrow">{role} WORKSPACE</span>
