@@ -85,6 +85,14 @@ public class QuizService {
     public QuizView duplicate(UUID actor,UUID classroom,UUID quizId) {
         return create(actor,classroom,authoring(actor,classroom,quizId));
     }
+    public void delete(UUID actor,UUID classroom,UUID quizId) {
+        owner(actor,classroom); var quiz=quiz(classroom,quizId,true);
+        if(!quiz.status.equals("DRAFT")) throw conflict("QUIZ_NOT_DRAFT");
+        Integer attempts=jdbc.queryForObject("select count(*) from tbl_quiz_attempt where quiz_id=?",Integer.class,quizId);
+        if(attempts!=null && attempts>0) throw conflict("QUIZ_HAS_ATTEMPTS");
+        jdbc.update("delete from tbl_lesson_item where item_type='QUIZ' and item_id=?",quizId);
+        jdbc.update("delete from tbl_quiz where id=? and classroom_id=?",quizId,classroom);
+    }
     public List<ReviewQuestion> review(UUID actor,UUID classroom,UUID quizId,UUID attemptId) {
         boolean teacher=reader(actor,classroom);
         var quiz=quiz(classroom,quizId,false);
@@ -338,7 +346,7 @@ public class QuizService {
     }
     private AttemptView attemptView(QuizRow quiz,AttemptRow a,boolean teacher) {
         var questions=snapshot(a).questions().stream().map(q->new StudentQuestion(q.id(),q.prompt(),q.type(),q.points(),q.options().stream().map(o->new StudentOption(o.id(),o.text())).toList())).toList();
-        return new AttemptView(a.id,quiz.id,a.status,a.started,a.cutoff,a.submitted,teacher||a.published?a.score:null,a.published,questions,answers(a.id),now(),QuizPolicy.expired(a.submitted==null?a.started:a.submitted,quiz.closesAt));
+        return new AttemptView(a.id,quiz.id,a.student,a.status,a.started,a.cutoff,a.submitted,teacher||a.published?a.score:null,a.published,questions,answers(a.id),now(),QuizPolicy.expired(a.submitted==null?a.started:a.submitted,quiz.closesAt));
     }
     private List<AnswerView> answers(UUID attempt) {
         return jdbc.query("select question_id,selected_options::text,version from tbl_quiz_answer where attempt_id=? order by question_id",(rs,n)->new AnswerView(rs.getObject(1,UUID.class),uuidList(rs.getString(2)),rs.getLong(3)),attempt);
