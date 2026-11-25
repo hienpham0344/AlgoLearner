@@ -32,7 +32,7 @@ export const AutosaveStatusIndicator: React.FC<AutosaveStatusIndicatorProps> = (
         <span className="inline-flex items-center gap-1 text-emerald-600 font-medium">
           <CheckCircle2 size={12} />
           <span>
-            Saved {lastSavedAt ? `at ${lastSavedAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+            Saved {lastSavedAt ? `at ${lastSavedAt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' })}` : ''}
           </span>
         </span>
       )}

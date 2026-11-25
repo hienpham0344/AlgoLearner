@@ -89,6 +89,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
   const rawDisplayName = displayNameOverride || user?.fullName || user?.username || activeRole;
   const displayName = rawDisplayName.replace(/^Demo\s+/i, '') || activeRole;
   const firstName = displayName.split(' ')[0] || 'Learner';
+  const accountName = user?.username || displayName;
 
   const signOut = async () => {
     setSignOutError(null);
@@ -196,11 +197,6 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
                       <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
                       {unreadCount > 0 && <span className="dashboard-notification-dot" />}
                     </Link>
-
-                    <Link className="dashboard-topbar-profile-link" to="/profile">
-                      <UserRound size={16} aria-hidden="true" />
-                      <span>My profile</span>
-                    </Link>
                   </>
                 )}
 
@@ -210,14 +206,20 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
                     <span className="dashboard-profile-name">{displayName}</span>
                   </summary>
                   <div className="dashboard-profile-menu">
-                    <strong>{displayName}</strong>
+                    {activeRole !== 'ADMIN' ? (
+                      <Link to="/profile" className="dashboard-profile-identity">
+                        <strong>{accountName}</strong>
+                      </Link>
+                    ) : (
+                      <strong>{accountName}</strong>
+                    )}
                     <span>{user?.email}</span>
                     {activeRole !== 'ADMIN' && (
-                      <Link to="/profile" className="dashboard-profile-setting">
+                      <Link to="/profile?tab=profile" className="dashboard-profile-setting">
                         Profile settings
                       </Link>
                     )}
-                    <Link to="/account/security" className="dashboard-profile-setting">
+                    <Link to="/profile?tab=security" className="dashboard-profile-setting">
                       Account security
                     </Link>
                     <button type="button" onClick={signOut}>

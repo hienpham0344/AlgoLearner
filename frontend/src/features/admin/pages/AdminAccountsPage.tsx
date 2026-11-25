@@ -8,12 +8,12 @@ import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import type { ApiErrorResponse } from '@/types/api';
 import { adminAccountKeys, adminAccountsApi, type AdminAccountView } from '../api/adminAccountsApi';
 
-const dateTime = new Intl.DateTimeFormat('vi-VN', {
+const dateTime = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
 });
 const errorMessage = (error: unknown) => isAxiosError<ApiErrorResponse>(error)
-  ? error.response?.data?.message || 'Không thể cập nhật tài khoản.'
-  : 'Không thể kết nối với máy chủ.';
+  ? error.response?.data?.message || 'Unable to update account.'
+  : 'Unable to connect to the server.';
 
 type Action = { kind: 'suspend'; id: string; reason: string; endsAt: string | null }
   | { kind: 'unsuspend' | 'reactivate'; id: string };
@@ -41,24 +41,24 @@ function AccountRow({ account, currentId, pending, onAction }: {
         <p className="text-sm text-slate-600">{account.email} · {account.role}</p></div>
       <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold">{account.status}</span>
     </div>
-    {account.suspensionReason && <p className="mt-3 text-sm">Lý do đình chỉ: {account.suspensionReason}</p>}
-    {account.suspensionEndsAt && <p className="text-sm">Đến: {dateTime.format(new Date(account.suspensionEndsAt))}</p>}
-    {account.loginLockedUntil && <p className="text-sm">Khóa đăng nhập đến: {dateTime.format(new Date(account.loginLockedUntil))}</p>}
-    {own ? <p className="mt-3 text-sm text-slate-600">Không thể thay đổi trạng thái tài khoản đang dùng.</p>
+    {account.suspensionReason && <p className="mt-3 text-sm">Suspension reason: {account.suspensionReason}</p>}
+    {account.suspensionEndsAt && <p className="text-sm">Until: {dateTime.format(new Date(account.suspensionEndsAt))}</p>}
+    {account.loginLockedUntil && <p className="text-sm">Login locked until: {dateTime.format(new Date(account.loginLockedUntil))}</p>}
+    {own ? <p className="mt-3 text-sm text-slate-600">Cannot change the status of the currently active account.</p>
       : account.status === 'SUSPENDED'
         ? <button type="button" className="mt-4 rounded-lg border border-slate-400 px-4 py-2 text-sm" disabled={pending}
-          onClick={() => onAction({ kind: 'unsuspend', id: account.id })}>Gỡ đình chỉ</button>
+          onClick={() => onAction({ kind: 'unsuspend', id: account.id })}>Unsuspend</button>
         : account.status === 'DEACTIVATED'
           ? <button type="button" className="mt-4 rounded-lg border border-slate-400 px-4 py-2 text-sm" disabled={pending}
-            onClick={() => onAction({ kind: 'reactivate', id: account.id })}>Kích hoạt lại</button>
+            onClick={() => onAction({ kind: 'reactivate', id: account.id })}>Reactivate</button>
           : account.status === 'ACTIVE' || account.status === 'TEMPORARILY_LOCKED'
             ? <form className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto_auto]" onSubmit={suspend}>
-              <label className="text-sm">Lý do đình chỉ <input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" required
+              <label className="text-sm">Suspension reason <input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2" required
                 value={reason} onChange={event => setReason(event.target.value)} disabled={pending} /></label>
-              <label className="text-sm">Hết hạn (tùy chọn) <input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
+              <label className="text-sm">Expires at (optional) <input className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2"
                 type="datetime-local"
                 value={endsAt} onChange={event => setEndsAt(event.target.value)} disabled={pending} /></label>
-              <button className="self-end rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" disabled={pending || !reason.trim()}>Đình chỉ</button>
+              <button className="self-end rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white" disabled={pending || !reason.trim()}>Suspend</button>
             </form> : null}
   </li>;
 }
@@ -80,27 +80,27 @@ export function AdminAccountsPage() {
       : action.kind === 'unsuspend' ? adminAccountsApi.unsuspend(action.id) : adminAccountsApi.reactivate(action.id),
     onSuccess: async () => {
       await client.invalidateQueries({ queryKey: adminAccountKeys.all });
-      setNotice('Đã cập nhật tài khoản.');
+      setNotice('Account updated.');
     },
     onError: error => setNotice(errorMessage(error)),
   });
 
-  if (isLoading) return <LoadingScreen variant="page" message="Đang tải tài khoản quản trị…" />;
+  if (isLoading) return <LoadingScreen variant="page" message="Loading admin accounts…" />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== 'ADMIN') return <Navigate to="/dashboard" replace />;
   return <main className="mx-auto min-h-screen max-w-5xl bg-slate-50 px-4 py-8 text-slate-900">
     <Link to="/dashboard" className="text-sm underline">← Dashboard</Link>
-    <h1 className="mt-5 text-3xl font-bold">Quản lý tài khoản</h1>
-    <p className="mt-2 text-sm text-slate-600">Đình chỉ, gỡ đình chỉ hoặc kích hoạt lại tài khoản.</p>
-    {isDemoMode ? <p role="status" className="mt-6">Cần kết nối backend để quản lý tài khoản.</p>
-      : accounts.isPending ? <LoadingScreen variant="inline" message="Đang tải danh sách tài khoản…" />
-        : accounts.isError ? <p role="alert" className="mt-6">{errorMessage(accounts.error)} <button onClick={() => void accounts.refetch()} className="underline">Thử lại</button></p>
+    <h1 className="mt-5 text-3xl font-bold">Account management</h1>
+    <p className="mt-2 text-sm text-slate-600">Suspend, unsuspend, or reactivate user accounts.</p>
+    {isDemoMode ? <p role="status" className="mt-6">Backend connection is required to manage accounts.</p>
+      : accounts.isPending ? <LoadingScreen variant="inline" message="Loading accounts…" />
+        : accounts.isError ? <p role="alert" className="mt-6">{errorMessage(accounts.error)} <button onClick={() => void accounts.refetch()} className="underline">Retry</button></p>
           : <><ul className="mt-6 space-y-4">{accounts.data.items.map(account => <AccountRow key={account.id}
             account={account} currentId={user.id} pending={update.isPending}
             onAction={action => { setNotice(''); update.mutate(action); }} />)}</ul>
-            {accounts.data.items.length === 0 && <p className="mt-6">Chưa có tài khoản.</p>}
-            <div className="mt-6 flex items-center gap-4 text-sm"><button disabled={page === 0} onClick={() => setPage(page - 1)}>Trước</button>
-              <span>Trang {page + 1}</span><button disabled={accounts.data.pagination.isLast} onClick={() => setPage(page + 1)}>Sau</button></div></>}
+            {accounts.data.items.length === 0 && <p className="mt-6">No accounts found.</p>}
+            <div className="mt-6 flex items-center gap-4 text-sm"><button disabled={page === 0} onClick={() => setPage(page - 1)}>Previous</button>
+              <span>Page {page + 1}</span><button disabled={accounts.data.pagination.isLast} onClick={() => setPage(page + 1)}>Next</button></div></>}
     {notice && <p role={update.isError ? 'alert' : 'status'} className="mt-4">{notice}</p>}
   </main>;
 }

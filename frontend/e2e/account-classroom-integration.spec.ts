@@ -36,9 +36,9 @@ test('Admin can suspend an account through the backend contract', async ({ page 
   });
   await login(page, 'admin@example.test');
   await page.goto(`${base}/admin/accounts`);
-  await page.getByLabel('Lý do đình chỉ').fill('Policy violation');
-  await page.getByRole('button', { name: 'Đình chỉ' }).click();
-  await expect(page.getByText('Lý do đình chỉ: Policy violation')).toBeVisible();
+  await page.getByLabel('Suspension reason').fill('Policy violation');
+  await page.getByRole('button', { name: 'Suspend', exact: true }).click();
+  await expect(page.getByText('Suspension reason: Policy violation')).toBeVisible();
 });
 
 test('Student revokes another login session from Security', async ({ page }) => {
@@ -61,9 +61,9 @@ test('Student revokes another login session from Security', async ({ page }) => 
   await page.goto(`${base}/profile`);
   await page.getByRole('tab', { name: 'Security' }).click();
   await expect(page.getByText('Other browser')).toBeVisible();
-  await page.getByRole('button', { name: 'Đăng xuất thiết bị này' }).click();
+  await page.getByRole('button', { name: 'Sign out this device' }).click();
   await expect(page.getByText('Other browser')).toHaveCount(0);
-  await expect(page.getByText('Thiết bị hiện tại')).toBeVisible();
+  await expect(page.getByText('Current device')).toBeVisible();
 });
 
 test('Teacher revokes a listed invitation without entering a UUID', async ({ page }) => {
@@ -88,7 +88,7 @@ test('Teacher revokes a listed invitation without entering a UUID', async ({ pag
   await page.goto(`${base}/teacher/classrooms/class-1`);
   await page.getByRole('tab', { name: /members/i }).click();
   await expect(page.getByText('student@example.test · PENDING')).toBeVisible();
-  await page.getByRole('button', { name: 'Thu hồi' }).click();
+  await page.getByRole('button', { name: 'Revoke' }).click();
   await expect(page.getByText('student@example.test · REVOKED')).toBeVisible();
 });
 
@@ -117,6 +117,6 @@ test('Student accepts a notification and reaches the classroom', async ({ page }
   await login(page, 'student@example.test');
   await page.goto(`${base}/student/classrooms`);
   await expect(page.getByText('Algorithms', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Chấp nhận' }).click();
+  await page.getByRole('button', { name: 'Accept' }).click();
   await expect(page).toHaveURL(/\/student\/classrooms\/class-1$/);
 });

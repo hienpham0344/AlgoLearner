@@ -184,7 +184,7 @@ export const ClassroomCodePanel: React.FC<ClassroomCodePanelProps> = ({
                 {isExpired
                   ? 'Expired'
                   : classroom.codeExpiresAt
-                  ? `Expires ${new Date(classroom.codeExpiresAt).toLocaleDateString()}`
+                  ? `Expires ${new Date(classroom.codeExpiresAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}`
                   : 'Never Expires'}
               </div>
             </div>

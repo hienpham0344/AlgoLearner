@@ -524,7 +524,7 @@ function AdminWorkspace({ data }: { data: AdminDashboardResponse }) {
                 <span className="dashboard-learning-label">
                   SYSTEM OVERVIEW · PLATFORM STATUS
                 </span>
-                <h3>{data.totals.officialSubmissionCount.toLocaleString()} submissions</h3>
+                <h3>{data.totals.officialSubmissionCount.toLocaleString('en-US')} submissions</h3>
                 <p>
                   {data.totals.studentCount} students · {data.totals.teacherCount} teachers ·{' '}
                   {data.totals.classroomCount} classes

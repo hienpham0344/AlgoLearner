@@ -18,7 +18,8 @@ test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) =>
 
   await signIn(process.env.LIVE_TEACHER_EMAIL!, process.env.LIVE_TEACHER_PASSWORD!);
   await expect(page.getByRole('heading', { name: 'Keep the class moving.' })).toBeVisible();
-  await page.getByRole('link', { name: 'My profile', exact: true }).first().click();
+  await page.getByLabel('Account menu').click();
+  await page.locator('.dashboard-profile-identity').click();
   const nameInput = page.getByRole('textbox', { name: 'Display name' });
   const originalName = await nameInput.inputValue();
   await nameInput.fill('Live integration teacher');
@@ -28,7 +29,8 @@ test('4.2 and 4.3 work through the running Spring Boot API', async ({ page }) =>
   expect((await updatedProfile).status()).toBe(200);
   await expect(page.getByRole('status')).toContainText('Profile changes saved.');
   await page.getByRole('link', { name: 'Workspace' }).click();
-  await page.getByRole('link', { name: 'My profile', exact: true }).first().click();
+  await page.getByLabel('Account menu').click();
+  await page.locator('.dashboard-profile-identity').click();
   await expect(nameInput).toHaveValue('Live integration teacher');
   await nameInput.fill(originalName);
   await page.getByRole('button', { name: 'Save changes' }).click();

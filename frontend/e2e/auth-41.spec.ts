@@ -115,7 +115,7 @@ test('4.1 account security uses session and password endpoints', async ({ page }
   await page.getByRole('button', { name: 'Change password' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Password updated' })).toBeVisible();
   expect(passwordBody).toEqual({ currentPassword: 'OldPass123', newPassword: 'NewPass123', confirmPassword: 'NewPass123' });
-  await page.getByRole('button', { name: 'Đăng xuất thiết bị này' }).click();
+  await page.getByRole('button', { name: 'Sign out this device' }).click();
   await expect.poll(() => revokedId).toBe('11111111-1111-1111-1111-111111111113');
 });
 

@@ -77,8 +77,10 @@ export function LiveProfilePreview({
 
         {/* Display Name and Username */}
         <div className="identity-meta">
-          <h3 className="identity-name">{effectiveName}</h3>
-          <span className="identity-handle">@{username}</span>
+          <h3 className="identity-name" data-username={!displayName.trim()} title={effectiveName}>
+            {effectiveName}
+          </h3>
+          <span className="identity-handle" title={`@${username}`}>@{username}</span>
         </div>
 
         {/* Bio Text */}

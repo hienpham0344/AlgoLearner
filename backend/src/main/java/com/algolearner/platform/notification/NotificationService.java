@@ -49,7 +49,7 @@ public class NotificationService {
                     + ("ANNOUNCEMENT".equals(targetType) ? "/announcements/" + targetId
                     : "ASSIGNMENT".equals(targetType) ? "/assignments/" + targetId : "");
             String title = notification.getTitle() != null ? notification.getTitle()
-                    : invitation != null ? "Lời mời tham gia " + classroomName : notification.getType();
+                    : invitation != null ? "Invitation to join " + classroomName : notification.getType();
             return new NotificationDtos.InvitationNotificationView(notification.getId(),
                     invitation != null ? invitation.getId() : null,
                     classroomId,

@@ -15,7 +15,7 @@ export function formatVietnamDateTime(isoString?: string | null): string {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return 'Invalid date';
 
-    return new Intl.DateTimeFormat('vi-VN', {
+    return new Intl.DateTimeFormat('en-GB', {
       timeZone: VIETNAM_TIMEZONE,
       year: 'numeric',
       month: '2-digit',
@@ -38,7 +38,7 @@ export function formatVietnamDateTimeFull(isoString?: string | null): string {
     const date = new Date(isoString);
     if (isNaN(date.getTime())) return 'Invalid date';
 
-    return new Intl.DateTimeFormat('vi-VN', {
+    return new Intl.DateTimeFormat('en-GB', {
       timeZone: VIETNAM_TIMEZONE,
       year: 'numeric',
       month: '2-digit',

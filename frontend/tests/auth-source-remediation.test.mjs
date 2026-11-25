@@ -143,7 +143,7 @@ test('CRITICAL-1: BackendStatusBanner does not authorize mock on non-ok response
     await act(async () => { root.render(createElement(mod2.BackendStatusBanner)); });
     await flush();
     assert.equal(mod2.getApiSource(), 'mock');
-    assert.match(container.textContent, /Backend chưa chạy/);
+    assert.match(container.textContent, /Backend is not running/);
   } finally {
     await act(async () => { root.unmount(); });
     globalThis.fetch = origFetch;
@@ -329,11 +329,11 @@ test('CRITICAL-1: AdminAccountsPage loads accounts when source is unknown in pro
 
     assert.equal(listCalls, 1);
     assert.match(container.textContent, /student1/);
-    assert.doesNotMatch(container.textContent, /Cần kết nối backend/);
+    assert.doesNotMatch(container.textContent, /Backend connection is required/);
 
     // Switch to mock source: must show backend-required message
     await act(async () => { mod.observeApiSource('mock'); });
-    assert.match(container.textContent, /Cần kết nối backend để quản lý tài khoản/);
+    assert.match(container.textContent, /Backend connection is required to manage accounts/);
   } finally {
     await act(async () => { root.unmount(); });
     queryClient.clear();
@@ -388,16 +388,16 @@ test('CRITICAL-1: AccountSecurityPanels work when source is unknown in productio
     await flush();
 
     assert.equal(sessionCalls, 1);
-    assert.match(container.textContent, /Thiết bị hiện tại/);
-    assert.doesNotMatch(container.textContent, /Cần kết nối backend để quản lý phiên/);
-    assert.doesNotMatch(container.textContent, /Cần kết nối backend để vô hiệu hóa tài khoản/);
+    assert.match(container.textContent, /Current device/);
+    assert.doesNotMatch(container.textContent, /Backend connection is required to manage sessions/);
+    assert.doesNotMatch(container.textContent, /Backend connection is required to deactivate your account/);
     const pwInput = container.querySelector('#deactivate-password');
     assert.equal(pwInput?.disabled, false);
 
     // Switch to mock source: must disable deactivation and show notices
     await act(async () => { mod.observeApiSource('mock'); });
-    assert.match(container.textContent, /Cần kết nối backend để quản lý phiên/);
-    assert.match(container.textContent, /Cần kết nối backend để vô hiệu hóa tài khoản/);
+    assert.match(container.textContent, /Backend connection is required to manage sessions/);
+    assert.match(container.textContent, /Backend connection is required to deactivate your account/);
     assert.equal(container.querySelector('#deactivate-password')?.disabled, true);
   } finally {
     await act(async () => { root.unmount(); });

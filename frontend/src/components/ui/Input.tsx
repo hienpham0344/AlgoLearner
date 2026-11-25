@@ -82,7 +82,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               className="absolute right-3.5 p-1 text-slate-400 hover:text-slate-200 transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-400 rounded"
             >
               {showPassword ? (

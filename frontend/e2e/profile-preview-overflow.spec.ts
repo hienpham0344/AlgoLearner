@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 
 const username = 'hienpham0344@gmail.com';
 
-test('profile preview keeps long identity text visible at narrow widths and zoom', async ({ page }) => {
+test('profile preview keeps long usernames on one line at narrow widths and zoom', async ({ page }) => {
   const css = await readFile(new URL('../src/features/profile/styles/profile.css', import.meta.url), 'utf8');
   await page.setContent(`
     <style>${css}</style>
@@ -11,7 +11,7 @@ test('profile preview keeps long identity text visible at narrow widths and zoom
       <aside class="folder-identity-preview" style="width: min(100%, 340px)">
         <div class="identity-specimen-card">
           <div class="identity-meta">
-            <h3 class="identity-name">${username}</h3>
+            <h3 class="identity-name" data-username="true">${username}</h3>
             <span class="identity-handle">@${username}</span>
           </div>
         </div>
@@ -27,8 +27,14 @@ test('profile preview keeps long identity text visible at narrow widths and zoom
     await test.step(`${width}px`, async () => {
       await page.setViewportSize({ width, height: 900 });
       for (const element of [name, handle]) {
-        const overflow = await element.evaluate(node => node.scrollWidth - node.clientWidth);
-        expect(overflow).toBeLessThanOrEqual(1);
+        const dimensions = await element.evaluate(node => ({
+          height: node.clientHeight,
+          lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight),
+          width: node.getBoundingClientRect().width,
+          parentWidth: node.parentElement!.getBoundingClientRect().width,
+        }));
+        expect(dimensions.height).toBeLessThanOrEqual(dimensions.lineHeight + 1);
+        expect(dimensions.width).toBeLessThanOrEqual(dimensions.parentWidth + 1);
       }
     });
   }
@@ -36,7 +42,10 @@ test('profile preview keeps long identity text visible at narrow widths and zoom
   await page.setViewportSize({ width: 1024, height: 900 });
   await page.evaluate(() => { document.documentElement.style.zoom = '200%'; });
   for (const element of [name, handle]) {
-    const overflow = await element.evaluate(node => node.scrollWidth - node.clientWidth);
-    expect(overflow).toBeLessThanOrEqual(1);
+    const dimensions = await element.evaluate(node => ({
+      height: node.clientHeight,
+      lineHeight: Number.parseFloat(getComputedStyle(node).lineHeight),
+    }));
+    expect(dimensions.height).toBeLessThanOrEqual(dimensions.lineHeight + 1);
   }
 });

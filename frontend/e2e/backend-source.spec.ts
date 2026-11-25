@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 const base = 'http://127.0.0.1:3100';
 async function demoLogin(page: Page) {
   await page.goto(`${base}/login`);
-  await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
+  await expect(page.getByText('Backend is not running', { exact: false })).toBeVisible();
   await page.getByLabel('Username or email').fill('learner@example.test');
   await page.getByLabel('Password', { exact: true }).fill('DemoPass123!');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -15,16 +15,16 @@ test('offline mock supports profile reload and classrooms with a visible notice'
   await demoLogin(page);
   await expect(page.getByRole('link', { name: /Data Structures & Advanced Algorithms/ }).first()).toBeVisible();
   await page.goto(`${base}/profile`);
-  await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
+  await expect(page.getByText('Backend is not running', { exact: false })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Learner');
   await page.reload();
   await expect(page).toHaveURL(/\/profile/);
   await page.goto(`${base}/student/classrooms`);
-  await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
+  await expect(page.getByText('Backend is not running', { exact: false })).toBeVisible();
   await expect(page.getByRole('heading').first()).toBeVisible();
   await page.goto(`${base}/student/classrooms/cls-algo-2026/lessons`);
   await expect(page).toHaveURL(/\/student\/classrooms\/cls-algo-2026\/lessons$/);
-  await expect(page.getByText('Backend chưa chạy', { exact: false })).toBeVisible();
+  await expect(page.getByText('Backend is not running', { exact: false })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Asymptotic Complexity & Recursion Trees' })).toBeVisible();
 });
@@ -42,7 +42,7 @@ test('backend recovery ends demo session and real login errors never fall back t
   try {
     await page.evaluate(() => window.dispatchEvent(new Event('focus')));
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
-    await expect(page.getByText('Backend chưa chạy', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Backend is not running', { exact: false })).toHaveCount(0);
     await page.getByLabel('Username or email').fill('teacher');
     await page.getByLabel('Password', { exact: true }).fill('DemoPass123!');
     await page.getByRole('button', { name: 'Sign in', exact: true }).click();
@@ -106,7 +106,7 @@ test('available backend supplies account, profile, dashboard and classrooms', as
     await page.goto(`${base}/teacher/classrooms`);
     await expect(page.getByRole('heading', { name: classroom.name })).toBeVisible();
     expect(classroomListCalls).toBe(1);
-    await expect(page.getByText('Backend chưa chạy', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Backend is not running', { exact: false })).toHaveCount(0);
     for (const path of ['/auth/login', '/auth/me', '/users/me/profile', '/dashboards/teacher', '/classrooms']) {
       expect(calls.has(`/api/v1${path}`)).toBe(true);
     }
@@ -114,6 +114,6 @@ test('available backend supplies account, profile, dashboard and classrooms', as
     await page.reload();
     await expect(page.getByRole('alert')).toContainText('Backend database unavailable');
     await expect(page.getByRole('heading', { name: classroom.name })).toHaveCount(0);
-    await expect(page.getByText('Backend chưa chạy', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Backend is not running', { exact: false })).toHaveCount(0);
   } finally { await new Promise<void>(resolve => { backend.closeAllConnections(); backend.close(() => resolve()); }); }
 });
