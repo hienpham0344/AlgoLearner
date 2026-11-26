@@ -218,3 +218,34 @@ CREATE INDEX idx_rejudge_history_previous_evaluation_id
     ON tbl_rejudge_history(previous_evaluation_id);
 CREATE INDEX idx_rejudge_history_new_evaluation_id
     ON tbl_rejudge_history(new_evaluation_id);
+
+ALTER TABLE tbl_judge_problem ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_judge_test_case_version ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_judge_test_case ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_judge_submission ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_submission_evaluation ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_submission_test_case_snapshot ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_submission_test_result ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tbl_rejudge_history ENABLE ROW LEVEL SECURITY;
+
+REVOKE ALL ON
+    tbl_judge_problem,
+    tbl_judge_test_case_version,
+    tbl_judge_test_case,
+    tbl_judge_submission,
+    tbl_submission_evaluation,
+    tbl_submission_test_case_snapshot,
+    tbl_submission_test_result,
+    tbl_rejudge_history
+FROM PUBLIC;
+
+DO $$ DECLARE r TEXT; BEGIN
+    FOREACH r IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+        IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN
+            EXECUTE format(
+                'REVOKE ALL ON tbl_judge_problem, tbl_judge_test_case_version, tbl_judge_test_case, tbl_judge_submission, tbl_submission_evaluation, tbl_submission_test_case_snapshot, tbl_submission_test_result, tbl_rejudge_history FROM %I',
+                r
+            );
+        END IF;
+    END LOOP;
+END $$;
