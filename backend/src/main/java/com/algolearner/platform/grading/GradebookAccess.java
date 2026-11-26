@@ -60,6 +60,13 @@ public class GradebookAccess {
         return actor;
     }
 
+    @Transactional(readOnly = true)
+    public UUID requireStudentRead(Authentication principal, UUID classroomId) {
+        UUID actor = requireRole(principal, "STUDENT");
+        requireActiveStudentInClass(classroomId, actor);
+        return actor;
+    }
+
     // These scope checks are used after authorization of the classroom.
     @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
     public void requireActiveStudentInClass(UUID classroomId, UUID studentId) {
