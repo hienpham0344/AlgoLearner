@@ -26,7 +26,7 @@ export function getWorkspaceNavItems(
 ): WorkspaceNavItemConfig[] {
   const rolePrefix = role.toLowerCase();
   const isOnDashboard = pathname === '/dashboard';
-  const isClassroomsRoute = pathname.startsWith(`/${rolePrefix}/classrooms`);
+  const isClassroomsRoute = pathname.startsWith(`/${rolePrefix}/classrooms`) && !pathname.includes('/practice');
 
   if (role === 'TEACHER') {
     return [
@@ -52,6 +52,6 @@ export function getWorkspaceNavItems(
     { label: 'Dashboard', href: '/dashboard', iconKey: 'dashboard', isCurrent: isOnDashboard },
     { label: 'My classes', href: '/student/classrooms', iconKey: 'classes', isCurrent: isClassroomsRoute },
     { label: 'Public courses', href: '/student/courses', iconKey: 'courses', isCurrent: pathname === '/student/courses' },
-    { label: 'Coding practice', href: '/practice', iconKey: 'practice', isCurrent: pathname === '/practice' },
+    { label: 'Coding practice', href: '/practice', iconKey: 'practice', isCurrent: pathname === '/practice' || pathname.includes('/practice') },
   ];
 }

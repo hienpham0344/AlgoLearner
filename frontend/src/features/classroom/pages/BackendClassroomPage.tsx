@@ -336,6 +336,10 @@ export function BackendClassroomPage({ role }: { role: DemoRole }) {
                     <span>Open class lessons</span>
                     <ArrowRight size={16} />
                   </Link>
+                  {role === 'STUDENT' && <Link
+                    to={`/student/classrooms/${encodeURIComponent(id)}/practice`}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-3.5 text-sm font-semibold text-slate-900 hover:bg-slate-50 transition"
+                  >Coding practice <ArrowRight size={16} /></Link>}
                 </div>
               )}
             </div>

@@ -7,6 +7,7 @@ import { authDemoPlugin } from './dev/authDemoPlugin';
 import { profileDemoPlugin } from './dev/profileDemoPlugin';
 import { dashboardDemoPlugin } from './dev/dashboardDemoPlugin';
 import { lessonsDemoPlugin } from './dev/lessonsDemoPlugin';
+import { practiceDemoPlugin } from './dev/practiceDemoPlugin';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -19,11 +20,24 @@ export default defineConfig(({ mode }) => ({
     authDemoPlugin(mode === 'auth-demo' ? 'demo' : 'backend-mock'),
     profileDemoPlugin(),
     dashboardDemoPlugin(),
+    practiceDemoPlugin(),
     offlineNotFoundPlugin(),
   ],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/monaco-editor') || id.includes('@monaco-editor/react')) {
+            return 'vendor-monaco';
+          }
+          return undefined;
+        },
+      },
     },
   },
   server: {

@@ -41,6 +41,7 @@ function getDefaultBreadcrumbLabel(role: WorkspaceRole, pathname: string): strin
     return role === 'TEACHER' ? 'Teacher Dashboard' : role === 'ADMIN' ? 'Admin Dashboard' : 'Dashboard';
   }
   if (pathname.includes('/lessons')) return 'Class lessons';
+  if (pathname.includes('/practice')) return 'Coding practice';
   if (pathname.includes('/classrooms')) return 'Classrooms';
   if (pathname === '/student/courses') return 'Public courses';
   if (pathname === '/practice') return 'Coding practice';
