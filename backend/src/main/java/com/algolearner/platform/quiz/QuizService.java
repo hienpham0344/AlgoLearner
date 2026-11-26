@@ -90,7 +90,7 @@ public class QuizService {
         if(!quiz.status.equals("DRAFT")) throw conflict("QUIZ_NOT_DRAFT");
         Integer attempts=jdbc.queryForObject("select count(*) from tbl_quiz_attempt where quiz_id=?",Integer.class,quizId);
         if(attempts!=null && attempts>0) throw conflict("QUIZ_HAS_ATTEMPTS");
-        jdbc.update("delete from tbl_lesson_item where item_type='QUIZ' and item_id=?",quizId);
+        jdbc.update("delete from tbl_lesson_linked_item where item_type='QUIZ' and item_id=?",quizId);
         jdbc.update("delete from tbl_quiz where id=? and classroom_id=?",quizId,classroom);
     }
     public List<ReviewQuestion> review(UUID actor,UUID classroom,UUID quizId,UUID attemptId) {

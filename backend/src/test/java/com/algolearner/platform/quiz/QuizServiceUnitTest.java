@@ -76,7 +76,7 @@ class QuizServiceUnitTest {
 
         service.delete(owner.getId(), classroom.getId(), quizId);
 
-        verify(jdbc).update(contains("delete from tbl_lesson_item"), eq(quizId));
+        verify(jdbc).update(contains("delete from tbl_lesson_linked_item"), eq(quizId));
         verify(jdbc).update(contains("delete from tbl_quiz where id=?"), eq(quizId), eq(classroom.getId()));
     }
 
