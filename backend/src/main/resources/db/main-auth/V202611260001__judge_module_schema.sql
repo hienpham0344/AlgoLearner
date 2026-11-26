@@ -41,7 +41,7 @@ CREATE TABLE tbl_judge_test_case_version (
     problem_id UUID NOT NULL REFERENCES tbl_judge_problem(id) ON DELETE RESTRICT,
     version_no INTEGER NOT NULL CHECK (version_no > 0),
     active BOOLEAN NOT NULL DEFAULT FALSE,
-    checksum_sha256 CHAR(64),
+    checksum_sha256 VARCHAR(64),
     created_by UUID NOT NULL REFERENCES tbl_account(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -75,7 +75,7 @@ CREATE TABLE tbl_judge_submission (
     test_case_version_id UUID NOT NULL REFERENCES tbl_judge_test_case_version(id) ON DELETE RESTRICT,
     language VARCHAR(20) NOT NULL CHECK (language IN ('JAVA', 'PYTHON')),
     source_code TEXT NOT NULL,
-    source_code_sha256 CHAR(64),
+    source_code_sha256 VARCHAR(64),
     status VARCHAR(40) NOT NULL DEFAULT 'QUEUED'
         CHECK (status IN (
             'PENDING', 'QUEUED', 'JUDGING', 'ACCEPTED', 'WRONG_ANSWER',
