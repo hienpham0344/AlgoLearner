@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { Plus, Settings, Save, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
@@ -42,6 +42,19 @@ export const TeacherQuizEditPage: React.FC = () => {
       }
     }
   }, [quiz]);
+
+  if (user && user.role !== 'TEACHER') {
+    return (
+      <Navigate
+        to={
+          user.role === 'STUDENT' && classId
+            ? `/student/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   if (isLoading) {
     return (

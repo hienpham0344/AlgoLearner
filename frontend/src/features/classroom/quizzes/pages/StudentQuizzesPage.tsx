@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { FileQuestion, ArrowRight, Clock } from 'lucide-react';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +15,19 @@ export const StudentQuizzesPage: React.FC = () => {
   const [page, setPage] = useState(0);
 
   const { data: pageData, isLoading, isError, error } = useQuizList(classId, page, 20);
+
+  if (user && user.role !== 'STUDENT') {
+    return (
+      <Navigate
+        to={
+          user.role === 'TEACHER' && classId
+            ? `/teacher/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   const quizzes = pageData?.items || [];
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { User, ShieldAlert, History, Edit3, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
@@ -39,6 +39,19 @@ export const TeacherQuizResultsPage: React.FC = () => {
 
   const accessOverrideMutation = useAccessOverride(classId, quizId, activeModal?.studentId || '');
   const gradeOverrideMutation = useGradeOverride(classId, quizId, activeModal?.studentId || '');
+
+  if (user && user.role !== 'TEACHER') {
+    return (
+      <Navigate
+        to={
+          user.role === 'STUDENT' && classId
+            ? `/student/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   const attempts = attemptsPage?.items || [];
 

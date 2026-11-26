@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { Clock, AlertTriangle, Award, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
@@ -26,6 +26,19 @@ export const StudentQuizDetailPage: React.FC = () => {
   const { data: result } = useQuizResult(classId, quizId, user?.id || '');
 
   const startMutation = useStartOrResumeAttempt(classId, quizId);
+
+  if (user && user.role !== 'STUDENT') {
+    return (
+      <Navigate
+        to={
+          user.role === 'TEACHER' && classId
+            ? `/teacher/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   const attempts = attemptsData?.items || [];
   const activeAttempt = attempts.find((a) => a.status === 'ACTIVE');

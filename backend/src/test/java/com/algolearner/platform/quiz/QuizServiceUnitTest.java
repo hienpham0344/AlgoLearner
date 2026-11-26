@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -42,7 +43,8 @@ class QuizServiceUnitTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-25T10:00:00Z"), ZoneOffset.UTC);
     private final AuditService audit = mock(AuditService.class);
-    private final QuizService service = new QuizService(jdbc, classrooms, memberships, accounts, lessons, mapper, clock, audit);
+    private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    private final QuizService service = new QuizService(jdbc, classrooms, memberships, accounts, lessons, mapper, clock, audit, events);
 
     @Test
     void attemptViewExposesStudentId() {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, Navigate } from 'react-router-dom';
 import { ArrowLeft, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
@@ -30,6 +30,19 @@ export const StudentQuizResultPage: React.FC = () => {
     latestAttemptSummary?.id || ''
   );
   const latestAttempt = enrichedAttempt || latestAttemptSummary;
+
+  if (user && user.role !== 'STUDENT') {
+    return (
+      <Navigate
+        to={
+          user.role === 'TEACHER' && classId
+            ? `/teacher/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   const persona = {
     id: user?.id || '',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { Plus, Settings, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
@@ -43,6 +43,19 @@ export const TeacherQuizCreatePage: React.FC = () => {
   const [actionError, setActionError] = useState<string | null>(null);
 
   const createMutation = useCreateQuiz(classId);
+
+  if (user && user.role !== 'TEACHER') {
+    return (
+      <Navigate
+        to={
+          user.role === 'STUDENT' && classId
+            ? `/student/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   const handleSaveSettings = (newTitle: string, newConfig: Partial<QuizConfig>) => {
     setTitle(newTitle);

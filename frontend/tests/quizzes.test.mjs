@@ -662,3 +662,43 @@ test('QuizApi: maps frontend payloads and responses strictly to Backend QuizCont
   assert.equal(history.items.length, 1);
   assert.equal(history.items[0].finalScore, 95);
 });
+
+test('8. Role guards (F-01, F-02) and beforeunload protection (F-03) are enforced across Teacher and Student Quiz pages', async () => {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const pagesDir = path.resolve(import.meta.dirname, '../src/features/classroom/quizzes/pages');
+
+  const teacherPages = [
+    'TeacherQuizzesPage.tsx',
+    'TeacherQuizCreatePage.tsx',
+    'TeacherQuizDetailPage.tsx',
+    'TeacherQuizEditPage.tsx',
+    'TeacherQuizResultsPage.tsx',
+  ];
+  for (const file of teacherPages) {
+    const src = await fs.readFile(path.join(pagesDir, file), 'utf8');
+    assert.match(src, /user\s*&&\s*user\.role\s*!==\s*'TEACHER'/, `${file} must enforce TEACHER role guard (F-01)`);
+    assert.match(src, /<Navigate[\s\S]*?replace/, `${file} must redirect unauthorized roles via <Navigate replace />`);
+  }
+
+  const studentPages = [
+    'StudentQuizzesPage.tsx',
+    'StudentQuizDetailPage.tsx',
+    'StudentQuizAttemptPage.tsx',
+    'StudentQuizResultPage.tsx',
+  ];
+  for (const file of studentPages) {
+    const src = await fs.readFile(path.join(pagesDir, file), 'utf8');
+    assert.match(src, /user\s*&&\s*user\.role\s*!==\s*'STUDENT'/, `${file} must enforce STUDENT role guard (F-02)`);
+    assert.match(src, /<Navigate[\s\S]*?replace/, `${file} must redirect unauthorized roles via <Navigate replace />`);
+  }
+
+  const attemptSrc = await fs.readFile(path.join(pagesDir, 'StudentQuizAttemptPage.tsx'), 'utf8');
+  assert.match(attemptSrc, /addEventListener\('beforeunload'/, 'StudentQuizAttemptPage must register beforeunload warning (F-03)');
+
+  const autosaveHookSrc = await fs.readFile(
+    path.resolve(import.meta.dirname, '../src/features/classroom/quizzes/hooks/useQuizAutosave.ts'),
+    'utf8'
+  );
+  assert.match(autosaveHookSrc, /addEventListener\('beforeunload'/, 'useQuizAutosave must register beforeunload warning (F-03)');
+});

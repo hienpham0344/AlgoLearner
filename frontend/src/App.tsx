@@ -40,8 +40,11 @@ const StudentQuizDetailPage = lazy(() => import('@/features/classroom/quizzes').
 const StudentQuizAttemptPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizAttemptPage })));
 const StudentQuizResultPage = lazy(() => import('@/features/classroom/quizzes').then(m => ({ default: m.StudentQuizResultPage })));
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+const ProtectedRoute: React.FC<{
+  children: React.ReactNode;
+  allowedRoles?: Array<'STUDENT' | 'TEACHER' | 'ADMIN'>;
+}> = ({ children, allowedRoles }) => {
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return (
@@ -55,6 +58,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (allowedRoles && user?.role && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return (
@@ -125,15 +132,15 @@ export const App: React.FC = () => {
       <Route path="/student/classrooms/:id/assignments/:assignmentId/attempts" element={<ProtectedRoute><StudentAttemptsHistoryPage /></ProtectedRoute>} />
 
       {/* Classroom Quizzes Routes (FE 4.7) */}
-      <Route path="/teacher/classrooms/:id/quizzes" element={<ProtectedRoute><TeacherQuizzesPage /></ProtectedRoute>} />
-      <Route path="/teacher/classrooms/:id/quizzes/new" element={<ProtectedRoute><TeacherQuizCreatePage /></ProtectedRoute>} />
-      <Route path="/teacher/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute><TeacherQuizDetailPage /></ProtectedRoute>} />
-      <Route path="/teacher/classrooms/:id/quizzes/:quizId/edit" element={<ProtectedRoute><TeacherQuizEditPage /></ProtectedRoute>} />
-      <Route path="/teacher/classrooms/:id/quizzes/:quizId/results" element={<ProtectedRoute><TeacherQuizResultsPage /></ProtectedRoute>} />
-      <Route path="/student/classrooms/:id/quizzes" element={<ProtectedRoute><StudentQuizzesPage /></ProtectedRoute>} />
-      <Route path="/student/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute><StudentQuizDetailPage /></ProtectedRoute>} />
-      <Route path="/student/classrooms/:id/quizzes/:quizId/attempt" element={<ProtectedRoute><StudentQuizAttemptPage /></ProtectedRoute>} />
-      <Route path="/student/classrooms/:id/quizzes/:quizId/result" element={<ProtectedRoute><StudentQuizResultPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes" element={<ProtectedRoute allowedRoles={['TEACHER']}><TeacherQuizzesPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/new" element={<ProtectedRoute allowedRoles={['TEACHER']}><TeacherQuizCreatePage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute allowedRoles={['TEACHER']}><TeacherQuizDetailPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId/edit" element={<ProtectedRoute allowedRoles={['TEACHER']}><TeacherQuizEditPage /></ProtectedRoute>} />
+      <Route path="/teacher/classrooms/:id/quizzes/:quizId/results" element={<ProtectedRoute allowedRoles={['TEACHER']}><TeacherQuizResultsPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentQuizzesPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentQuizDetailPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId/attempt" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentQuizAttemptPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/quizzes/:quizId/result" element={<ProtectedRoute allowedRoles={['STUDENT']}><StudentQuizResultPage /></ProtectedRoute>} />
       <Route path="/teacher/classrooms" element={<ClassroomSourceRoute role="TEACHER" detail={false} />} />
       <Route path="/teacher/classrooms/:id" element={<ClassroomSourceRoute role="TEACHER" detail />} />
 

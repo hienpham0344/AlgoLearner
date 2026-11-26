@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
 import { Edit2, Copy, BarChart2, CheckCircle2, Lock, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { ClassroomLayout } from '@/features/classroom/components/ClassroomLayout';
@@ -28,6 +28,19 @@ export const TeacherQuizDetailPage: React.FC = () => {
   const deleteMutation = useDeleteQuiz(classId);
 
   const [actionError, setActionError] = useState<string | null>(null);
+
+  if (user && user.role !== 'TEACHER') {
+    return (
+      <Navigate
+        to={
+          user.role === 'STUDENT' && classId
+            ? `/student/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   if (isLoading) {
     return (

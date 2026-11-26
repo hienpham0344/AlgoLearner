@@ -67,6 +67,22 @@ export function useQuizAutosave({
     };
   }, [saveFn]);
 
+  // Warn on page unload if an autosave request is pending or in flight
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (managerRef.current?.getGlobalStatus() === 'saving') {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved quiz answers. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, []);
+
   const selectAnswer = useCallback(
     (questionId: string, optionIds: string[]) => {
       if (isLocked) return;

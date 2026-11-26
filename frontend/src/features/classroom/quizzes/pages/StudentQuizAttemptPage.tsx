@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Navigate } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Flag, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { useAuth } from '@/hooks/useAuth';
 import { useQuizDetail } from '../hooks/useQuizDetail';
 import { useStartOrResumeAttempt, useSubmitAttempt } from '../hooks/useQuizAttempt';
 import { useQuizTimer } from '../hooks/useQuizTimer';
@@ -15,6 +16,7 @@ import { quizError } from '../api/quizApi';
 
 export const StudentQuizAttemptPage: React.FC = () => {
   const { id: classId = '', quizId = '' } = useParams<{ id: string; quizId: string }>();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [attempt, setAttempt] = useState<AttemptView | null>(null);
@@ -29,6 +31,7 @@ export const StudentQuizAttemptPage: React.FC = () => {
 
   // Initialize or resume attempt on mount
   useEffect(() => {
+    if (user && user.role !== 'STUDENT') return;
     let isMounted = true;
     startAttemptMutation
       .mutateAsync()
@@ -53,7 +56,7 @@ export const StudentQuizAttemptPage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [classId, quizId]);
+  }, [classId, quizId, user]);
 
   const questions: QuestionView[] = attempt?.questions || [];
   const currentQuestion = questions[currentIndex] || null;
@@ -115,6 +118,37 @@ export const StudentQuizAttemptPage: React.FC = () => {
     isSubmitted: attempt?.status === 'SUBMITTED',
     onExpire: handleExpire,
   });
+
+  // Warn before unloading tab while quiz attempt is active or autosave is syncing (F-03)
+  useEffect(() => {
+    const isAttemptActive = attempt?.status === 'ACTIVE' && !isExpired;
+    const hasPendingAutosave = globalStatus === 'saving' || globalStatus === 'error';
+    if (!isAttemptActive && !hasPendingAutosave) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = 'Your quiz attempt is in progress. Are you sure you want to leave?';
+      return e.returnValue;
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [attempt?.status, isExpired, globalStatus]);
+
+  if (user && user.role !== 'STUDENT') {
+    return (
+      <Navigate
+        to={
+          user.role === 'TEACHER' && classId
+            ? `/teacher/classrooms/${encodeURIComponent(classId)}/quizzes`
+            : '/dashboard'
+        }
+        replace
+      />
+    );
+  }
 
   // Answer selection handler
   const handleSelectOption = (optionId: string) => {
