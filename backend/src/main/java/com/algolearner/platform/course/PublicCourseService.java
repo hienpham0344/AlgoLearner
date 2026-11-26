@@ -1,147 +1,177 @@
 package com.algolearner.platform.course;
 
+import com.algolearner.platform.common.dto.PageResponse;
+import com.algolearner.platform.course.CourseAccessPolicy.Access;
+import com.algolearner.platform.course.CourseDtos.CatalogItem;
+import com.algolearner.platform.course.CourseDtos.Detail;
+import com.algolearner.platform.course.CourseDtos.EnrollmentHistory;
+import com.algolearner.platform.course.CourseDtos.Lesson;
+import com.algolearner.platform.course.CourseDtos.LessonOutline;
+import com.algolearner.platform.course.CourseDtos.Level;
+import com.algolearner.platform.course.CourseDtos.Progress;
+import com.algolearner.platform.course.CourseDtos.Publication;
+import com.algolearner.platform.course.CourseDtos.QuizOutline;
+import com.algolearner.platform.course.PublicCourseRepository.CatalogFilter;
+import com.algolearner.platform.course.PublicCourseRepository.CourseRow;
+import com.algolearner.platform.course.PublicCourseRepository.EnrollmentRow;
+import com.algolearner.platform.course.PublicCourseRepository.LessonRow;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
-import com.algolearner.platform.audit.AuditService;
-import com.algolearner.platform.common.exception.AppException;
-import com.algolearner.platform.common.security.AccountAccess;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.algolearner.platform.common.dto.PageResponse;
 
+/** Learner side of SRS 4.11: catalog, preview, enrollment, lessons and own progress (FR-PCRS-001..006, 009). */
 @Service
 @Profile("!mock")
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PublicCourseService {
     private final PublicCourseRepository courses;
-    private final AccountAccess accounts;
-    private final AuditService audit;
+    private final CourseAccessPolicy policy;
+    private final CourseProgressService progress;
+    private final Clock clock;
 
-    @Transactional
-    public CourseDtos.Summary create(UUID actor, CourseDtos.Create request) {
-        requireRole(actor,"TEACHER");
-        validText(request.title(),255);
-        return courses.create(actor,request);
+    public PageResponse<CatalogItem> catalog(UUID actor, String query, Level level, String topic, Pageable pageable) {
+        policy.learner(actor);
+        CourseAccessPolicy.pageSize(pageable);
+        var filter = new CatalogFilter(CourseContentRules.blankToNull(query), level, CourseContentRules.blankToNull(topic),
+                Set.of(Publication.PUBLISHED), null);
+        if (filter.query() != null && filter.query().length() > 255) throw CourseException.invalid("Search text is too long");
+        List<CourseRow> rows = courses.courses(filter, pageable.getPageNumber(), pageable.getPageSize());
+        var statuses = courses.enrollmentStatuses(actor, rows.stream().map(CourseRow::id).toList());
+        var items = rows.stream().map(row -> new CatalogItem(row.summary(), statuses.get(row.id()))).toList();
+        return PageResponse.fromPage(new PageImpl<>(items, pageable, courses.countCourses(filter)));
+    }
+
+    public Detail detail(UUID actor, UUID courseId) {
+        String role = policy.learner(actor);
+        CourseRow course = courses.course(courseId, false).orElseThrow(CourseException::notFound);
+        EnrollmentRow enrollment = activeEnrollment(actor, courseId);
+        Access access = CourseAccessPolicy.access(course, enrollment);
+        boolean author = role.equals("TEACHER") && course.authorId().equals(actor);
+        if (access == Access.NONE && !author) throw CourseException.notFound();
+        Set<UUID> doneLessons = enrollment == null ? Set.of() : courses.completedLessonIds(enrollment.id());
+        Set<UUID> doneQuizzes = enrollment == null ? Set.of() : courses.completedQuizIds(enrollment.id());
+        var lessons = courses.lessons(courseId).stream().map(l -> new LessonOutline(l.id(), l.title(), l.displayOrder(),
+                l.estimatedMinutes(), l.prerequisiteNote(), l.preview(), doneLessons.contains(l.id()))).toList();
+        var quizzes = courses.quizzes(courseId).stream().map(q -> outline(q, doneQuizzes.contains(q.id()))).toList();
+        Progress own = enrollment == null ? null : progress.view(course, enrollment);
+        return new Detail(course.summary(), lessons, quizzes, own, access == Access.FULL);
     }
 
     @Transactional
-    public CourseDtos.Unit addUnit(UUID actor, UUID course, CourseDtos.UnitRequest request) {
-        var current = ownedDraft(actor,course);
-        validText(request.title(),255);validText(request.content(),100_000);
-        if (current.status().equals("REJECTED")) courses.changeStatus(course,"DRAFT",null);
-        return courses.addUnit(course,request);
-    }
-
-    @Transactional
-    public CourseDtos.Summary submitReview(UUID actor, UUID course) {
-        var current = ownedDraft(actor,course);
-        if (courses.unitCount(course) == 0) throw failure(HttpStatus.UNPROCESSABLE_ENTITY,"COURSE_EMPTY","Course must contain a lesson");
-        courses.changeStatus(course,"PENDING_REVIEW",null);
-        audit.record(actor,"TEACHER","PUBLIC_COURSE",course.toString(),"PUBLIC_COURSE_SUBMITTED",
-                current.status(),"PENDING_REVIEW",null,null);
-        return required(course,false);
-    }
-
-    @Transactional
-    public CourseDtos.Summary review(UUID actor, UUID course, CourseDtos.Review request) {
-        requireRole(actor,"ADMIN");
-        var current = required(course,true);
-        if (!current.status().equals("PENDING_REVIEW")) throw failure(HttpStatus.CONFLICT,"COURSE_STATE_CONFLICT","Course is not pending review");
-        if (!request.approved()) validText(request.reason(),500);
-        String reason = request.reason() == null ? null : request.reason().strip();
-        if (reason != null && reason.length() > 500) throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Review reason is too long");
-        String state = request.approved() ? "PUBLISHED" : "REJECTED";
-        courses.changeStatus(course,state,reason);
-        audit.record(actor,"ADMIN","PUBLIC_COURSE",course.toString(),"PUBLIC_COURSE_REVIEWED",current.status(),state,reason,null);
-        return required(course,false);
-    }
-
-    @Transactional
-    public CourseDtos.Progress enroll(UUID actor, UUID course) {
-        requireLearner(actor);requirePublished(course);
-        courses.enroll(actor,course);
-        return ownProgress(actor,course);
-    }
-
-    @Transactional
-    public CourseDtos.Progress complete(UUID actor, UUID course, UUID unit) {
-        requireLearner(actor);requirePublished(course);
-        var enrollment = courses.enrollment(actor,course).orElseThrow(() -> failure(HttpStatus.FORBIDDEN,"COURSE_NOT_ENROLLED","Enroll before completing lessons"));
-        if (!courses.containsUnit(course,unit)) throw failure(HttpStatus.NOT_FOUND,"COURSE_UNIT_NOT_FOUND","Course lesson not found");
-        courses.complete(enrollment,unit);
-        return ownProgress(actor,course);
-    }
-
-    public CourseDtos.Progress progress(UUID actor, UUID course) {
-        requireLearner(actor);requirePublished(course);
-        return ownProgress(actor,course);
-    }
-
-    public CourseDtos.Detail detail(UUID actor, UUID course) {
-        requireLearner(actor);
-        String role = accounts.activeRole(actor);
-        var current = required(course,false);
-        if (!current.status().equals("PUBLISHED") && !(role.equals("TEACHER") && current.authorId().equals(actor))) {
-            throw failure(HttpStatus.NOT_FOUND,"COURSE_NOT_FOUND","Course not found");
+    public Lesson lesson(UUID actor, UUID courseId, UUID lessonId) {
+        policy.learner(actor);
+        CourseRow course = courses.course(courseId, false).orElseThrow(CourseException::notFound);
+        EnrollmentRow enrollment = courses.enrollment(actor, courseId, true).filter(EnrollmentRow::active).orElse(null);
+        Access access = CourseAccessPolicy.access(course, enrollment);
+        if (access == Access.NONE) throw CourseException.notFound();
+        if (access == Access.LOCKED) throw CourseException.locked();
+        LessonRow lesson = courses.lesson(courseId, lessonId)
+                .orElseThrow(() -> CourseException.notFound("COURSE_UNIT_NOT_FOUND", "Course lesson not found"));
+        if (access == Access.PREVIEW && !lesson.preview()) throw CourseException.notEnrolled();
+        boolean completed = false;
+        if (enrollment != null) {
+            if (enrollment.startedAt() == null) progress.recompute(course, enrollment, true, false, now());
+            completed = courses.completedLessonIds(enrollment.id()).contains(lessonId);
         }
-        return new CourseDtos.Detail(current,courses.units(course));
+        return new Lesson(lesson.id(), courseId, lesson.title(), lesson.displayOrder(), lesson.estimatedMinutes(),
+                lesson.prerequisiteNote(), lesson.preview(), lesson.blocks(), completed);
     }
 
-    public CourseDtos.Detail administrationDetail(UUID actor, UUID course) {
-        requireRole(actor,"ADMIN");
-        return new CourseDtos.Detail(required(course,false),courses.units(course));
+    @Transactional
+    public Progress enroll(UUID actor, UUID courseId) {
+        policy.learner(actor);
+        CourseRow course = courses.course(courseId, true).orElseThrow(CourseException::notFound);
+        var existing = courses.enrollment(actor, courseId, true);
+        if (existing.isPresent() && existing.get().active()) return progress.view(course, existing.get());
+        if (course.status() == Publication.DRAFT) throw CourseException.notFound();
+        if (course.status() != Publication.PUBLISHED) {
+            throw CourseException.conflict("COURSE_NOT_ENROLLABLE", "Course is not open for new enrollment");
+        }
+        Instant now = now();
+        UUID enrollmentId;
+        if (existing.isPresent()) {
+            enrollmentId = existing.get().id();
+            courses.setUnenrolled(enrollmentId, null, now);
+        } else {
+            enrollmentId = courses.insertEnrollment(actor, courseId, now);
+        }
+        courses.event(enrollmentId, "ENROLLED", null, now);
+        return progress.view(course, courses.enrollment(actor, courseId, false).orElseThrow());
     }
 
-    public PageResponse<CourseDtos.Summary> list(UUID actor, String state, boolean own, boolean administration, Pageable pageable) {
-        if (pageable.getPageSize() > 100) throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Page size exceeds limit");
-        UUID author = null;
-        if (administration) requireRole(actor,"ADMIN");
-        else if (own) { requireRole(actor,"TEACHER");author=actor; }
-        else { requireLearner(actor);state="PUBLISHED"; }
-        if (!java.util.Set.of("DRAFT","PENDING_REVIEW","PUBLISHED","REJECTED").contains(state)) throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Invalid course status");
-        return PageResponse.fromPage(new PageImpl<>(courses.list(state,author,pageable.getPageNumber(),pageable.getPageSize()),pageable,courses.count(state,author)));
+    @Transactional
+    public void unenroll(UUID actor, UUID courseId) {
+        policy.learner(actor);
+        courses.course(courseId, false).orElseThrow(CourseException::notFound);
+        EnrollmentRow enrollment = courses.enrollment(actor, courseId, true).filter(EnrollmentRow::active)
+                .orElseThrow(() -> CourseException.notFound("COURSE_ENROLLMENT_NOT_FOUND", "Enrollment not found"));
+        if (enrollment.startedAt() != null || courses.hasLearningActivity(enrollment.id())) {
+            throw CourseException.conflict("COURSE_ALREADY_STARTED", "A started course cannot be unenrolled");
+        }
+        Instant now = now();
+        courses.setUnenrolled(enrollment.id(), now, now);
+        courses.event(enrollment.id(), "UNENROLLED", null, now);
     }
 
-    private CourseDtos.Progress ownProgress(UUID actor, UUID course) {
-        UUID enrollment = courses.enrollment(actor,course).orElseThrow(() -> failure(HttpStatus.NOT_FOUND,"COURSE_ENROLLMENT_NOT_FOUND","Enrollment not found"));
-        int total = courses.unitCount(course);int completed = courses.completedUnits(enrollment,course);
-        return new CourseDtos.Progress(course,actor,completed,total,total == 0 ? 0 : 100.0*completed/total);
+    @Transactional
+    public Progress completeLesson(UUID actor, UUID courseId, UUID lessonId) {
+        policy.learner(actor);
+        CourseRow course = courses.course(courseId, false).orElseThrow(CourseException::notFound);
+        EnrollmentRow enrollment = policy.learningEnrollment(actor, course);
+        courses.lesson(courseId, lessonId).orElseThrow(() -> CourseException.notFound("COURSE_UNIT_NOT_FOUND", "Course lesson not found"));
+        Instant now = now();
+        if (courses.completeLesson(enrollment.id(), lessonId, now)) {
+            courses.event(enrollment.id(), "LESSON_COMPLETED", lessonId.toString(), now);
+        }
+        return progress.recompute(course, enrollment, true, false, now);
     }
 
-    private CourseDtos.Summary ownedDraft(UUID actor, UUID course) {
-        requireRole(actor,"TEACHER");
-        var current = required(course,true);
-        if (!current.authorId().equals(actor)) throw failure(HttpStatus.FORBIDDEN,"FORBIDDEN_OPERATION","Only the course author may edit it");
-        if (!java.util.Set.of("DRAFT","REJECTED").contains(current.status())) throw failure(HttpStatus.CONFLICT,"COURSE_STATE_CONFLICT","Only draft courses may be edited");
-        return current;
+    public Progress progress(UUID actor, UUID courseId) {
+        policy.learner(actor);
+        CourseRow course = courses.course(courseId, false).orElseThrow(CourseException::notFound);
+        EnrollmentRow enrollment = activeEnrollment(actor, courseId);
+        if (enrollment == null) throw CourseException.notFound("COURSE_ENROLLMENT_NOT_FOUND", "Enrollment not found");
+        return progress.view(course, enrollment);
     }
 
-    private void requirePublished(UUID course) {
-        if (!required(course,false).status().equals("PUBLISHED")) throw failure(HttpStatus.NOT_FOUND,"COURSE_NOT_FOUND","Course not found");
+    @Transactional
+    public Progress acknowledgeUpdate(UUID actor, UUID courseId) {
+        policy.learner(actor);
+        CourseRow course = courses.course(courseId, false).orElseThrow(CourseException::notFound);
+        EnrollmentRow e = courses.enrollment(actor, courseId, true).filter(EnrollmentRow::active)
+                .orElseThrow(() -> CourseException.notFound("COURSE_ENROLLMENT_NOT_FOUND", "Enrollment not found"));
+        Instant now = now();
+        courses.updateProgress(e.id(), e.status(), e.percent(), e.startedAt(), e.completedAt(), false, now);
+        return progress.view(course, courses.enrollment(actor, courseId, false).orElseThrow());
     }
 
-    private CourseDtos.Summary required(UUID course, boolean lock) {
-        return courses.find(course,lock).orElseThrow(() -> failure(HttpStatus.NOT_FOUND,"COURSE_NOT_FOUND","Course not found"));
+    public PageResponse<EnrollmentHistory> myEnrollments(UUID actor, Pageable pageable) {
+        policy.learner(actor);
+        CourseAccessPolicy.pageSize(pageable);
+        var items = courses.enrollmentsOf(actor, pageable.getPageNumber(), pageable.getPageSize()).stream().map(e -> {
+            CourseRow course = courses.course(e.courseId(), false).orElseThrow();
+            return new EnrollmentHistory(course.summary(), progress.view(course, e));
+        }).toList();
+        return PageResponse.fromPage(new PageImpl<>(items, pageable, courses.countEnrollmentsOf(actor)));
     }
 
-    private void requireLearner(UUID actor) {
-        if (!java.util.Set.of("STUDENT","TEACHER").contains(accounts.activeRole(actor))) throw failure(HttpStatus.FORBIDDEN,"FORBIDDEN_OPERATION","Learning access denied");
+    static QuizOutline outline(PublicCourseRepository.QuizRow q, boolean completed) {
+        return new QuizOutline(q.id(), q.lessonId(), q.title(), q.mandatory(), q.rule(), q.passingScore(), q.maxAttempts(),
+                q.timeLimitSeconds(), q.questions().size(), completed);
     }
 
-    private void requireRole(UUID actor, String role) {
-        if (!accounts.activeRole(actor).equals(role)) throw failure(HttpStatus.FORBIDDEN,"FORBIDDEN_OPERATION","Course access denied");
+    private EnrollmentRow activeEnrollment(UUID actor, UUID course) {
+        return courses.enrollment(actor, course, false).filter(EnrollmentRow::active).orElse(null);
     }
 
-    private void validText(String text, int max) {
-        if (text == null || text.isBlank() || text.length() > max) throw failure(HttpStatus.BAD_REQUEST,"VALIDATION_FAILED","Invalid course content");
-    }
-
-    private AppException failure(HttpStatus status, String code, String message) {
-        return new AppException(message,status,code) { };
-    }
+    private Instant now() { return clock.instant(); }
 }

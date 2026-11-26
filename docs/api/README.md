@@ -8,6 +8,7 @@
 | 4.4 Thông báo lớp | [API-4.4-announcements.md](API-4.4-announcements.md) |
 | 4.5 Bài học | [API-4.5-lessons.md](API-4.5-lessons.md) |
 | 4.6 Bài tập | [API-4.6-assignments.md](API-4.6-assignments.md) |
+| 4.11 Khóa học công khai | [API-4.11-public-course.md](API-4.11-public-course.md) |
 
 **Quy ước chung.** Base path là `/api/v1`. Request JSON không bọc envelope. Thành công JSON thông thường là `ApiResponse<T>` gồm `success`, `message`, `data`, `timestamp`; danh sách phân trang là `PageResponse<T>` gồm `success`, `data.items`, `data.pagination`, `timestamp`. Lỗi là `ApiErrorResponse` gồm `success=false`, `errorCode`, `message`, `path`, `timestamp` và có thể có `errors`. `204` không có body; response file/avatar là binary. Toàn bộ `Instant` ở dạng ISO-8601 UTC kết thúc `Z`. Các route riêng tư dùng `Authorization: Bearer <access_token>`; quyền còn được kiểm tra theo trạng thái tài khoản và phạm vi lớp tại service.
 
