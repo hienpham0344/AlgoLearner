@@ -42,12 +42,15 @@ public class NotificationService {
             String classroomName = context != null ? context.getClassroomName() : classroom == null ? null : classroom.getName();
             String targetType = invitation != null ? "CLASS_INVITATION"
                     : notification.getAnnouncementId() != null ? "ANNOUNCEMENT"
-                    : notification.getAssignmentId() != null ? "ASSIGNMENT" : "SYSTEM";
+                    : notification.getAssignmentId() != null ? "ASSIGNMENT"
+                    : notification.getGradebookResultId() != null ? "GRADEBOOK" : "SYSTEM";
             UUID targetId = invitation != null ? invitation.getId()
-                    : notification.getAnnouncementId() != null ? notification.getAnnouncementId() : notification.getAssignmentId();
+                    : notification.getAnnouncementId() != null ? notification.getAnnouncementId()
+                    : notification.getAssignmentId() != null ? notification.getAssignmentId() : notification.getGradebookResultId();
             String actionUrl = classroomId == null ? null : "/classrooms/" + classroomId
                     + ("ANNOUNCEMENT".equals(targetType) ? "/announcements/" + targetId
-                    : "ASSIGNMENT".equals(targetType) ? "/assignments/" + targetId : "");
+                    : "ASSIGNMENT".equals(targetType) ? "/assignments/" + targetId
+                    : "GRADEBOOK".equals(targetType) ? "/gradebook" : "");
             String title = notification.getTitle() != null ? notification.getTitle()
                     : invitation != null ? "Lời mời tham gia " + classroomName : notification.getType();
             return new NotificationDtos.InvitationNotificationView(notification.getId(),
@@ -59,6 +62,12 @@ public class NotificationService {
                     notification.getCreatedAt(), notification.getReadAt(), notification.getType(), title,
                     notification.getMessage(), targetType, targetId, actionUrl);
         }));
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.MANDATORY)
+    public void notifyGradebookFinalChange(UUID student, UUID classroom, UUID result) {
+        notifications.insertGradebookFinalChange(UUID.randomUUID(), student, classroom, result,
+                "/classrooms/" + classroom + "/gradebook");
     }
 
     @Transactional

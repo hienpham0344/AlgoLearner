@@ -13,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @Profile("!mock")
 public class AuditService {
+    public record RequestContext(String clientIp, String userAgent) {
+        public static final RequestContext EMPTY = new RequestContext(null, null);
+    }
     private final JdbcTemplate jdbc;
     private final Clock clock;
 
@@ -28,5 +31,23 @@ public class AuditService {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, actorId, actorRole, targetType, targetId, action, beforeState, afterState,
                 reason, correlationId, now, now);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordGradebook(UUID classroomId, UUID gradebookId, UUID actorId, String action,
+                                String beforeState, String afterState, String reason, String metadata,
+                                RequestContext request) {
+        var now = Timestamp.from(clock.instant());
+        jdbc.update("""
+                INSERT INTO tbl_audit_log(actor_id,actor_role,target_type,target_id,action,before_state,after_state,
+                    reason,classroom_id,metadata,client_ip,user_agent,created_at,updated_at)
+                VALUES (?,?,'GRADEBOOK',?,?,?,?,?,?,?::jsonb,?,?,?,?)
+                """, actorId, actorId == null ? "SYSTEM" : "TEACHER", gradebookId.toString(), action, beforeState,
+                afterState, reason, classroomId, metadata, bounded(request.clientIp(), 45), bounded(request.userAgent(), 500),
+                now, now);
+    }
+
+    private static String bounded(String value, int maxLength) {
+        return value == null || value.length() <= maxLength ? value : value.substring(0, maxLength);
     }
 }

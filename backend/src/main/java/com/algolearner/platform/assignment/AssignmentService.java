@@ -21,7 +21,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -200,7 +199,13 @@ public class AssignmentService {
         if (request.durationMinutes() != null) assignment.setDurationMinutes(request.durationMinutes());
         if (request.timeExpiredAction() != null) assignment.setTimeExpiredAction(request.timeExpiredAction());
         if (request.maxAttempts() != null) assignment.setMaxAttempts(request.maxAttempts());
-        if (request.scoringPolicy() != null) assignment.setScoringPolicy(request.scoringPolicy());
+        if (request.scoringPolicy() != null && request.scoringPolicy() != assignment.getScoringPolicy()) {
+            assignment.setScoringPolicy(request.scoringPolicy());
+            if (events != null) {
+                attempts.findStudentsWithSubmissions(assignmentId).forEach(studentId ->
+                        events.publishEvent(new com.algolearner.platform.grading.GradeSourceChanged(classroomId, studentId)));
+            }
+        }
         if (request.shuffleQuestions() != null) assignment.setShuffleQuestions(request.shuffleQuestions());
         if (request.shuffleAnswers() != null) assignment.setShuffleAnswers(request.shuffleAnswers());
         if (request.gradePublishMode() != null) assignment.setGradePublishMode(request.gradePublishMode());
@@ -1105,6 +1110,14 @@ public class AssignmentService {
             attempts.flush();
             events.publishEvent(new AssignmentProgressChanged(attempt.getAssignment().getClassroom().getId(),
                 attempt.getAssignment().getId(), attempt.getStudent().getId()));
+            gradebookChanged(attempt);
+        }
+    }
+
+    private void gradebookChanged(AssignmentAttemptEntity attempt) {
+        if (events != null) {
+            events.publishEvent(new com.algolearner.platform.grading.GradeSourceChanged(
+                    attempt.getAssignment().getClassroom().getId(), attempt.getStudent().getId()));
         }
     }
 
@@ -1116,6 +1129,7 @@ public class AssignmentService {
                 || assignment.getGradePublishMode()==GradePublishMode.AFTER_DEADLINE && assignment.getDeadline()!=null
                 && !clock.instant().isBefore(assignment.getDeadline());
         if(automatic && attempt.getStatus()==AttemptStatus.GRADED) evaluations.publish(attempt);
+        if (!"AUTO".equals(kind)) gradebookChanged(attempt);
     }
 
     private String captureSnapshot(AssignmentEntity assignment) {
@@ -1175,7 +1189,7 @@ public class AssignmentService {
     }
 
     private BigDecimal publishedBestScore(AssignmentEntity assignment, List<AssignmentAttemptEntity> history) {
-        BigDecimal best=null, ratio=null;
+        BigDecimal best=null, bestMaximum=null;
         for(var attempt:history) {
             BigDecimal score;
             if(attempt.getPublishedEvaluationId()!=null && evaluations!=null) {
@@ -1185,8 +1199,10 @@ public class AssignmentService {
             if(score==null || attempt.getStatus()==AttemptStatus.IN_PROGRESS || attempt.getStatus()==AttemptStatus.TIMED_OUT)continue;
             BigDecimal maximum=attempt.getRevisionSnapshot()==null?null:AssignmentSnapshotPolicy.decode(attempt.getRevisionSnapshot()).questions().stream()
                     .map(AssignmentSnapshotPolicy.Question::points).reduce(BigDecimal.ZERO,BigDecimal::add);
-            var normalized=maximum!=null && maximum.signum()>0?score.divide(maximum,12,RoundingMode.HALF_UP):score;
-            if(best==null || assignment.getScoringPolicy()==ScoringPolicy.HIGHEST && normalized.compareTo(ratio)>0) {best=score;ratio=normalized;}
+            if (AssignmentGradeSelection.prefers(assignment.getScoringPolicy(), score, maximum, best, bestMaximum)) {
+                best = score;
+                bestMaximum = maximum;
+            }
             if(assignment.getScoringPolicy()==ScoringPolicy.LATEST)break;
         }
         return best;

@@ -6,6 +6,14 @@ import org.springframework.http.HttpStatus;
 /** API error contract: stable machine code, HTTP status and default public message. */
 @Getter
 public enum ErrorCode {
+    GRADEBOOK_VERSION_CONFLICT(HttpStatus.CONFLICT, "Gradebook version no longer matches"),
+    GRADEBOOK_INVALID_WEIGHTS(HttpStatus.UNPROCESSABLE_ENTITY, "Weighted gradebook weights must total 100%"),
+    GRADEBOOK_NOT_FOUND(HttpStatus.NOT_FOUND, "Gradebook not found"),
+    GRADEBOOK_PUBLICATION_NOT_READY(HttpStatus.UNPROCESSABLE_ENTITY, "No eligible grades to publish"),
+    GRADEBOOK_IDEMPOTENCY_CONFLICT(HttpStatus.CONFLICT, "Idempotency key was already used for a different request"),
+    GRADEBOOK_EXPORT_LIMIT_EXCEEDED(HttpStatus.UNPROCESSABLE_ENTITY, "Gradebook exceeds the export limits"),
+    GRADEBOOK_ITEM_UNGRADED(HttpStatus.UNPROCESSABLE_ENTITY, "Ungraded items cannot be included in a grade scheme"),
+    GRADEBOOK_ITEM_HIDDEN(HttpStatus.UNPROCESSABLE_ENTITY, "A hidden classroom item cannot be included in a new grade scheme"),
     VALIDATION_FAILED(HttpStatus.BAD_REQUEST, "Invalid request parameters"),
     INVALID_REQUEST_BODY(HttpStatus.BAD_REQUEST, "Invalid request parameters"),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "Invalid request parameters"),
