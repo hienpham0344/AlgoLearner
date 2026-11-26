@@ -1,6 +1,6 @@
 -- SRS 4.9 - Code Judge schema.
 -- RUN executions are intentionally not persisted here. Every row in
--- tbl_submission represents an official SUBMIT operation.
+-- tbl_judge_submission represents an official SUBMIT operation.
 
 CREATE TABLE tbl_judge_problem (
     id UUID PRIMARY KEY,
@@ -68,7 +68,7 @@ CREATE TABLE tbl_judge_test_case (
     CONSTRAINT uq_judge_test_case_ordinal UNIQUE (version_id, ordinal)
 );
 
-CREATE TABLE tbl_submission (
+CREATE TABLE tbl_judge_submission (
     id UUID PRIMARY KEY,
     problem_id UUID NOT NULL REFERENCES tbl_judge_problem(id) ON DELETE RESTRICT,
     submitter_id UUID NOT NULL REFERENCES tbl_account(id) ON DELETE RESTRICT,
@@ -94,18 +94,18 @@ CREATE TABLE tbl_submission (
     completed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT ck_submission_source_not_blank CHECK (btrim(source_code) <> ''),
-    CONSTRAINT ck_submission_source_checksum
+    CONSTRAINT ck_judge_submission_source_not_blank CHECK (btrim(source_code) <> ''),
+    CONSTRAINT ck_judge_submission_source_checksum
         CHECK (source_code_sha256 IS NULL OR source_code_sha256 ~ '^[0-9a-fA-F]{64}$')
 );
-CREATE INDEX idx_submission_problem_created
-    ON tbl_submission(problem_id, created_at DESC);
-CREATE INDEX idx_submission_submitter_created
-    ON tbl_submission(submitter_id, created_at DESC);
-CREATE INDEX idx_submission_test_case_version_id
-    ON tbl_submission(test_case_version_id);
-CREATE INDEX idx_submission_status_created
-    ON tbl_submission(status, created_at)
+CREATE INDEX idx_judge_submission_problem_created
+    ON tbl_judge_submission(problem_id, created_at DESC);
+CREATE INDEX idx_judge_submission_submitter_created
+    ON tbl_judge_submission(submitter_id, created_at DESC);
+CREATE INDEX idx_judge_submission_test_case_version_id
+    ON tbl_judge_submission(test_case_version_id);
+CREATE INDEX idx_judge_submission_status_created
+    ON tbl_judge_submission(status, created_at)
     WHERE status IN ('PENDING', 'QUEUED', 'JUDGING');
 
 -- An evaluation is an immutable judge attempt. The first attempt is INITIAL;
@@ -113,7 +113,7 @@ CREATE INDEX idx_submission_status_created
 -- current official evaluation.
 CREATE TABLE tbl_submission_evaluation (
     id UUID PRIMARY KEY,
-    submission_id UUID NOT NULL REFERENCES tbl_submission(id) ON DELETE RESTRICT,
+    submission_id UUID NOT NULL REFERENCES tbl_judge_submission(id) ON DELETE RESTRICT,
     test_case_version_id UUID NOT NULL REFERENCES tbl_judge_test_case_version(id) ON DELETE RESTRICT,
     attempt_no INTEGER NOT NULL CHECK (attempt_no > 0),
     trigger_type VARCHAR(20) NOT NULL CHECK (trigger_type IN ('INITIAL', 'REJUDGE')),
@@ -185,7 +185,7 @@ CREATE INDEX idx_submission_test_result_evaluation_id
 
 CREATE TABLE tbl_rejudge_history (
     id BIGSERIAL PRIMARY KEY,
-    submission_id UUID NOT NULL REFERENCES tbl_submission(id) ON DELETE RESTRICT,
+    submission_id UUID NOT NULL REFERENCES tbl_judge_submission(id) ON DELETE RESTRICT,
     requested_by UUID NOT NULL REFERENCES tbl_account(id) ON DELETE RESTRICT,
     previous_evaluation_id UUID REFERENCES tbl_submission_evaluation(id) ON DELETE RESTRICT,
     new_evaluation_id UUID REFERENCES tbl_submission_evaluation(id) ON DELETE RESTRICT,

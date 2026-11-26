@@ -13,7 +13,7 @@ import java.util.UUID;
 import static com.algolearner.platform.judge.JudgeTypes.*;
 
 @Entity
-@Table(name = "tbl_submission")
+@Table(name = "tbl_judge_submission")
 @Getter @Setter @NoArgsConstructor
 public class SubmissionEntity extends BaseAuditableEntity {
     @Id @Column(nullable = false, updatable = false) private UUID id;
