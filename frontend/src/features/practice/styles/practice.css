@@ -1600,9 +1600,9 @@
 .practice-case-strip {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   overflow-x: auto;
-  padding: 10px 0 12px;
+  padding: 6px 4px 12px;
 }
 
 .practice-case-pill {
@@ -1627,8 +1627,12 @@
 }
 
 .practice-case-pill[data-selected='true'] {
-  outline: 2px solid var(--prac-ink);
-  outline-offset: 1px;
+  border-color: var(--prac-ink);
+  box-shadow: 0 0 0 1px var(--prac-ink);
+}
+
+.practice-case-pill[data-verdict='ACCEPTED'][data-selected='true'] {
+  box-shadow: 0 0 0 2px #fafaf8, 0 0 0 3.5px var(--prac-ink);
 }
 
 .practice-io-compare {
