@@ -4,12 +4,17 @@ import com.algolearner.platform.auth.*;
 import com.algolearner.platform.common.dto.PageResponse;
 import com.algolearner.platform.common.exception.AppException;
 import com.algolearner.platform.common.exception.ResourceNotFoundException;
+import com.algolearner.platform.grading.GradebookEntity;
+import com.algolearner.platform.grading.GradebookRepository;
+import com.algolearner.platform.grading.GradeSchemeRevisionRepository;
 import com.algolearner.platform.practice.ClassroomPracticeRepository;
 import com.algolearner.platform.notification.NotificationEntity;
 import com.algolearner.platform.notification.NotificationRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import com.algolearner.platform.audit.AuditService;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -36,6 +41,8 @@ public class ClassroomService {
     private final NotificationRepository notifications;
     private final AccountRepository accounts;
     private final ClassroomPracticeRepository practices;
+    private final GradebookRepository gradebooks;
+    private final GradeSchemeRevisionRepository gradeSchemeRevisions;
     private final ClassroomPairLock pairLock;
     private final EntityManager entityManager;
     private final Clock clock;
@@ -47,12 +54,15 @@ public class ClassroomService {
                             ClassroomJoinRequestRepository requests, ClassroomInvitationRepository invitations,
                             NotificationRepository notifications, AccountRepository accounts, Clock clock,
                             ClassroomPairLock pairLock, EntityManager entityManager, AuditService audit, AccountIdentityResolver identityResolver,
-                            ClassroomPracticeRepository practices) {
+                            ClassroomPracticeRepository practices, GradebookRepository gradebooks,
+                            GradeSchemeRevisionRepository gradeSchemeRevisions) {
         this.classrooms = classrooms; this.memberships = memberships; this.requests = requests;
         this.invitations = invitations; this.notifications = notifications; this.accounts = accounts; this.clock = clock;
         this.pairLock = pairLock; this.entityManager = entityManager;
         this.audit = audit; this.identityResolver = identityResolver;
         this.practices = practices;
+        this.gradebooks = gradebooks;
+        this.gradeSchemeRevisions = gradeSchemeRevisions;
     }
 
     public View get(UUID actorId, UUID classroomId) {
@@ -110,7 +120,12 @@ public class ClassroomService {
         classroom.setDescription(clean(input.description())); classroom.setStatus(ClassroomStatus.ACTIVE);
         classroom.setClassCode(nextCode()); classroom.setCodeExpiresAt(input.codeExpiresAt());
         classroom.setCodeLocked(false); classroom.setJoiningOpen(true); classroom.setJoinMode(input.joinMode());
-        return view(classrooms.save(classroom), true);
+        var saved = classrooms.saveAndFlush(classroom);
+        var gradebook = new GradebookEntity();
+        gradebook.setId(UUID.randomUUID());
+        gradebook.setClassroomId(saved.getId());
+        gradebooks.save(gradebook);
+        return view(saved, true);
     }
 
     @Transactional
@@ -135,7 +150,25 @@ public class ClassroomService {
                 || classrooms.hasQuizData(classroomId)) {
             throw conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve related classroom data");
         }
-        classrooms.delete(classroom);
+        if (gradeSchemeRevisions.existsForClassroom(classroomId)) {
+            throw gradebookDeleteConflict();
+        }
+        try {
+            classrooms.delete(classroom);
+            // A revision writer that bypasses the classroom lock can race the pre-check.
+            classrooms.flush();
+        } catch (DataIntegrityViolationException exception) {
+            if (exception.getCause() instanceof ConstraintViolationException violation
+                    && "23503".equals(violation.getSQLState())
+                    && "tbl_grade_scheme_revision_gradebook_id_fkey".equals(violation.getConstraintName())) {
+                throw gradebookDeleteConflict();
+            }
+            throw exception;
+        }
+    }
+
+    private static AppException gradebookDeleteConflict() {
+        return conflict("CLASS_HAS_RETAINED_DATA", "Archive this classroom to preserve its gradebook revisions");
     }
 
     @Transactional

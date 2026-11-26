@@ -34,6 +34,7 @@ public class QuizService {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final com.algolearner.platform.audit.AuditService audit;
+    private final org.springframework.context.ApplicationEventPublisher events;
 
     public QuizView create(UUID actor,UUID classroom,Configure input) {
         owner(actor,classroom); QuizPolicy.validate(input);
@@ -149,6 +150,7 @@ public class QuizService {
                 json(Map.of("studentId",studentId,"score",change.finalScore())),change.reason(),null);
         refreshCompletion(quizId,studentId);
         lessons.recomputeForItem(classroom,LinkedItemType.QUIZ,quizId,studentId);
+        gradebookChanged(classroom, studentId);
         return change;
     }
     public List<GradeChange> gradeHistory(UUID actor,UUID classroom,UUID quizId,UUID studentId) {
@@ -275,7 +277,10 @@ public class QuizService {
         owner(actor,classroom); quiz(classroom,quizId,true);
         var students=jdbc.query("select distinct student_id from tbl_quiz_attempt where quiz_id=? and status='SUBMITTED' and score is not null and not grade_published",(rs,n)->rs.getObject(1,UUID.class),quizId);
         jdbc.update("update tbl_quiz_attempt set grade_published=true,version=version+1,updated_at=? where quiz_id=? and status='SUBMITTED' and score is not null and not grade_published",ts(now()),quizId);
-        students.forEach(student->lessons.recomputeForItem(classroom,LinkedItemType.QUIZ,quizId,student));
+        students.forEach(student -> {
+            lessons.recomputeForItem(classroom, LinkedItemType.QUIZ, quizId, student);
+            gradebookChanged(classroom, student);
+        });
     }
     public com.algolearner.platform.common.dto.PageResponse<AttemptView> history(UUID actor,UUID classroom,UUID quizId,UUID studentId,org.springframework.data.domain.Pageable page) {
         boolean teacher=reader(actor,classroom);if(!teacher)requireLinkedAccess(quizId); var quiz=quiz(classroom,quizId,false);
@@ -320,7 +325,12 @@ public class QuizService {
         if(status.equals("SUBMITTED")) {
             refreshCompletion(quiz.id,attempt.student);
             lessons.recomputeForItem(quiz.classroom,LinkedItemType.QUIZ,quiz.id,attempt.student);
+            gradebookChanged(quiz.classroom, attempt.student);
         }
+    }
+
+    private void gradebookChanged(UUID classroom, UUID student) {
+        events.publishEvent(new com.algolearner.platform.grading.GradeSourceChanged(classroom, student));
     }
     private BigDecimal grade(Snapshot snapshot,List<AnswerView> saved) {
         var byQuestion=new HashMap<UUID,Set<UUID>>();saved.forEach(a->byQuestion.put(a.questionId(),new HashSet<>(a.selectedOptionIds())));

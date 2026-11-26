@@ -35,6 +35,12 @@ public interface AssignmentAttemptRepository extends JpaRepository<AssignmentAtt
             """,nativeQuery=true)
     List<UUID> findPendingOfficialAttemptIds();
 
+    @Query("""
+            select distinct a.student.id from AssignmentAttemptEntity a
+            where a.assignment.id = :assignmentId and a.submittedAt is not null
+            """)
+    List<UUID> findStudentsWithSubmissions(@Param("assignmentId") UUID assignmentId);
+
     long countByAssignmentIdAndStudentId(UUID assignmentId, UUID studentId);
 
     boolean existsByAssignmentId(UUID assignmentId);
