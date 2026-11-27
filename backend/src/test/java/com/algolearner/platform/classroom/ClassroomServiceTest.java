@@ -2,11 +2,16 @@ package com.algolearner.platform.classroom;
 
 import com.algolearner.platform.auth.*;
 import com.algolearner.platform.common.exception.AppException;
+import com.algolearner.platform.grading.GradebookRepository;
+import com.algolearner.platform.grading.GradeSchemeRevisionRepository;
 import com.algolearner.platform.notification.NotificationRepository;
 import jakarta.persistence.EntityManager;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import java.sql.SQLException;
 import java.time.*;
 import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,7 +30,9 @@ class ClassroomServiceTest {
     private final EntityManager entityManager = mock(EntityManager.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-11-01T00:00:00Z"), ZoneOffset.UTC);
     private final com.algolearner.platform.practice.ClassroomPracticeRepository practices = mock(com.algolearner.platform.practice.ClassroomPracticeRepository.class);
-    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts), practices);
+    private final GradebookRepository gradebooks = mock(GradebookRepository.class);
+    private final GradeSchemeRevisionRepository revisions = mock(GradeSchemeRevisionRepository.class);
+    private final ClassroomService service = new ClassroomService(classrooms, memberships, requests, invitations, notifications, accounts, clock, pairLock, entityManager, mock(com.algolearner.platform.audit.AuditService.class), new AccountIdentityResolver(accounts), practices, gradebooks, revisions);
 
     @Test
     void invitationCreatesNotificationForInvitedStudent() {
@@ -184,10 +191,13 @@ class ClassroomServiceTest {
     @Test
     void teacherCreatesPrivateActiveClassWithGeneratedCode() {
         var teacher = account(AccountRole.TEACHER); when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher));
-        when(classrooms.existsByClassCode(any())).thenReturn(false); when(classrooms.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(classrooms.existsByClassCode(any())).thenReturn(false); when(classrooms.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
         var result = service.create(teacher.getId(), new ClassroomDtos.Create(" Algorithms ", "desc", JoinMode.AUTO_JOIN, null, null));
         assertThat(result.name()).isEqualTo("Algorithms"); assertThat(result.status()).isEqualTo("ACTIVE");
         assertThat(result.ownerId()).isEqualTo(teacher.getId()); assertThat(result.classCode()).hasSize(8);
+        verify(gradebooks).save(argThat(gradebook -> gradebook.getClassroomId().equals(result.id())
+                && !gradebook.isShowOverall() && gradebook.getActiveSchemeRevisionId() == null
+                && gradebook.getVersion() == 0));
     }
 
     @Test
@@ -237,6 +247,38 @@ class ClassroomServiceTest {
         when(classrooms.findById(classroom.getId())).thenReturn(Optional.of(classroom)); when(classrooms.existsByClassCode(any())).thenReturn(false);
         var updated = service.regenerateCode(teacher.getId(), classroom.getId());
         assertThat(updated.classCode()).hasSize(8).isNotEqualTo("ABCDEFGH"); verifyNoInteractions(memberships);
+    }
+
+    @Test
+    void deleteRejectsClassWithGradebookRevisionsBeforeDeleting() {
+        var teacher = account(AccountRole.TEACHER);
+        var classroom = classroom(teacher);
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        when(revisions.existsForClassroom(classroom.getId())).thenReturn(true);
+
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getHttpStatus().value()).isEqualTo(409);
+                    assertThat(exception.getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
+                });
+        verify(classrooms, never()).delete(any());
+    }
+
+    @Test
+    void deleteMapsConcurrentRevisionForeignKeyViolationToConflict() {
+        var teacher = account(AccountRole.TEACHER);
+        var classroom = classroom(teacher);
+        when(accounts.findById(teacher.getId())).thenReturn(Optional.of(teacher));
+        var violation = new ConstraintViolationException("revision FK", new SQLException("FK violation", "23503"),
+                "tbl_grade_scheme_revision_gradebook_id_fkey");
+        doThrow(new DataIntegrityViolationException("delete failed", violation)).when(classrooms).flush();
+
+        assertThatThrownBy(() -> service.delete(teacher.getId(), classroom.getId()))
+                .isInstanceOfSatisfying(AppException.class, exception -> {
+                    assertThat(exception.getHttpStatus().value()).isEqualTo(409);
+                    assertThat(exception.getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA");
+                });
+        verify(classrooms).delete(classroom);
     }
 
     @Test

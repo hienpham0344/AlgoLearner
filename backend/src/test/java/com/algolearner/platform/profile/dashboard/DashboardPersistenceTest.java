@@ -125,9 +125,14 @@ class DashboardPersistenceTest extends PostgresIntegrationTest {
         assertThat(repository.contributions(context(outsider),false)).isEqualTo(new DashboardResponse.Contributions(0,0));
         assertThat(repository.totals().officialSubmissionCount()).isGreaterThanOrEqualTo(1);
         assertThat(repository.chartEvents(now.minusSeconds(1),now.plusSeconds(1))).anyMatch(e -> e.metric().equals("SUBMISSION"));
-        jdbc.update("INSERT INTO tbl_audit_log(actor_id,actor_role,target_type,target_id,action,created_at) VALUES(?,'TEACHER','COURSE',?,'COURSE_SUBMIT',?)",teacher,course.toString(),Timestamp.from(now));
-        assertThat(repository.audits(context(teacher)).items()).anyMatch(e -> e.action().equals("COURSE_SUBMIT"));
-        assertThat(repository.activities(context(teacher)).items()).anyMatch(e -> e.action().equals("COURSE_SUBMIT"));
+        var auditId = jdbc.queryForObject("""
+                INSERT INTO tbl_audit_log(actor_id,actor_role,target_type,target_id,action,created_at)
+                VALUES (?,'TEACHER','COURSE',?,'COURSE_SUBMIT',clock_timestamp()) RETURNING 'audit-'||id
+                """, String.class, teacher, course.toString());
+        assertThat(repository.audits(context(teacher)).items())
+                .anyMatch(e -> e.auditId().equals(auditId) && e.action().equals("COURSE_SUBMIT"));
+        assertThat(repository.activities(context(teacher)).items())
+                .anyMatch(e -> e.eventId().equals(auditId) && e.action().equals("COURSE_SUBMIT"));
         job(student,submission,2,"WRONG_ANSWER");
         assertThat(practice.acceptedPublicSubmissions(student)).isEmpty();
     }
