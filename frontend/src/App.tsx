@@ -28,6 +28,9 @@ const StudentAssignmentsPage = lazy(() => import('@/features/classroom/assignmen
 const StudentAssignmentDetailPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAssignmentDetailPage })));
 const StudentWorkspacePage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentWorkspacePage })));
 const StudentAttemptsHistoryPage = lazy(() => import('@/features/classroom/assignments').then(m => ({ default: m.StudentAttemptsHistoryPage })));
+const PracticeStudioPage = lazy(() => import('@/features/practice/pages/PracticeStudioPage').then(m => ({ default: m.PracticeStudioPage })));
+const PracticeWorkspacePage = lazy(() => import('@/features/practice/pages/PracticeWorkspacePage').then(m => ({ default: m.PracticeWorkspacePage })));
+const PatternLab = import.meta.env.DEV ? lazy(() => import('@/features/practice/components/generative-patterns/PatternLab').then(m => ({ default: m.PatternLab }))) : null;
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
@@ -90,7 +93,10 @@ export const App: React.FC = () => {
       {/* Feature Placeholders & Workspace Sections */}
       <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
       <Route path="/student/courses" element={<ProtectedRoute><PlaceholderPage feature="public-courses" /></ProtectedRoute>} />
-      <Route path="/practice" element={<ProtectedRoute><PlaceholderPage feature="practice" /></ProtectedRoute>} />
+      <Route path="/practice" element={<ProtectedRoute><PracticeStudioPage /></ProtectedRoute>} />
+      <Route path="/practice/problems/:practiceId" element={<ProtectedRoute><PracticeWorkspacePage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/practice" element={<ProtectedRoute><PracticeStudioPage /></ProtectedRoute>} />
+      <Route path="/student/classrooms/:id/practice/:practiceId" element={<ProtectedRoute><PracticeWorkspacePage /></ProtectedRoute>} />
       <Route path="/teacher/assignments" element={<ProtectedRoute><PlaceholderPage feature="teacher-assignments" /></ProtectedRoute>} />
       <Route path="/teacher/review-queue" element={<ProtectedRoute><PlaceholderPage feature="teacher-review-queue" /></ProtectedRoute>} />
       <Route path="/admin/submissions" element={<ProtectedRoute><PlaceholderPage feature="admin-submissions" /></ProtectedRoute>} />
@@ -130,6 +136,7 @@ export const App: React.FC = () => {
 
       {/* Dev Loading Preview Route */}
       <Route path="/preview/loading" element={<LoadingPreviewPage />} />
+      {PatternLab && <Route path="/dev/pattern-lab" element={<Suspense fallback={<LoadingScreen variant="page" message="Loading Pattern Lab…" />}><PatternLab /></Suspense>} />}
 
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
