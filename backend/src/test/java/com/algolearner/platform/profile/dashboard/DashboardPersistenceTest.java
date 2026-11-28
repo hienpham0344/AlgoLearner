@@ -114,7 +114,7 @@ class DashboardPersistenceTest extends PostgresIntegrationTest {
         UUID course=course(teacher,"DRAFT");
         jdbc.update("INSERT INTO tbl_public_course_revision(id,course_id,author_id,revision_no,status,snapshot,submitted_at) VALUES(?,?,?,1,'PENDING_REVIEW','{}'::jsonb,CURRENT_TIMESTAMP)",UUID.randomUUID(),course,teacher);
         UUID problem=UUID.randomUUID();
-        jdbc.update("INSERT INTO tbl_public_problem(id,author_id,status) VALUES(?,?,'PENDING_REVIEW')",problem,teacher);
+        jdbc.update("INSERT INTO tbl_public_problem(id,author_id,status,review_status) VALUES(?,?,'DRAFT','PENDING_REVIEW')",problem,teacher);
         UUID submission=UUID.randomUUID();
         jdbc.update("INSERT INTO tbl_submission(id,owner_id,scope,resource_id,revision_id,language,source,testcase_snapshot,created_at) VALUES(?,?,'PUBLIC_PROBLEM',?,?,'PYTHON','pass','[]',?)",submission,student,problem,UUID.randomUUID(),Timestamp.from(now));
         // Trusted worker-result fixtures exercise persisted projections; no Docker execution is claimed.

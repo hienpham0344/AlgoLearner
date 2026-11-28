@@ -140,7 +140,7 @@ public class JdbcDashboardRepository implements DashboardRepository {
         String scope=allTeachers ? "author.role='TEACHER'" : "p.author_id=:account AND author.role='TEACHER'";
         var params=Map.of("account",c.accountId());
         long courses=jdbc.queryForObject("SELECT COUNT(*) FROM tbl_public_course_revision p JOIN tbl_account author ON author.id=p.author_id WHERE p.status='PENDING_REVIEW' AND "+scope,params,Long.class);
-        long problems=jdbc.queryForObject("SELECT COUNT(*) FROM tbl_public_problem p JOIN tbl_account author ON author.id=p.author_id WHERE p.status='PENDING_REVIEW' AND "+scope,params,Long.class);
+        long problems=jdbc.queryForObject("SELECT COUNT(*) FROM tbl_public_problem p JOIN tbl_account author ON author.id=p.author_id WHERE p.review_status='PENDING_REVIEW' AND p.status='DRAFT' AND "+scope,params,Long.class);
         return new Contributions(courses,problems);
     }
     @Override public Preview<Activity> activities(Context c) {

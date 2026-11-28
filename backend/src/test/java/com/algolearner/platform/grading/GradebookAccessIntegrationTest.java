@@ -706,7 +706,7 @@ class GradebookAccessIntegrationTest extends PostgresIntegrationTest {
         var quiz = publishedQuiz(classroom, student.getId(), 80);
         var problem = UUID.randomUUID();
         var course = UUID.randomUUID();
-        jdbc.update("INSERT INTO tbl_public_problem(id,author_id,status) VALUES (?,?,'PENDING_REVIEW')",
+        jdbc.update("INSERT INTO tbl_public_problem(id,author_id,status,review_status) VALUES (?,?,'DRAFT','PENDING_REVIEW')",
                 problem, publicAuthor.getId());
         jdbc.update("""
                 INSERT INTO tbl_submission(id,owner_id,scope,resource_id,revision_id,language,source,testcase_snapshot)
