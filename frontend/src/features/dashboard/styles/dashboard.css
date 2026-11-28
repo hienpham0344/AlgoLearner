@@ -164,6 +164,7 @@
 
 .dashboard-topbar {
   position: relative;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -189,6 +190,7 @@
 }
 
 .dashboard-topbar-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 18px;
@@ -203,6 +205,7 @@
   border-radius: 8px;
   color: #60656a;
   text-decoration: none;
+  cursor: pointer;
   transition: background 180ms ease, color 180ms ease;
 }
 
@@ -221,6 +224,39 @@
   border-radius: 50%;
   background: var(--dash-ink);
 }
+
+.notification-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 50;
+  width: min(360px, calc(100vw - 48px));
+  border: 1px solid var(--dash-line);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 40px #1315161a;
+}
+
+.notification-dropdown-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 12px 18px;
+  border-bottom: 1px solid var(--dash-line);
+}
+
+.notification-dropdown-heading h2 { margin: 0; font-size: 14px; font-weight: 700; }
+.notification-dropdown-content { max-height: min(360px, 60svh); overflow-y: auto; }
+.notification-dropdown-list { margin: 0; padding: 0 12px; list-style: none; }
+.notification-dropdown-list li:last-child .dashboard-notification-row { border-bottom: 0; }
+.notification-dropdown-list strong { display: block; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.notification-dropdown-list time { display: block; margin-top: 5px; color: #60656a; font-size: 11px; }
+.notification-dropdown-message { display: grid; justify-items: center; gap: 9px; padding: 30px 18px; text-align: center; font-size: 12px; }
+.notification-dropdown-message p { margin: 0; color: #60656a; line-height: 1.6; }
+.notification-dropdown-message button { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.notification-dropdown-footer { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--dash-line); color: var(--dash-ink); font-size: 11px; font-weight: 650; text-decoration: none; }
+.notification-dropdown-footer:hover { background: var(--dash-hover); border-radius: 0 0 12px 12px; }
+.notification-dropdown :is(button, a):focus-visible { outline: 2px solid var(--dash-ink); outline-offset: 3px; }
 
 .dashboard-profile {
   position: relative;

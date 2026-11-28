@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
-  Bell,
   BookOpen,
   ChevronRight,
   ClipboardCheck,
@@ -17,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { NotificationDropdown } from '@/features/notification/components/NotificationDropdown';
 import logoMark from '@/assets/logo-mark.svg';
 import { getWorkspaceNavItems, type WorkspaceNavIconKey, type WorkspaceRole } from './workspaceNav';
 import '@/features/dashboard/styles/dashboard.css';
@@ -188,16 +188,7 @@ export const WorkspaceLayout: React.FC<WorkspaceLayoutProps> = ({
             {topbarActions ?? (
               <>
                 {activeRole !== 'ADMIN' && (
-                  <>
-                    <Link
-                      className="dashboard-icon-link"
-                      to="/notifications"
-                      aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
-                    >
-                      <Bell size={18} strokeWidth={1.8} aria-hidden="true" />
-                      {unreadCount > 0 && <span className="dashboard-notification-dot" />}
-                    </Link>
-                  </>
+                  <NotificationDropdown unreadCount={unreadCount} />
                 )}
 
                 <details className="dashboard-profile">

@@ -137,6 +137,8 @@ Các trang `/teacher/classrooms`, `/student/classrooms`, `/admin/classrooms` và
 
 Backend 4.3 có API liệt kê lời mời đã gửi và thông báo lời mời của Student. Student có thể chấp nhận hoặc từ chối trực tiếp tại `/student/classrooms#invitations`; Teacher thu hồi từ danh sách lời mời trong lớp. Lời mời hết hạn hoặc bị thu hồi vẫn giữ trạng thái để đối chiếu. Chuyển quyền sở hữu hiện yêu cầu Admin nhập UUID Teacher. Các số liệu mẫu trong prototype không xuất hiện ở chế độ API.
 
+Nút chuông trong workspace Student/Teacher mở bảng thông báo thả xuống ngay trên trang hiện tại. Bấm ra ngoài hoặc nhấn Escape để đóng; chọn `View all notifications` để mở trang thông báo đầy đủ.
+
 Kiểm thử giao diện 4.2/4.3 bằng Chrome: từ `frontend`, chạy `npm run test:e2e` hoặc `npm run test:e2e:coverage` để xem độ bao phủ hàm của mã frontend được nạp. Bộ test tự chạy Vite ở cổng 3100/3101; có thể đặt `PLAYWRIGHT_CHROME_PATH` nếu Chrome không ở `/usr/bin/google-chrome`. Mặc định các phản hồi API trong Playwright được giả lập.
 
 Để kiểm tra UI với backend thật, điền Supabase trong `backend/.env`, chạy `bash backend/scripts/run-local-email.sh`, rồi `npm run dev` trong `frontend`. Đăng ký tài khoản thật qua OTP; launcher không seed tài khoản mẫu. Các bài Playwright mặc định dùng backend HTTP fixture hoặc frontend offline, không chứng minh kết nối Supabase thật. Xem `backend/README.md` để chạy integration tests trên PostgreSQL riêng.
