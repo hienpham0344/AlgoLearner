@@ -18,7 +18,9 @@ public class JudgeAccessPolicy {
     private final ClassroomRepository classrooms;
     private final ClassroomMembershipRepository memberships;
 
-    public JudgeAccessPolicy(ClassroomRepository classrooms, ClassroomMembershipRepository memberships) {
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
+    public JudgeAccessPolicy(ClassroomRepository classrooms, ClassroomMembershipRepository memberships, org.springframework.jdbc.core.JdbcTemplate jdbc) {
+        this.jdbc=jdbc;
         this.classrooms = classrooms;
         this.memberships = memberships;
     }
@@ -28,7 +30,13 @@ public class JudgeAccessPolicy {
         if (actor.getRole() == AccountRole.ADMIN) {
             throw error(HttpStatus.FORBIDDEN, "ADMIN_CONTEXT_FORBIDDEN", "Admin accounts cannot submit in learner contexts");
         }
-        if (problem.getContextType() == PUBLIC_PROBLEM) return;
+        if (problem.getContextType() == PUBLIC_PROBLEM) {
+            boolean unavailable=Boolean.TRUE.equals(jdbc.queryForObject(
+                    "SELECT EXISTS(SELECT FROM tbl_public_problem WHERE id=? AND status<>'PUBLISHED')",
+                    Boolean.class,problem.getContextId()));
+            if(unavailable) throw error(HttpStatus.UNPROCESSABLE_ENTITY,"PROBLEM_INACTIVE","Public problem is unavailable");
+            return;
+        }
         var classroom = problem.getClassroomId() == null ? null : classrooms.findById(problem.getClassroomId()).orElse(null);
         if (actor.getRole() == AccountRole.TEACHER && classroom != null
                 && classroom.getOwner().getId().equals(actor.getId())) return;

@@ -17,7 +17,11 @@ public interface JudgeGateway {
         public CodeEvaluationRequest { testCases = List.copyOf(testCases); }
     }
     record CaseResult(int index, Verdict verdict, String input, String expectedOutput, String actualOutput) { }
-    record EvaluationResult(UUID jobId, long generation, Verdict verdict, int passed, int total, List<CaseResult> cases) {
+    record EvaluationResult(UUID jobId, long generation, Verdict verdict, int passed, int total, List<CaseResult> cases,
+                            Long runtimeMs, Long memoryUsedKb) {
+        public EvaluationResult(UUID jobId,long generation,Verdict verdict,int passed,int total,List<CaseResult> cases) {
+            this(jobId,generation,verdict,passed,total,cases,null,null);
+        }
         public EvaluationResult { cases = List.copyOf(cases); }
     }
     record JobReference(UUID jobId, UUID ownerId, UUID attemptId, UUID questionId, SubmissionScope scope,

@@ -50,6 +50,8 @@ public class JdbcJudgeGateway implements JudgeGateway {
             if(run && jdbc.queryForObject("SELECT COUNT(*) FROM tbl_judge_job WHERE owner_id=:owner AND mode='RUN' AND created_at>clock_timestamp()-INTERVAL '60 seconds'",params,Long.class)>=5)
                 throw failure(HttpStatus.TOO_MANY_REQUESTS,"JUDGE_RUN_RATE_LIMIT");
             UUID submission = null;
+            if (!run && !rejudge && jdbc.queryForObject("SELECT count(*) FROM tbl_judge_job WHERE owner_id=:owner AND mode='SUBMIT' AND status IN ('QUEUED','RUNNING')",params,Long.class)>=5)
+                throw failure(HttpStatus.TOO_MANY_REQUESTS,"JUDGE_SUBMIT_QUEUE_LIMIT");
             boolean newSubmission = false;
             if (!run) {
                 var previousJobs = jdbc.queryForList("SELECT submission_id,payload FROM tbl_judge_job WHERE owner_id=:owner AND request_key=:key AND mode='SUBMIT' ORDER BY generation LIMIT 1",params);
@@ -92,12 +94,12 @@ public class JdbcJudgeGateway implements JudgeGateway {
         var result = evaluation(row,id);
         var request = decode((String)row.get("payload"),CodeEvaluationRequest.class);
         if (request.feedback() == Feedback.PASS_FAIL) {
-            return new EvaluationResult(id,result.generation(),result.verdict(),result.passed(),result.total(),List.of());
+            return new EvaluationResult(id,result.generation(),result.verdict(),result.passed(),result.total(),List.of(),result.runtimeMs(),result.memoryUsedKb());
         }
         var cases = result.cases().stream().filter(value -> value.index() >= 0 && value.index() < request.testCases().size())
                 .map(value -> JudgePolicy.visibleCase(value.index(),request.testCases().get(value.index()),value.verdict(),value.actualOutput(),request.feedback()))
                 .filter(Objects::nonNull).toList();
-        return new EvaluationResult(id,result.generation(),result.verdict(),result.passed(),result.total(),cases);
+        return new EvaluationResult(id,result.generation(),result.verdict(),result.passed(),result.total(),cases,result.runtimeMs(),result.memoryUsedKb());
     }
 
     @Override public EvaluationResult scoringResult(UUID owner,UUID id) {

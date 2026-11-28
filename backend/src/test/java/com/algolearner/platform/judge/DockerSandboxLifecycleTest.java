@@ -54,6 +54,15 @@ class DockerSandboxLifecycleTest {
         assertEmptyDirectory();
     }
 
+    @Test
+    void completedEvaluationIncludesMeasuredRuntimeAndMemory() throws Exception {
+        var commands=new Commands();
+        commands.result=new DockerSandbox.Execution(0,"output",false,false,false,37,4096L);
+        var result=sandbox(commands).evaluate(UUID.randomUUID(),request());
+        assertThat(result.runtimeMs()).isEqualTo(37);
+        assertThat(result.memoryUsedKb()).isEqualTo(4096L);
+    }
+
     private DockerSandbox sandbox(Commands commands) throws IOException {
         return new DockerSandbox(IMAGE,IMAGE,root,commands);
     }
