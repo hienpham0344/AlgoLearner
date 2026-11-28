@@ -15,7 +15,17 @@ import static org.mockito.Mockito.*;
 class JudgeAccessPolicyTest {
     private final ClassroomRepository classrooms = mock(ClassroomRepository.class);
     private final ClassroomMembershipRepository memberships = mock(ClassroomMembershipRepository.class);
-    private final JudgeAccessPolicy policy = new JudgeAccessPolicy(classrooms, memberships);
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc = mock(org.springframework.jdbc.core.JdbcTemplate.class);
+    private final JudgeAccessPolicy policy = new JudgeAccessPolicy(classrooms, memberships, jdbc);
+
+    @Test
+    void unpublishedCatalogProblemRejectsExecution() {
+        var actor=account(AccountRole.STUDENT);
+        var problem=classProblem(actor);
+        problem.setContextType(JudgeTypes.JudgeContextType.PUBLIC_PROBLEM);
+        when(jdbc.queryForObject(anyString(),eq(Boolean.class),eq(problem.getContextId()))).thenReturn(true);
+        assertThatThrownBy(() -> policy.requireExecute(actor,problem)).isInstanceOf(AppException.class);
+    }
 
     @Test
     void ownershipTransferImmediatelyGivesNewOwnerManageAccess() {

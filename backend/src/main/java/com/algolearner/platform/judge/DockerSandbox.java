@@ -47,12 +47,16 @@ final class DockerSandbox {
                 if(compiled.timedOut() || compiled.exit()!=0 || compiled.overflow())
                     return new EvaluationResult(job,r.generation(),Verdict.COMPILE_ERROR,0,r.testCases().size(),List.of());
             }
+            long runtimeMs=0;
+            Long memoryUsedKb=null;
             int passed=0,index=0;Verdict overall=Verdict.ACCEPTED;var results=new ArrayList<CaseResult>();
             for(var test:r.testCases()) {
                 var args=command(r.language()==Language.JAVA?javaImage:pythonImage,dir,artifact,false);
                 args.addAll(r.language()==Language.JAVA?List.of("java","-Xmx192m","-XX:ActiveProcessorCount=1","-XX:+UseSerialGC","-cp","/artifact","Main")
                         :List.of("python3","-I","-B","/source/main.py"));
                 var execution=commands.execute(args,test.input(),r.limits().runtimeMillis(),r.limits().outputBytes());
+                runtimeMs+=execution.runtimeMs();
+                if(execution.memoryUsedKb()!=null) memoryUsedKb=Math.max(memoryUsedKb==null?0:memoryUsedKb,execution.memoryUsedKb());
                 Verdict verdict=execution.timedOut()?Verdict.TIME_LIMIT_EXCEEDED:execution.overflow()?Verdict.OUTPUT_LIMIT_EXCEEDED
                         :execution.outOfMemory()?Verdict.MEMORY_LIMIT_EXCEEDED:execution.exit()!=0?Verdict.RUNTIME_ERROR:JudgePolicy.matches(test.expectedOutput(),execution.stdout())?Verdict.ACCEPTED:Verdict.WRONG_ANSWER;
                 if(verdict==Verdict.ACCEPTED)passed++;else if(overall==Verdict.ACCEPTED)overall=verdict;
@@ -60,7 +64,7 @@ final class DockerSandbox {
                 // Persist every verdict for server-side weighted scoring; API projection enforces feedback separately.
                 results.add(visible!=null?visible:new CaseResult(index-1,verdict,null,null,null));
             }
-            return new EvaluationResult(job,r.generation(),overall,passed,r.testCases().size(),results);
+            return new EvaluationResult(job,r.generation(),overall,passed,r.testCases().size(),results,runtimeMs,memoryUsedKb);
         } catch(IOException|InterruptedException|RuntimeException|Error error) {
             failure=error;
             throw error;
@@ -99,7 +103,11 @@ final class DockerSandbox {
             if(p.exitValue()!=0)throw new IOException("Docker control failed");
         } finally {if(p.isAlive())p.destroyForcibly();}
     }
-    record Execution(int exit,String stdout,boolean overflow,boolean timedOut,boolean outOfMemory) { }
+    record Execution(int exit,String stdout,boolean overflow,boolean timedOut,boolean outOfMemory,long runtimeMs,Long memoryUsedKb) {
+        Execution(int exit,String stdout,boolean overflow,boolean timedOut,boolean outOfMemory) {
+            this(exit,stdout,overflow,timedOut,outOfMemory,0,null);
+        }
+    }
     interface DockerCommands {
         void control(List<String> args) throws IOException,InterruptedException;
         Execution execute(List<String> args,String input,int timeoutMillis,int limit) throws IOException,InterruptedException;
@@ -111,6 +119,19 @@ final class DockerSandbox {
         }
     }
     private static Execution executeContainer(List<String> args,String input,int timeoutMillis,int limit) throws IOException,InterruptedException {
+        Path metricsDir=Files.createTempDirectory("judge-metrics-");
+        Path cid=metricsDir.resolve("cid");
+        var command=new ArrayList<>(args);
+        command.addAll(2,List.of("--cidfile",cid.toString()));
+        try {
+            return runMeasured(command,input,timeoutMillis,limit,cid);
+        } finally {
+            Files.deleteIfExists(cid);
+            Files.deleteIfExists(metricsDir);
+        }
+    }
+    private static Execution runMeasured(List<String> args,String input,int timeoutMillis,int limit,Path cid) throws IOException,InterruptedException {
+        long start=System.nanoTime();
         Process process=new ProcessBuilder(args).start();
         String name=args.get(args.indexOf("--name")+1);
         try(var executor=Executors.newVirtualThreadPerTaskExecutor()) {
@@ -121,7 +142,15 @@ final class DockerSandbox {
             boolean removed=false;
             Throwable failure=null;
             try {
-                boolean finished=process.waitFor(timeoutMillis,TimeUnit.MILLISECONDS);
+                long deadline=start+TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+                var meter=new ContainerMemoryMeter(cid);
+                boolean finished;
+                do {
+                    long remaining=Math.max(0,deadline-System.nanoTime());
+                    finished=process.waitFor(Math.min(remaining,TimeUnit.MILLISECONDS.toNanos(10)),TimeUnit.NANOSECONDS);
+                    meter.sample();
+                } while(!finished && System.nanoTime()<deadline);
+                long runtimeMs=TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-start);
                 if(!finished) {
                     process.destroyForcibly();
                     // Killing the CLI does not kill its container.
@@ -133,7 +162,7 @@ final class DockerSandbox {
                 // Docker infrastructure/daemon failures retry; learner failures remain final verdicts.
                 if(finished && exit==125)throw new IOException("Docker infrastructure unavailable");
                 boolean oom=finished && exit==137 && outOfMemory(name);
-                return new Execution(exit,output,overflow.get(),!finished,oom);
+                return new Execution(exit,output,overflow.get(),!finished,oom,runtimeMs,meter.peakKb());
             } catch(ExecutionException|TimeoutException error) {
                 var wrapped=new IOException("Bounded container IO failed",error);
                 failure=wrapped;
@@ -170,5 +199,9 @@ final class DockerSandbox {
         }
         return output.toString(StandardCharsets.UTF_8);
     }
-    private static void permissions(Path path,String mode) throws IOException {Files.setPosixFilePermissions(path,java.nio.file.attribute.PosixFilePermissions.fromString(mode));}
+    private static void permissions(Path path,String mode) throws IOException {
+        // On NTFS the read-only Docker bind mount handles container access; the host uses ACLs.
+        if (Files.getFileAttributeView(path,java.nio.file.attribute.PosixFileAttributeView.class)!=null)
+            Files.setPosixFilePermissions(path,java.nio.file.attribute.PosixFilePermissions.fromString(mode));
+    }
 }

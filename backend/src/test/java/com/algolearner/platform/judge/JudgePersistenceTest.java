@@ -58,6 +58,39 @@ class JudgePersistenceTest {
             jdbc.getJdbcTemplate().execute("DROP TRIGGER reject_job ON tbl_judge_job");
             for(int i=0;i<4;i++) gateway.run(new CodeEvaluationRequest(owner,null,null,"pass",Language.PYTHON,request.testCases(),"run"+i,0,Feedback.PASS_FAIL,request.scope(),request.resourceId(),request.revisionId(),request.limits()));
             assertThatThrownBy(() -> gateway.run(new CodeEvaluationRequest(owner,null,null,"pass",Language.PYTHON,request.testCases(),"overflow",0,Feedback.PASS_FAIL,request.scope(),request.resourceId(),request.revisionId(),request.limits()))).isInstanceOf(RuntimeException.class);
+            jdbc.update("UPDATE tbl_judge_job SET status='ACCEPTED'", Map.of());
+            UUID last = null;
+            CodeEvaluationRequest lastRequest = null;
+            for (int i=0;i<5;i++) {
+                lastRequest = new CodeEvaluationRequest(owner,null,null,"pass",Language.PYTHON,request.testCases(),"submit"+i,0,Feedback.PASS_FAIL,request.scope(),request.resourceId(),request.revisionId(),request.limits());
+                last = gateway.submit(lastRequest);
+            }
+            assertThat(gateway.submit(lastRequest)).isEqualTo(last);
+            var overflow = new CodeEvaluationRequest(owner,null,null,"pass",Language.PYTHON,request.testCases(),"submit-overflow",0,Feedback.PASS_FAIL,request.scope(),request.resourceId(),request.revisionId(),request.limits());
+            assertThatThrownBy(() -> gateway.submit(overflow)).isInstanceOf(com.algolearner.platform.common.exception.AppException.class);
+            jdbc.update("UPDATE tbl_judge_job SET status='ACCEPTED' WHERE id=:id",Map.of("id",last));
+            assertThat(gateway.submit(overflow)).isNotNull();
+            UUID concurrentOwner=UUID.randomUUID();
+            jdbc.update("INSERT INTO tbl_account VALUES(:id)",Map.of("id",concurrentOwner));
+            var start=new java.util.concurrent.CountDownLatch(1);
+            try (var pool=java.util.concurrent.Executors.newFixedThreadPool(10)) {
+                var futures=new java.util.ArrayList<java.util.concurrent.Future<Boolean>>();
+                for (int i=0;i<10;i++) {
+                    String key="concurrent"+i;
+                    futures.add(pool.submit(() -> {
+                        start.await();
+                        try {
+                            gateway.submit(new CodeEvaluationRequest(concurrentOwner,null,null,"pass",Language.PYTHON,request.testCases(),key,0,Feedback.PASS_FAIL,request.scope(),request.resourceId(),request.revisionId(),request.limits()));
+                            return true;
+                        } catch (com.algolearner.platform.common.exception.AppException rejected) { return false; }
+                    }));
+                }
+                start.countDown();
+                int admitted=0;
+                for (var future : futures) if (future.get(20,java.util.concurrent.TimeUnit.SECONDS)) admitted++;
+                assertThat(admitted).isEqualTo(5);
+                assertThat(jdbc.queryForObject("SELECT count(*) FROM tbl_submission WHERE owner_id=:id",Map.of("id",concurrentOwner),Long.class)).isEqualTo(5);
+            }
         } finally { ds.setConnectionProperties(new java.util.Properties()); jdbc.getJdbcTemplate().execute("DROP SCHEMA " + schema + " CASCADE"); }
     }
     private java.util.Properties properties(String schema) { var p=new java.util.Properties();p.setProperty("currentSchema",schema); return p; }
