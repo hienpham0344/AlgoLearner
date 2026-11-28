@@ -69,6 +69,7 @@ const ProtectedRoute: React.FC<{
       fallback={
         <LoadingScreen
           variant="page"
+          appearance="line"
           message="Loading page…"
           submessage="Please wait a moment"
         />

@@ -32,6 +32,7 @@ async function loadBundle({ mode = 'production', dev = false } = {}) {
     platform: 'node',
     format: 'cjs',
     write: false,
+    loader: { '.css': 'empty' },
     jsx: 'automatic',
     define: {
       'import.meta.env.MODE': JSON.stringify(mode),

@@ -63,6 +63,7 @@ async function loadModule() {
     platform: 'node',
     format: 'cjs',
     write: false,
+    loader: { '.css': 'empty' },
     jsx: 'automatic',
     define: {
       'import.meta.env.MODE': '"test"',
