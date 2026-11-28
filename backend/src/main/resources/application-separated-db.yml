@@ -1,0 +1,6 @@
+# Enable alongside internal-auth; runtime and Flyway credentials must be different.
+spring:
+  flyway:
+    url: ${DB_URL}
+    user: ${MIGRATION_DB_USERNAME}
+    password: ${MIGRATION_DB_PASSWORD}
