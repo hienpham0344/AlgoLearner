@@ -111,6 +111,31 @@ test('4.2 student dashboard and profile work in demo mode', async ({ page }) => 
   await expect(page.locator('.folder-feedback-toast')).toContainText('Your public profile is visible.');
 });
 
+for (const username of ['learner', 'teacher']) {
+  test(`4.2 ${username} account menu opens profile and matching settings tabs`, async ({ page }) => {
+    await signIn(page, 'http://127.0.0.1:3100', `${username}@example.test`);
+    const menu = page.locator('.dashboard-profile-menu');
+    await expect(page.getByLabel('Account menu')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'My profile', exact: true })).toHaveCount(0);
+    await page.getByLabel('Account menu').click();
+    const profileLink = menu.getByRole('link', { name: username, exact: true });
+    await expect(profileLink).toBeVisible();
+    await profileLink.focus();
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(page.getByRole('tab', { name: 'Profile', exact: true })).toHaveAttribute('aria-selected', 'true');
+
+    for (const [label, tab] of [['Profile settings', 'profile'], ['Account security', 'security']]) {
+      await page.getByRole('link', { name: 'Workspace', exact: true }).click();
+      await page.getByLabel('Account menu').click();
+      await menu.getByRole('link', { name: label, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/profile\\?tab=${tab}$`));
+      await expect(page.getByRole('tab', { name: tab === 'profile' ? 'Profile' : 'Security', exact: true }))
+        .toHaveAttribute('aria-selected', 'true');
+    }
+  });
+}
+
 test('4.2 profile reads the backend response in backend-mock mode', async ({ page }) => {
   const base = 'http://127.0.0.1:3101';
   let profileRequests = 0;
@@ -415,7 +440,8 @@ test('4.2 does not reuse another teacher profile after sign out', async ({ page 
   await page.getByLabel('Account menu').click();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await signIn(page, base, 'teacher2');
-  await page.getByRole('link', { name: 'My profile', exact: true }).first().click();
+  await page.getByLabel('Account menu').click();
+  await page.locator('.dashboard-profile-menu').getByRole('link', { name: 'teacher2', exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Display name' })).toHaveValue('Second teacher profile');
 });
 

@@ -46,9 +46,9 @@ function formatVietnamDate(value?: string | null): string {
   if (!value) return '—';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return '—';
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
     year: 'numeric',
     timeZone: 'Asia/Ho_Chi_Minh',
   }).format(parsed);
@@ -349,7 +349,7 @@ export function BackendClassroomListView({
       {/* Loading & Error States */}
       {listPending && (
         <div className="mt-6">
-          <LoadingScreen variant="page" message="Đang tải danh sách lớp học…" />
+          <LoadingScreen variant="page" message="Loading classrooms…" />
         </div>
       )}
 
@@ -711,7 +711,7 @@ export function BackendClassroomListView({
         <section id="invitations" className="mt-8 rounded-md border border-[#EAEAEA] bg-white p-5">
           <div className="flex items-center justify-between border-b border-[#EAEAEA] pb-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-[#111111]">
-              Thông báo
+              Notifications
             </h2>
             {notificationsData && (
               <span className="font-mono text-[11px] text-[#A5A4A0]">
@@ -721,7 +721,7 @@ export function BackendClassroomListView({
           </div>
 
           {notificationsPending && (
-            <LoadingScreen variant="inline" message="Đang tải thông báo…" className="mt-3" />
+            <LoadingScreen variant="inline" message="Loading notifications…" className="mt-3" />
           )}
           {notificationsIsError && (
             <p role="alert" className="mt-3 text-xs text-[#9F2F2D]">
@@ -731,7 +731,7 @@ export function BackendClassroomListView({
           {notificationsData && (
             <>
               {notificationsData.items.length === 0 && (
-                <p className="pt-4 text-xs text-[#787774]">Chưa có thông báo.</p>
+                <p className="pt-4 text-xs text-[#787774]">No notifications yet.</p>
               )}
               <ul className="divide-y divide-[#EAEAEA]">
                 {notificationsData.items.map(item => (
@@ -746,16 +746,16 @@ export function BackendClassroomListView({
                       {item.message && <p className="text-[#787774]">{item.message}</p>}
                       {item.expiresAt && (
                         <p className="font-mono text-[11px] text-[#787774]">
-                          Trạng thái: {item.status} · Hết hạn:{' '}
-                          {new Intl.DateTimeFormat('vi-VN', {
-                            dateStyle: 'short',
+                          Status: {item.status} · Expires:{' '}
+                          {new Intl.DateTimeFormat('en-US', {
+                            dateStyle: 'medium',
                             timeStyle: 'short',
                             timeZone: 'Asia/Ho_Chi_Minh',
                           }).format(new Date(item.expiresAt))}
                         </p>
                       )}
                       {(item.status === 'REVOKED' || item.status === 'EXPIRED') && (
-                        <p className="text-[11px] text-[#9F2F2D]">Lời mời đã hết hạn.</p>
+                        <p className="text-[11px] text-[#9F2F2D]">Invitation has expired.</p>
                       )}
                     </div>
 
@@ -767,7 +767,7 @@ export function BackendClassroomListView({
                           onClick={() => onMarkNotificationRead(item.id)}
                           className="text-xs font-medium text-[#787774] underline underline-offset-2 hover:text-[#111111]"
                         >
-                          Đánh dấu đã đọc
+                          Mark as read
                         </button>
                       )}
                       {item.status === 'PENDING' && item.invitationId && (
@@ -778,7 +778,7 @@ export function BackendClassroomListView({
                             onClick={() => onAcceptInvitation(item.invitationId!, item.classroomId)}
                             className="rounded-md bg-[#111111] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#2F3437] disabled:opacity-50"
                           >
-                            Chấp nhận
+                            Accept
                           </button>
                           <button
                             type="button"
@@ -786,7 +786,7 @@ export function BackendClassroomListView({
                             onClick={() => onDeclineInvitation(item.invitationId!)}
                             className="rounded-md border border-[#EAEAEA] bg-white px-3 py-1.5 text-xs font-medium text-[#787774] hover:bg-[#F7F6F3] hover:text-[#111111] disabled:opacity-50"
                           >
-                            Từ chối
+                            Decline
                           </button>
                         </>
                       )}
@@ -795,7 +795,7 @@ export function BackendClassroomListView({
                           to={item.actionUrl}
                           className="text-xs font-medium text-[#111111] underline underline-offset-2"
                         >
-                          Xem chi tiết
+                          View details
                         </Link>
                       )}
                     </div>

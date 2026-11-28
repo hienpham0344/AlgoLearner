@@ -180,7 +180,7 @@ public class JdbcDashboardRepository implements DashboardRepository {
                             + (announcementId != null ? "/announcements/" + announcementId
                             : assignmentId != null ? "/assignments/" + assignmentId : "");
                     String title = rs.getString("title");
-                    if (title == null) title = invitationId != null ? "Lời mời tham gia " + rs.getString("classroom_name") : type;
+                    if (title == null) title = invitationId != null ? "Invitation to join " + rs.getString("classroom_name") : type;
                     return new Notification(rs.getObject("id", UUID.class), title,
                             rs.getTimestamp("created_at").toInstant(), readAt == null ? null : readAt.toInstant(),
                             type, rs.getString("message"), targetType, targetId, classroomId, actionUrl);

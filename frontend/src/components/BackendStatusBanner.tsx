@@ -76,7 +76,7 @@ export function BackendStatusBanner() {
   }, []);
   if (source !== 'mock') return null;
   return <div role="status" className="sticky top-0 z-50 bg-amber-100 px-4 py-2 text-center text-sm text-amber-950">
-    Backend chưa chạy — đang dùng dữ liệu mẫu, không lưu vào Supabase.
-    {' '}Tài khoản mẫu: learner@example.test / DemoPass123!
+    Backend is not running — using demo data, changes will not be saved.
+    {' '}Demo account: learner@example.test / DemoPass123!
   </div>;
 }

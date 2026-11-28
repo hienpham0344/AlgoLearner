@@ -229,6 +229,15 @@ export const TeacherClassroomDetailPage: React.FC = () => {
           <span>Class assignments</span>
         </Link>
 
+        <Link
+          to={`/teacher/classrooms/${encodeURIComponent(classroom.id)}/quizzes`}
+          className="classroom-subnav-link"
+          role="tab"
+        >
+          <BookOpen size={16} aria-hidden="true" />
+          <span>Class quizzes</span>
+        </Link>
+
         <button
           type="button"
           className="classroom-subnav-link"

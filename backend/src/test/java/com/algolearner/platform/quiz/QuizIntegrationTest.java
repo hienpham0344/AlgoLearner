@@ -350,8 +350,7 @@ class QuizIntegrationTest extends PostgresIntegrationTest {
         assertThatThrownBy(() -> classrooms.delete(teacher.getId(), classroom.id()))
                 .isInstanceOfSatisfying(AppException.class, error -> assertThat(error.getErrorCode()).isEqualTo("CLASS_HAS_RETAINED_DATA"));
 
-        // The quiz API has no delete route. Remove the draft fixture to exercise ClassroomService.
-        assertThat(jdbc.update("delete from tbl_quiz where id=?", quiz.id())).isEqualTo(1);
+        quizzes.delete(teacher.getId(), classroom.id(), quiz.id());
         classrooms.delete(teacher.getId(), classroom.id());
         assertThat(jdbc.queryForObject("select count(*) from tbl_classroom where id=?", Integer.class, classroom.id())).isZero();
     }
@@ -373,7 +372,7 @@ class QuizIntegrationTest extends PostgresIntegrationTest {
 
         mvc.perform(post(collection).with(member).contentType("application/json").content(body)).andExpect(status().isForbidden());
         mvc.perform(put(item).with(member).contentType("application/json").content(body)).andExpect(status().isForbidden());
-        mvc.perform(delete(item).with(member)).andExpect(status().isMethodNotAllowed());
+        mvc.perform(delete(item).with(member)).andExpect(status().isForbidden());
         mvc.perform(post(item + "/publish").with(member)).andExpect(status().isForbidden());
         mvc.perform(post(item + "/publish-grades").with(member)).andExpect(status().isForbidden());
         quizzes.publish(teacher.getId(), classroom.id(), quiz.id());

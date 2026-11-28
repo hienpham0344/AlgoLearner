@@ -39,8 +39,8 @@ export function ClassroomSourceRoute({ role, detail }: { role: DemoRole; detail:
     return (
       <LoadingScreen
         variant="fullscreen"
-        message="Đang tải thông tin tài khoản…"
-        submessage="Đang đồng bộ phiên đăng nhập"
+        message="Loading account…"
+        submessage="Syncing your sign-in session"
       />
     );
   }
@@ -49,8 +49,8 @@ export function ClassroomSourceRoute({ role, detail }: { role: DemoRole; detail:
     return (
       <LoadingScreen
         variant="page"
-        message="Đang kết nối không gian lớp học…"
-        submessage="Kiểm tra trạng thái máy chủ"
+        message="Connecting to classroom workspace…"
+        submessage="Checking server status"
       />
     );
   }

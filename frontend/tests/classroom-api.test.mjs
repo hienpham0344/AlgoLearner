@@ -66,6 +66,7 @@ test('classroom API uses backend routes and nested page envelope', async () => {
     await classroomApi.removeMember('class-1', 'student-1');
     await classroomApi.requests('class-1', 1);
     await classroomApi.approve('class-1', 'request-1');
+    await classroomApi.reject('class-1', 'request-2');
     await classroomApi.invite('class-1', 'student@example.test', '2026-11-10T00:00:00Z');
     await classroomApi.revoke('class-1', 'invitation-1');
     await classroomApi.acceptInvitation('invitation-1');
@@ -84,6 +85,7 @@ test('classroom API uses backend routes and nested page envelope', async () => {
       'POST /classrooms/class-1/leave', 'POST /classrooms/class-1/members/direct',
       'DELETE /classrooms/class-1/members/student-1', 'GET /classrooms/class-1/join-requests',
       'POST /classrooms/class-1/join-requests/request-1/approve',
+      'POST /classrooms/class-1/join-requests/request-2/reject',
       'POST /classrooms/class-1/invitations', 'POST /classrooms/class-1/invitations/invitation-1/revoke',
       'POST /classrooms/invitations/invitation-1/accept', 'POST /classrooms/invitations/invitation-1/decline',
       'POST /classrooms/class-1/transfer-owner',
@@ -92,10 +94,10 @@ test('classroom API uses backend routes and nested page envelope', async () => {
     ]);
     assert.deepEqual(calls[8].body, { codeExpiresAt: null, codeLocked: true, joiningOpen: false, joinMode: 'REQUIRE_APPROVAL' });
     assert.deepEqual(calls[11].body, { usernameOrEmail: 'student@example.test' });
-    assert.deepEqual(calls[15].body, { email: 'student@example.test', expiresAt: '2026-11-10T00:00:00Z' });
-    assert.deepEqual(calls[19].body, { targetTeacherId: 'teacher-2' });
-    assert.deepEqual(calls[20].params, { page: 2, size: 20 });
-    assert.deepEqual(calls[21].params, { page: 1, size: 20 });
+    assert.deepEqual(calls[16].body, { email: 'student@example.test', expiresAt: '2026-11-10T00:00:00Z' });
+    assert.deepEqual(calls[20].body, { targetTeacherId: 'teacher-2' });
+    assert.deepEqual(calls[21].params, { page: 2, size: 20 });
+    assert.deepEqual(calls[22].params, { page: 1, size: 20 });
     assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 401 } }), false);
     assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 403 } }), false);
     assert.equal(classroomApiUnavailable({ isAxiosError: true, response: { status: 404 } }), false);

@@ -200,6 +200,16 @@ export const StudentClassroomDetailPage: React.FC = () => {
             Class assignments
           </Link>
         )}
+        {isEnrolled && (
+          <Link
+            to={`/student/classrooms/${encodeURIComponent(classroom.id)}/quizzes`}
+            className="classroom-tab-btn"
+            role="tab"
+          >
+            <FileText size={14} className="inline mr-1.5" />
+            Class quizzes
+          </Link>
+        )}
         <button
           type="button"
           role="tab"
@@ -422,7 +432,7 @@ export const StudentClassroomDetailPage: React.FC = () => {
                         {classroomAnnouncements[0].title}
                       </h3>
                       <span className="text-[11px] text-slate-500 ml-auto">
-                        {new Date(classroomAnnouncements[0].createdAt).toLocaleDateString()}
+                        {new Date(classroomAnnouncements[0].createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}
                       </span>
                     </div>
                     <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
@@ -499,7 +509,7 @@ export const StudentClassroomDetailPage: React.FC = () => {
                   <div className="text-right">
                     <span className="text-xs text-slate-500 flex items-center gap-1 justify-end font-medium">
                       <Calendar size={12} className="text-slate-400 shrink-0" />
-                      Joined {new Date(m.joinedAt).toLocaleDateString()}
+                      Joined {new Date(m.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}
                     </span>
                   </div>
                 </div>

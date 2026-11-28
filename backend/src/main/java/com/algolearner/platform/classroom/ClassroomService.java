@@ -263,6 +263,22 @@ public class ClassroomService {
     }
 
     @Transactional
+    public void reject(UUID actorId, UUID classroomId, UUID requestId) {
+        var classroom = ownedWritable(actorId, classroomId);
+        requireActiveClass(classroom);
+        var request = requests.findById(requestId)
+                .filter(r -> r.getClassroom().getId().equals(classroomId) && r.getStatus() == JoinRequestStatus.PENDING_APPROVAL)
+                .orElseThrow(() -> notFound("JOIN_REQUEST_NOT_FOUND", "Pending join request not found"));
+        pairLock.lock(classroomId, request.getStudent().getId());
+        entityManager.flush();
+        entityManager.refresh(request);
+        if (request.getStatus() != JoinRequestStatus.PENDING_APPROVAL) {
+            throw notFound("JOIN_REQUEST_NOT_FOUND", "Pending join request not found");
+        }
+        request.setStatus(JoinRequestStatus.REJECTED);
+    }
+
+    @Transactional
     public UUID invite(UUID actorId, UUID classroomId, Invite input) {
         var classroom = ownedWritable(actorId, classroomId); requireActiveClass(classroom);
         var student = accounts.findByEmailIgnoreCase(input.email()).orElseThrow(() -> notFound("STUDENT_NOT_FOUND", "Registered Student not found"));

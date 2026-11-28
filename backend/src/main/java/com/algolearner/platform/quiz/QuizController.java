@@ -29,6 +29,8 @@ public class QuizController {
     public ApiResponse<QuizDtos.Configure> authoring(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId){return ApiResponse.success(quizzes.authoring(actor(auth),classId,quizId));}
     @PutMapping("/{quizId}") @Operation(summary="Update a quiz draft (Teacher owner)")
     public ApiResponse<QuizDtos.QuizView> update(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId,@Valid @RequestBody QuizDtos.Configure request){return ApiResponse.success(quizzes.update(actor(auth),classId,quizId,request));}
+    @DeleteMapping("/{quizId}") @ResponseStatus(HttpStatus.NO_CONTENT) @Operation(summary="Delete an unused quiz draft (Teacher owner)")
+    public void delete(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId){quizzes.delete(actor(auth),classId,quizId);}
     @PostMapping("/{quizId}/publish") @Operation(summary="Publish a validated quiz draft")
     public ApiResponse<QuizDtos.QuizView> publish(Authentication auth,@PathVariable UUID classId,@PathVariable UUID quizId){return ApiResponse.success(quizzes.publish(actor(auth),classId,quizId));}
     @PostMapping("/{quizId}/close") @Operation(summary="Close a quiz to new attempts while preserving history")

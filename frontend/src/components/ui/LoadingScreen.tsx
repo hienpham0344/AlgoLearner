@@ -52,7 +52,7 @@ export interface LoadingScreenProps {
 
 export const LoadingScreen: React.FC<LoadingScreenProps> = ({
   variant = 'fullscreen',
-  message = 'Đang chuẩn bị không gian làm việc…',
+  message = 'Preparing your workspace…',
   submessage,
   showLogo = variant !== 'inline',
   className,

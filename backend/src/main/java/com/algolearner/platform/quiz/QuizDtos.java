@@ -38,7 +38,7 @@ public final class QuizDtos {
     public record StudentOption(UUID id,String text) { }
     public record StudentQuestion(UUID id,String prompt,QuestionType type,BigDecimal points,List<StudentOption> options) { }
     public record AnswerView(UUID questionId,List<UUID> selectedOptionIds,long version) { }
-    public record AttemptView(UUID id,UUID quizId,String status,Instant startedAt,Instant cutoffAt,Instant submittedAt,
+    public record AttemptView(UUID id,UUID quizId,UUID studentId,String status,Instant startedAt,Instant cutoffAt,Instant submittedAt,
             BigDecimal score,boolean gradePublished,List<StudentQuestion> questions,List<AnswerView> answers,Instant serverTime,boolean late) { }
     public record SaveAnswer(@NotNull UUID questionId,@NotNull List<@NotNull UUID> selectedOptionIds,
             @Min(0) long expectedVersion,@NotNull UUID idempotencyKey) { }

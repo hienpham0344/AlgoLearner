@@ -38,7 +38,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
           </Badge>
           <div className="h-4 w-px bg-slate-800 hidden sm:block" />
           <span className="text-xs text-slate-400">
-            Múi giờ hệ thống: <strong className="text-slate-300">UTC+7 (Asia/Ho_Chi_Minh)</strong>
+            System timezone: <strong className="text-slate-300">UTC+7 (Asia/Ho_Chi_Minh)</strong>
           </span>
         </div>
       </header>
@@ -50,16 +50,16 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
           <div className="space-y-4">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
               <GraduationCap className="w-4 h-4 text-indigo-400" />
-              Nền tảng học lập trình thế hệ mới
+              Next-generation programming learning platform
             </div>
             <h1 className="text-4xl xl:text-5xl font-black text-white leading-tight tracking-tight">
-              Rèn luyện thuật toán & <br />
+              Master algorithms &amp; <br />
               <span className="bg-gradient-to-r from-indigo-400 via-purple-300 to-emerald-400 bg-clip-text text-transparent">
-                Lớp học thông minh
+                Smart classrooms
               </span>
             </h1>
             <p className="text-base text-slate-400 leading-relaxed max-w-lg">
-              Hệ thống kết hợp chấm mã nguồn tự động an toàn (Java/Python Sandbox), ngân hàng bài tập LeetCode-style, và quản lý bài giảng, kiểm tra tính giờ theo chuẩn SRS v1.1.
+              Combining secure automated code judging (Java/Python Sandbox), a LeetCode-style problem bank, and timed classroom lessons and assessments per SRS v1.1.
             </p>
           </div>
 
@@ -77,7 +77,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
             <div className="space-y-1 text-slate-300">
               <p><span className="text-purple-400">public class</span> <span className="text-amber-300">Solution</span> &#123;</p>
               <p className="pl-4"><span className="text-purple-400">public int</span> <span className="text-blue-400">maxSubArray</span>(<span className="text-purple-400">int</span>[] nums) &#123;</p>
-              <p className="pl-8 text-slate-400">// Thuật toán Kadane - Tối ưu thời gian O(n)</p>
+              <p className="pl-8 text-slate-400">// Kadane&apos;s algorithm - Optimal O(n) time</p>
               <p className="pl-8"><span className="text-purple-400">int</span> maxSoFar = nums[0], currMax = nums[0];</p>
               <p className="pl-8"><span className="text-purple-400">for</span> (<span className="text-purple-400">int</span> i = 1; i &lt; nums.length; i++) &#123;</p>
               <p className="pl-12">currMax = Math.max(nums[i], currMax + nums[i]);</p>
@@ -93,7 +93,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
           <div className="grid grid-cols-2 gap-4 text-xs text-slate-300">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-indigo-400 shrink-0" />
-              <span>Xác thực OTP Email 10 phút</span>
+              <span>10-minute Email OTP Verification</span>
             </div>
             <div className="flex items-center gap-2.5">
               <Code2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -117,7 +117,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, title, subtitl
 
       {/* Footer */}
       <footer className="w-full max-w-7xl mx-auto px-6 py-6 text-center text-xs text-slate-400 border-t border-slate-800/40 z-10">
-        <p>&copy; {new Date().getFullYear()} AlgoLearner Platform. Đặc tả theo SRS ver 1.1 (Karl Wiegers Standard).</p>
+        <p>&copy; {new Date().getFullYear()} AlgoLearner Platform. Specified to SRS ver 1.1 (Karl Wiegers Standard).</p>
       </footer>
     </div>
   );

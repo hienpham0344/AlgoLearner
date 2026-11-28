@@ -9,6 +9,7 @@ export * from './hooks/useStudentAttempt';
 export * from './hooks/useAutosaveDraft';
 export * from './hooks/useCodeRunner';
 export * from './hooks/useTeacherSubmissions';
+export * from './pages/TeacherAssignmentsHubPage';
 export * from './pages/TeacherAssignmentsPage';
 export * from './pages/TeacherAssignmentDetailPage';
 export * from './pages/TeacherSubmissionsPage';

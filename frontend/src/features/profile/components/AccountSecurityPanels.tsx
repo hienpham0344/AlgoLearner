@@ -6,14 +6,50 @@ import { authApi } from '@/features/auth/api/authApi';
 import { useIsDemoMode } from '@/components/BackendStatusBanner';
 import { clearSession } from '@/services/apiClient';
 import type { ApiErrorResponse } from '@/types/api';
+import { parseSessionDevice, type DeviceCategory } from '../parseSessionDevice';
 
 const sessionKeys = { all: ['auth', 'sessions'] as const };
-const dateTime = new Intl.DateTimeFormat('vi-VN', {
+const dateTime = new Intl.DateTimeFormat('en-US', {
   dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh',
 });
 const message = (error: unknown) => isAxiosError<ApiErrorResponse>(error)
-  ? error.response?.data?.message || 'Không thể hoàn tất thao tác.'
-  : 'Không thể kết nối với máy chủ.';
+  ? error.response?.data?.message || 'Unable to complete this action.'
+  : 'Unable to connect to the server.';
+
+function SessionDeviceIcon({ category }: { category: DeviceCategory }) {
+  if (category === 'mobile') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="7" y="2.5" width="10" height="19" rx="2.2" />
+        <line x1="11" y1="18" x2="13" y2="18" />
+      </svg>
+    );
+  }
+  if (category === 'tablet') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="4.5" y="3" width="15" height="18" rx="2.2" />
+        <line x1="11" y1="17.5" x2="13" y2="17.5" />
+      </svg>
+    );
+  }
+  if (category === 'desktop') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <rect x="2.75" y="4" width="18.5" height="12.5" rx="2" />
+        <line x1="8.5" y1="20" x2="15.5" y2="20" />
+        <line x1="12" y1="16.5" x2="12" y2="20" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3.6 9h16.8M3.6 15h16.8" />
+      <path d="M12 3a13.5 13.5 0 0 1 0 18M12 3a13.5 13.5 0 0 0 0 18" />
+    </svg>
+  );
+}
 
 export function SessionManager() {
   const isDemoMode = useIsDemoMode();
@@ -33,7 +69,7 @@ export function SessionManager() {
     try {
       await authApi.revokeSession(id);
       await queryClient.invalidateQueries({ queryKey: sessionKeys.all });
-      setFeedback({ error: false, text: 'Đã đăng xuất thiết bị.' });
+      setFeedback({ error: false, text: 'Device signed out.' });
     } catch (error) { setFeedback({ error: true, text: message(error) }); }
     finally { setBusyId(null); }
   };
@@ -47,65 +83,106 @@ export function SessionManager() {
     } catch (error) { setFeedback({ error: true, text: message(error) }); setBusyId(null); }
   };
 
+  const orderedSessions = sessions.data
+    ? [...sessions.data].sort((a, b) => Number(b.current) - Number(a.current))
+    : [];
+
   return (
-    <section className="security-sessions-section" aria-label="Thiết bị đăng nhập">
+    <section className="security-sessions-section" aria-label="Signed-in devices">
       <div className="security-sessions-header">
-        <strong className="security-sessions-title">Thiết bị đăng nhập</strong>
-        {!isDemoMode && sessions.data && sessions.data.length > 0 && (
+        <div className="security-sessions-heading">
+          <div className="security-sessions-title-row">
+            <h3 className="security-sessions-title">Signed-in devices</h3>
+            {!isDemoMode && orderedSessions.length > 0 && (
+              <span className="security-sessions-count" aria-label={`${orderedSessions.length} active sessions`}>
+                {orderedSessions.length}
+              </span>
+            )}
+          </div>
+          <p className="security-sessions-subtitle">
+            Review active browser sessions and sign out devices you do not recognize.
+          </p>
+        </div>
+        {!isDemoMode && orderedSessions.length > 0 && (
           <button
             type="button"
             className="security-btn-secondary"
             disabled={busyId !== null}
             onClick={() => void logoutAll()}
           >
-            Đăng xuất tất cả thiết bị
+            {busyId === 'all' ? 'Signing out…' : 'Sign out all devices'}
           </button>
         )}
       </div>
 
       {isDemoMode ? (
-        <p role="status" className="security-empty-text">Cần kết nối backend để quản lý phiên.</p>
+        <p role="status" className="security-empty-text">Backend connection is required to manage sessions.</p>
       ) : sessions.isPending ? (
-        <p role="status" className="security-empty-text">Đang tải phiên đăng nhập…</p>
+        <p role="status" className="security-empty-text">Loading signed-in sessions…</p>
       ) : sessions.isError ? (
         <p role="alert" className="security-status-badge is-error">{message(sessions.error)}</p>
-      ) : sessions.data.length === 0 ? (
-        <p className="security-empty-text">Không có phiên đang hoạt động.</p>
+      ) : orderedSessions.length === 0 ? (
+        <p className="security-empty-text">No active sessions.</p>
       ) : (
         <div className="security-sessions-list" role="list">
-          {sessions.data.map(session => (
-            <div key={session.id} className="security-session-row" role="listitem">
-              <div className="security-session-info">
-                <div className="security-session-headline">
-                  <span className={`security-mono-tag ${session.current ? 'is-current' : ''}`}>
-                    {session.current ? 'CURRENT' : 'SESSION'}
+          {orderedSessions.map(session => {
+            const parsed = parseSessionDevice(session.userAgent);
+            const rawTooltip = parsed.isParsedUserAgent && parsed.rawUserAgent ? parsed.rawUserAgent : undefined;
+            const titleText = session.current ? 'Current device' : parsed.label;
+            return (
+              <div
+                key={session.id}
+                className={`security-session-row ${session.current ? 'is-current' : ''}`}
+                role="listitem"
+              >
+                <div className="security-session-main">
+                  <span
+                    className={`security-session-icon ${session.current ? 'is-current' : ''}`}
+                    aria-hidden="true"
+                  >
+                    <SessionDeviceIcon category={parsed.category} />
                   </span>
-                  <strong className="security-session-device">
-                    {session.current ? 'Thiết bị hiện tại' : session.userAgent || 'Thiết bị khác'}
-                  </strong>
-                  <span className="security-session-meta">
-                    · Đăng nhập: {dateTime.format(new Date(session.createdAt))} · Hết hạn: {dateTime.format(new Date(session.expiresAt))}
-                  </span>
+                  <div className="security-session-body">
+                    <div className="security-session-title-row">
+                      <strong className="security-session-device" title={rawTooltip}>
+                        {titleText}
+                      </strong>
+                      {session.current && parsed.isParsedUserAgent && (
+                        <span className="security-session-browser" title={rawTooltip}>
+                          {parsed.label}
+                        </span>
+                      )}
+                      {session.rememberMe && (
+                        <span className="security-mono-tag">Remembered</span>
+                      )}
+                    </div>
+                    <div className="security-session-meta">
+                      <span>Signed in {dateTime.format(new Date(session.createdAt))}</span>
+                      <span className="security-session-sep" aria-hidden="true">·</span>
+                      <span>Expires {dateTime.format(new Date(session.expiresAt))}</span>
+                    </div>
+                  </div>
                 </div>
-                {session.current && (
-                  <span className="security-session-status">
-                    <span className="security-status-dot" aria-hidden="true" />
-                    Active now
-                  </span>
-                )}
+                <div className="security-session-action">
+                  {session.current ? (
+                    <span className="security-session-status">
+                      <span className="security-status-dot" aria-hidden="true" />
+                      Active now
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="security-btn-danger"
+                      disabled={busyId !== null}
+                      onClick={() => void revoke(session.id)}
+                    >
+                      {busyId === session.id ? 'Signing out…' : 'Sign out this device'}
+                    </button>
+                  )}
+                </div>
               </div>
-              {!session.current && (
-                <button
-                  type="button"
-                  className="security-btn-danger"
-                  disabled={busyId !== null}
-                  onClick={() => void revoke(session.id)}
-                >
-                  Đăng xuất thiết bị này
-                </button>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -160,7 +237,7 @@ export function DeactivateAccountForm() {
 
       {isDemoMode && (
         <p className="account-danger-status" role="status">
-          Cần kết nối backend để vô hiệu hóa tài khoản.
+          Backend connection is required to deactivate your account.
         </p>
       )}
 
@@ -171,7 +248,7 @@ export function DeactivateAccountForm() {
       >
         <div className="account-danger-field">
           <label className="account-danger-label" htmlFor="deactivate-password">
-            Mật khẩu hiện tại
+            Account password
           </label>
           <div className="account-danger-input-wrap">
             <input

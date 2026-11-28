@@ -334,11 +334,11 @@ export const AdminClassroomDetailPage: React.FC = () => {
                   <div className="text-right text-xs text-slate-500">
                     <span className="flex items-center gap-1 justify-end font-medium">
                       <Calendar size={12} className="text-slate-400" />
-                      Joined {new Date(m.joinedAt).toLocaleDateString()}
+                      Joined {new Date(m.joinedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}
                     </span>
                     {m.endedAt && (
                       <span className="text-rose-600 block text-[11px] font-medium">
-                        Left on {new Date(m.endedAt).toLocaleDateString()}
+                        Left on {new Date(m.endedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' })}
                       </span>
                     )}
                   </div>
@@ -405,7 +405,7 @@ export const AdminClassroomDetailPage: React.FC = () => {
               <span className="text-xs font-semibold text-slate-500 block mb-1">Code Expiration</span>
               <span className="text-xs font-medium text-slate-800">
                 {classroom.codeExpiresAt
-                  ? new Date(classroom.codeExpiresAt).toLocaleString()
+                  ? new Date(classroom.codeExpiresAt).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Ho_Chi_Minh' })
                   : 'No expiration date configured'}
               </span>
             </div>

@@ -485,4 +485,5 @@ test('useCreateAnnouncementMutation & ClassroomAnnouncementsList wait for server
   await act(async () => {
     root.unmount();
   });
+  queryClient.clear();
 });

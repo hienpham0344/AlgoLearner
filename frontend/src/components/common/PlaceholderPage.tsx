@@ -27,67 +27,67 @@ interface FeatureMeta {
 
 const FEATURE_REGISTRY: Record<string, FeatureMeta> = {
   practice: {
-    title: 'Luyện tập thuật toán trực tuyến',
+    title: 'Online Algorithm Practice',
     subtitle: 'Online Coding Practice Studio',
     moduleCode: 'SRS Module 4.4',
     moduleName: 'Practice & Online Judge',
-    description: 'Hệ thống kho bài tập thuật toán phân loại theo độ khó, chấm mã trực tiếp và thống kê chuỗi ngày luyện tập (Streak). Màn hình này đang trong giai đoạn triển khai.',
+    description: 'Algorithm problem bank organized by difficulty, with automated code judging and daily practice streak tracking. This screen is currently under development.',
     icon: Code2,
   },
   'public-courses': {
-    title: 'Danh mục Khóa học Công khai',
+    title: 'Public Courses Catalog',
     subtitle: 'Public Courses Catalog',
     moduleCode: 'SRS Module 4.4',
     moduleName: 'Course Exploration',
-    description: 'Thư viện các khóa học thuật toán và lập trình miễn phí dành cho học viên tự học theo lộ trình có hướng dẫn. Màn hình này đang trong giai đoạn hoàn thiện.',
+    description: 'A library of free algorithm and programming courses with guided learning paths for self-paced study. This screen is currently being finalized.',
     icon: BookOpen,
   },
   'teacher-assignments': {
-    title: 'Quản lý Bài tập & Đánh giá',
+    title: 'Assignments & Grading',
     subtitle: 'Classroom Assignments & Grading',
     moduleCode: 'SRS Module 4.6',
     moduleName: 'Assignment Management',
-    description: 'Giao diện tạo bài tập, thiết lập deadline, cấu hình nộp bài và quản lý điểm số cho sinh viên trong lớp học.',
+    description: 'Create assignments, configure deadlines and submission settings, and manage student grades across your classrooms.',
     icon: FileCode2,
   },
   'teacher-review-queue': {
-    title: 'Hàng đợi Chấm & Duyệt bài',
+    title: 'Grading & Review Queue',
     subtitle: 'Submission Review Queue',
     moduleCode: 'SRS Module 4.6',
     moduleName: 'Grading & Feedback',
-    description: 'Nơi giảng viên duyệt các bài nộp thủ công, chấm code và gửi nhận xét phản hồi cho sinh viên.',
+    description: 'Review manual submissions, grade student code, and share feedback with learners.',
     icon: ClipboardCheck,
   },
   'admin-submissions': {
-    title: 'Giám sát Bài nộp toàn hệ thống',
+    title: 'Platform Submissions Monitor',
     subtitle: 'Platform Submissions Monitor',
     moduleCode: 'SRS Module 4.6',
     moduleName: 'Submission Oversight',
-    description: 'Bảng điều khiển dành cho Quản trị viên để giám sát lưu lượng nộp bài, trạng thái chấm mã và tài nguyên máy chấm.',
+    description: 'Administrator dashboard for monitoring submission volume, judging statuses, and judge worker resources.',
     icon: Activity,
   },
   'admin-system-logs': {
-    title: 'Nhật ký Hệ thống & Hoạt động',
+    title: 'System & Activity Logs',
     subtitle: 'System & Activity Logs',
     moduleCode: 'SRS Module 4.1 / 4.2',
     moduleName: 'Audit & System Logging',
-    description: 'Lưu trữ toàn bộ sự kiện đăng nhập, phân quyền, thay đổi cấu hình và lịch sử thao tác của các tài khoản.',
+    description: 'Audit trail of sign-in events, role changes, configuration updates, and account activity across the platform.',
     icon: ShieldAlert,
   },
   'admin-security-audit': {
-    title: 'Kiểm toán Bảo mật & Phiên làm việc',
+    title: 'Security & Session Audit',
     subtitle: 'Security & Session Audit',
     moduleCode: 'SRS Module 4.1',
     moduleName: 'Security Administration',
-    description: 'Theo dõi các phiên đăng nhập bất thường, khóa tài khoản vi phạm chính sách và quản trị khóa ký JWT.',
+    description: 'Monitor unusual sign-in sessions, lock accounts violating policy, and manage JWT signing keys.',
     icon: ShieldAlert,
   },
   'admin-accounts': {
-    title: 'Quản trị Danh sách Tài khoản',
+    title: 'Account Moderation',
     subtitle: 'User Account Moderation',
     moduleCode: 'SRS Module 4.1',
     moduleName: 'Account Management',
-    description: 'Quản lý, kích hoạt, đình chỉ hoặc mở khóa tài khoản Student và Teacher trên toàn hệ thống.',
+    description: 'Manage, activate, suspend, or unlock Student and Teacher accounts across the platform.',
     icon: Users,
   },
 };
@@ -103,11 +103,11 @@ export const PlaceholderPage: React.FC<PlaceholderPageProps> = ({ feature: propF
 
   const activeKey = propFeature || featureKey || searchParams.get('feature') || 'practice';
   const meta: FeatureMeta = FEATURE_REGISTRY[activeKey] || {
-    title: searchParams.get('title') || 'Tính năng đang được phát triển',
+    title: searchParams.get('title') || 'Feature Under Development',
     subtitle: 'Feature Under Construction',
     moduleCode: searchParams.get('module') || 'AlgoLearner System',
     moduleName: 'Upcoming Module',
-    description: searchParams.get('desc') || 'Màn hình cho tính năng này đang được đội ngũ phát triển xây dựng theo đặc tả SRS.',
+    description: searchParams.get('desc') || 'This feature screen is currently being built according to the SRS specification.',
     icon: Hammer,
   };
 
@@ -133,7 +133,7 @@ export const PlaceholderPage: React.FC<PlaceholderPageProps> = ({ feature: propF
             {meta.moduleCode}
           </span>
           <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-[11px] font-medium">
-            Chưa có màn hình
+            Coming soon
           </span>
         </div>
 
@@ -154,7 +154,7 @@ export const PlaceholderPage: React.FC<PlaceholderPageProps> = ({ feature: propF
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 transition-all shadow-xs"
           >
             <LayoutDashboard size={16} />
-            <span>Về màn hình Dashboard</span>
+            <span>Back to Dashboard</span>
           </Link>
           <button
             type="button"
@@ -162,7 +162,7 @@ export const PlaceholderPage: React.FC<PlaceholderPageProps> = ({ feature: propF
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-all"
           >
             <ArrowLeft size={16} />
-            <span>Trang trước đó</span>
+            <span>Previous page</span>
           </button>
         </div>
       </div>

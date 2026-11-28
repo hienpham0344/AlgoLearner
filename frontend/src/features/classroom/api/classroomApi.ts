@@ -103,6 +103,7 @@ export const classroomApi = {
   requests: async (id: string, pageNumber = 0) =>
     page(await apiClient.get<PageResponse<JoinRequestRecord>>(`/classrooms/${id}/join-requests`, { params: { page: pageNumber, size: 20 } })),
   approve: async (id: string, requestId: string) => { await apiClient.post(`/classrooms/${id}/join-requests/${requestId}/approve`); },
+  reject: async (id: string, requestId: string) => { await apiClient.post(`/classrooms/${id}/join-requests/${requestId}/reject`); },
   invite: async (id: string, email: string, expiresAt: string) =>
     unwrap(await apiClient.post<ApiResponse<string>>(`/classrooms/${id}/invitations`, { email, expiresAt })),
   invitations: async (id: string, pageNumber = 0): Promise<PaginatedData<InvitationRecord>> =>
@@ -122,7 +123,7 @@ export const classroomApi = {
 
 export function classroomError(error: unknown): string {
   if (isAxiosError<ApiErrorResponse>(error)) {
-    if (error.response?.data?.errorCode === 'INVITATION_UNAVAILABLE') return 'Lời mời đã hết hạn.';
+    if (error.response?.data?.errorCode === 'INVITATION_UNAVAILABLE') return 'Invitation has expired.';
     return error.response?.data?.message || (error.response ? `HTTP ${error.response.status}` : 'Cannot connect to the classroom API.');
   }
   return error instanceof Error ? error.message : 'Classroom request failed.';

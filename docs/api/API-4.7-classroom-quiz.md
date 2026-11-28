@@ -5,7 +5,7 @@ API dùng bản JDBC của PR #50. Base path là `/api/v1/classrooms/{classId}/q
 | Method | Path tương đối | Nội dung |
 |---|---|---|
 | GET / POST | `/` | Danh sách quiz / tạo draft bằng `Configure` |
-| GET / PUT | `/{quizId}` | Đọc thông tin quiz / cập nhật draft |
+| GET / PUT / DELETE | `/{quizId}` | Đọc thông tin quiz / cập nhật draft / xóa draft chưa có lượt làm |
 | GET | `/{quizId}/authoring` | Đọc cấu hình và đáp án, chỉ Teacher chủ lớp |
 | POST | `/{quizId}/publish`, `/{quizId}/close` | Xuất bản hoặc đóng quiz |
 | POST | `/{quizId}/duplicate` | Tạo draft độc lập, sao chép cấu hình và câu hỏi |
